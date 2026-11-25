@@ -64,12 +64,8 @@ public class Game(Room room, GameState state)
         return solved;
     }
 
-    bool Met(Puzzle p, Condition c) => c switch
-    {
-        { Sequence: { } seq } => state.Recent.TryGetValue(p.Id, out var r) && r.Count >= seq.Length
-            && seq.Zip(r.Skip(r.Count - seq.Length)).All(x => x.First.Input == x.Second.Input && x.First.Matches(x.Second.Value)),
-        { All: { } all } => all.All(x => Met(p, x)),
-        { Any: { } any } => any.Any(x => Met(p, x)),
-        _ => state.Inputs.TryGetValue(c.Input!, out var v) && c.Matches(v),
-    };
+    bool Met(Puzzle p, Condition c) => c.Sequence is { } seq
+        ? state.Recent.TryGetValue(p.Id, out var r) && r.Count >= seq.Length
+            && seq.Zip(r.Skip(r.Count - seq.Length)).All(x => x.First.Input == x.Second.Input && x.First.Matches(x.Second.Value))
+        : c.Holds(state.Inputs);
 }

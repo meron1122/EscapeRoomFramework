@@ -20,11 +20,20 @@ public class Mqtt(IConfiguration config, ILogger<Mqtt> log) : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        client.ApplicationMessageReceivedAsync += e =>
+        client.ApplicationMessageReceivedAsync += async e =>
         {
             var (topic, payload) = (e.ApplicationMessage.Topic, e.ApplicationMessage.ConvertPayloadToString());
             Seen[topic] = (payload, DateTimeOffset.UtcNow);
-            return Received?.Invoke(topic, payload) ?? Task.CompletedTask;
+            // Each listener on its own, so a failing game handler can never keep a message from the safety layer.
+            foreach (var handler in Received?.GetInvocationList() ?? [])
+                try
+                {
+                    await ((Func<string, string, Task>)handler)(topic, payload);
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Handling {Topic} failed", topic);
+                }
         };
 
         var options = new MqttClientOptionsBuilder()

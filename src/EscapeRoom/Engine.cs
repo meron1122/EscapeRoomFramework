@@ -1,11 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Channels;
 using Npgsql;
 
 namespace EscapeRoom;
 
 /// <summary>Runs games: routes MQTT messages to running sessions, stores every change in Postgres, fires outputs.</summary>
-public class Engine(NpgsqlDataSource db, Mqtt mqtt, ILogger<Engine> log) : BackgroundService
+public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engine> log) : BackgroundService
 {
     public const string Schema = """
         create table if not exists rooms (
@@ -58,7 +59,14 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, ILogger<Engine> log) : Backg
         {
             gate.Release();
         }
-        mqtt.Received += OnMessage;
+        // Own queue, so a slow database never holds up the MQTT loop that safety rules run on.
+        var inbox = Channel.CreateUnbounded<(string Topic, string Payload)>();
+        mqtt.Received += (topic, payload) =>
+        {
+            inbox.Writer.TryWrite((topic, payload));
+            return Task.CompletedTask;
+        };
+        await foreach (var (topic, payload) in inbox.Reader.ReadAllAsync(ct)) await OnMessage(topic, payload);
     }
 
     public async Task<List<object>> ListRooms()
@@ -87,6 +95,7 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, ILogger<Engine> log) : Backg
         {
             var room = change(await RoomJson(roomId) is { } current ? Parse<Room>(current) : null);
             var errors = room.Validate().ToArray();
+            if (errors.Length == 0) errors = [.. safety.Current.Conflicts(room)];
             if (errors.Length > 0) return errors;
             var json = Serialize(room);
             await db.Exec("""
@@ -125,19 +134,20 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, ILogger<Engine> log) : Backg
         }
     }
 
-    /// <summary>Drives an output right now, game running or not: open a locker, test a lamp.</summary>
-    public async Task<bool> Trigger(string roomId, string output, JsonElement value)
+    /// <summary>Drives an output right now, game running or not: open a locker, test a lamp. Returns an error or null.</summary>
+    public async Task<string?> Trigger(string roomId, string output, JsonElement value)
     {
         await gate.WaitAsync();
         try
         {
             var room = running.TryGetValue(roomId, out var s) ? s.Room
                 : await RoomJson(roomId) is { } json ? Parse<Room>(json) : null;
-            if (room is null || !room.Outputs.ContainsKey(output)) return false;
-            var (topic, payload) = Message(room, output, value);
+            if (room is null || !room.Outputs.ContainsKey(output)) return $"Room '{roomId}' or its output '{output}' not found";
+            var (topic, payload) = room.Outputs[output].Message(value);
+            if (safety.Blocks(topic, $"room {roomId}, manual output {output}")) return $"{topic} belongs to a safety device; blocked and audited";
             await mqtt.Publish(topic, payload);
             if (s is not null) await Log(s, "gm-output", new { output, topic, payload });
-            return true;
+            return null;
         }
         finally
         {
@@ -267,7 +277,8 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, ILogger<Engine> log) : Backg
                     await Task.Delay(ms);
                     continue;
                 }
-                var (topic, payload) = Message(s.Room, step.Output!, step.Value!.Value);
+                var (topic, payload) = s.Room.Outputs[step.Output!].Message(step.Value!.Value);
+                if (safety.Blocks(topic, $"room {s.RoomId}, output {step.Output}")) continue;
                 await mqtt.Publish(topic, payload);
                 await Log(s, "output", new { output = step.Output, topic, payload });
             }
@@ -283,12 +294,6 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, ILogger<Engine> log) : Backg
             .Select(kv => (Id: kv.Key, Io: kv.Value.AsInput()))
             .ToLookup(x => x.Io.Topic, x => (x.Id, x.Io.Path));
         return running[roomId] = new Session(id, roomId, room, new Game(room, state), topics);
-    }
-
-    static (string Topic, string Payload) Message(Room room, string output, JsonElement value)
-    {
-        var (topic, path) = room.Outputs[output].AsOutput();
-        return (topic, Payload.ForOutput(value, path));
     }
 
     Task Log(Session s, string type, object data) =>

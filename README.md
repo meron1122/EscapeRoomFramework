@@ -98,6 +98,7 @@ Wymaga `ffmpeg` w PATH. Ten sam kod publikowany jest ponownie dopiero wtedy, gdy
 | `POST /rooms/{id}/stop` | koniec gry |
 | `POST /rooms/{id}/puzzles/{puzzle}/solve` | ręczne zaliczenie przez MG (wykonuje `then`) |
 | `GET /rooms/{id}/session` | stan ostatniej gry: status zagadek i wartości wejść |
+| `GET /safety`, `GET /safety/log`, `PUT /safety` | warstwa bezpieczeństwa, patrz niżej (zmiana tylko z tokenem operatora) |
 
 Każde zdarzenie (`input`, `solved`, `output`, `gm-solve`, `room-updated`, `started`, `finished`…) trafia
 do tabeli `events`. Trwająca gra jest wznawiana po restarcie procesu.
@@ -129,6 +130,41 @@ Każda zmiana przechodzi tę samą walidację co `PUT`. Błędna zmiana jest odr
 
 API i MCP odpowiadają tylko dla hostów z `AllowedHosts` (domyślnie localhost), co chroni przed DNS rebindingiem
 ze stron WWW. Żeby sięgnąć do serwera z innej maszyny, dopisz jej nazwę lub IP serwera w `appsettings.json`.
+
+## Bezpieczeństwo
+
+Funkcje bezpieczeństwa (przycisk awaryjny, czujnik dymu, odcięcie zasilania zamków, oświetlenie awaryjne) to osobna
+kategoria dla całego obiektu, niezależna od pokoi i gier. Przykład: [examples/safety.json](examples/safety.json).
+
+- **Reguły działają zawsze**, także bez trwającej gry. Liczą się w pamięci, w pętli MQTT, i nie czekają na bazę.
+  Dopóki warunek jest spełniony, każda nowa wartość czujnika ponownie wysyła wyjścia (np. gdy sterownik zamka
+  się zrestartował).
+- **Gra i MCP nie mogą ich dotknąć.** Wyjście pokoju, które publikowałoby do urządzenia bezpieczeństwa, jest
+  odrzucane przy zapisie pokoju. Dodatkowo tuż przed każdą publikacją gry sprawdzana jest ostatnia blokada, zapisywana
+  w audycie jako `blocked`. Do urządzenia „należy” każda komenda do niego, podszywanie się pod jego odczyty,
+  broadcast Tasmoty `cmnd/tasmotas/` i `zigbee2mqtt/bridge/`. MCP nie ma żadnego narzędzia do bezpieczeństwa,
+  a `list_mqtt_topics` oznacza tematy bezpieczeństwa jako `safety: true`.
+- **Zmiana konfiguracji wymaga tokenu operatora** (`PUT /safety`, nagłówek `X-Safety-Token`, w treści `reason`
+  i `config`). W konfiguracji serwera trzymany jest tylko SHA-256 tokenu, więc jej odczyt nie pozwala się podszyć:
+
+  ```bash
+  TOKEN=$(openssl rand -hex 32); echo "token dla operatora: $TOKEN"
+  printf %s "$TOKEN" | shasum -a 256   # wynik do Safety:Operators:<imię> (np. zmienna Safety__Operators__jan)
+  ```
+
+- **Audyt:** tabela `safety_log` tylko do dopisywania. Trigger w Postgresie odrzuca UPDATE, DELETE i TRUNCATE.
+  Trafia tam każda próba zmiany (`denied`, `rejected`, `config` z operatorem, IP i powodem), każde zadziałanie
+  reguły (`fired`, `output`, `failed`) i każda zablokowana publikacja gry (`blocked`). Zmiana jest zapisywana
+  w audycie, zanim zacznie obowiązywać. Odczyt: `GET /safety`, `GET /safety/log`.
+
+**To warstwa dodatkowa, nie zastępuje sprzętowego bezpieczeństwa.** Elektrozamki muszą puszczać po zaniku zasilania,
+a przycisk awaryjny musi fizycznie odcinać ich zasilanie, niezależnie od tego serwera, sieci i brokera. Dalsze
+uszczelnienie należy do wdrożenia:
+- ACL w brokerze, żeby inne klienty MQTT nie mogły publikować do tematów bezpieczeństwa;
+- urządzenia bezpieczeństwa poza grupami zigbee2mqtt;
+- aplikacja łącząca się z Postgresem rolą, która nie jest właścicielem `safety_log` i nie może zdjąć triggera.
+
+Przywrócenie zasilania zamków po alarmie jest celowo poza oprogramowaniem i robi je człowiek.
 
 ## Czego jeszcze nie ma
 

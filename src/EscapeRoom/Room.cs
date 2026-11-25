@@ -103,6 +103,25 @@ public record Io(
         _ => ($"zigbee2mqtt/{Z2m}/set", Path),
     };
 
+    public (string Topic, string Payload) Message(JsonElement value)
+    {
+        var (topic, path) = AsOutput();
+        return (topic, Payload.ForOutput(value, path));
+    }
+
+    /// <summary>True when publishing to <paramref name="topic"/> could command, reconfigure or impersonate this device.</summary>
+    public bool Owns(string topic) => this switch
+    {
+        { Topic: { } t } => topic == t,
+        // cmnd/tasmotas/ is Tasmota's broadcast group topic, it reaches every device
+        { Tasmota: { } d } => topic.StartsWith("cmnd/tasmotas/") || topic.StartsWith($"cmnd/{d}/")
+            || topic.StartsWith($"stat/{d}/") || topic.StartsWith($"tele/{d}/"),
+        { Esphome: { } d } => topic.StartsWith($"{d}/"),
+        // zigbee2mqtt/bridge/ can remove, rename or re-flash any device
+        { Z2m: { } d } => topic == $"zigbee2mqtt/{d}" || topic.StartsWith($"zigbee2mqtt/{d}/") || topic.StartsWith("zigbee2mqtt/bridge/"),
+        _ => topic == QrCamera.TopicFor(Camera!),
+    };
+
     internal string? Problem(bool input)
     {
         if (new[] { Topic, Tasmota, Esphome, Z2m, Camera }.Count(x => x is not null) != 1)
@@ -125,6 +144,14 @@ public record Condition(
     Condition[]? Any = null,
     Condition[]? Sequence = null)
 {
+    /// <summary>Evaluates against the last value of each input. A sequence never holds here; it needs event history.</summary>
+    public bool Holds(IReadOnlyDictionary<string, string> inputs) => this switch
+    {
+        { All: { } all } => all.All(x => x.Holds(inputs)),
+        { Any: { } any } => any.Any(x => x.Holds(inputs)),
+        _ => Input is { } i && inputs.TryGetValue(i, out var v) && Matches(v),
+    };
+
     public bool Matches(string value) =>
         (Is is not { } e || string.Equals(Payload.Text(e), value, StringComparison.OrdinalIgnoreCase))
         && (Gt is not { } gt || Number(value) > gt)

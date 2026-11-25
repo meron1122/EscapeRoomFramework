@@ -7,6 +7,7 @@ var connectionString = builder.Configuration.GetConnectionString("Postgres")
     ?? throw new InvalidOperationException("Missing ConnectionStrings:Postgres");
 builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton<Mqtt>();
+builder.Services.AddSingleton<Safety>();
 builder.Services.AddSingleton<Engine>();
 builder.Services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<Mqtt>());
 builder.Services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<Engine>());
@@ -20,8 +21,21 @@ var app = builder.Build();
 var db = app.Services.GetRequiredService<NpgsqlDataSource>();
 // shortcut: idempotent schema instead of migrations; switch to migrations once a released schema has to change
 await db.Exec(Engine.Schema);
+await db.Exec(Safety.Schema);
+var safety = app.Services.GetRequiredService<Safety>();
+await safety.Start(); // before app.Run, so no game can publish while the safety config is still unknown
 
 app.MapMcp("/mcp");
+
+// Safety has its own endpoints; nothing in the game API or MCP can reach them.
+app.MapGet("/safety", () => Results.Json(safety.Current, Engine.Json));
+app.MapGet("/safety/log", async () => await safety.History());
+app.MapPut("/safety", async (HttpRequest request) =>
+{
+    var (status, errors) = await safety.Change(
+        request.Headers["X-Safety-Token"], request.HttpContext.Connection.RemoteIpAddress?.ToString(), request.Body);
+    return status == 200 ? Results.NoContent() : Results.Json(new { errors }, statusCode: status);
+});
 
 app.MapPut("/rooms/{id}", async (string id, HttpRequest request, Engine engine) =>
 {

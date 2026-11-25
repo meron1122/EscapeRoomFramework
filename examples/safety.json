@@ -1,0 +1,28 @@
+{
+  "reason": "Initial setup: emergency button or smoke cuts power to all maglocks and turns on the emergency light",
+  "config": {
+    "inputs": {
+      "emergencyButton": { "esphome": "safety-panel", "entity": "binary_sensor/emergency" },
+      "smoke":           { "z2m": "smoke_lab", "path": "smoke" }
+    },
+    "outputs": {
+      "lockPower":      { "tasmota": "lock-power", "command": "Power1" },
+      "emergencyLight": { "topic": "shellies/emergency-light/relay/0/command" }
+    },
+    "rules": [
+      {
+        "id": "emergency",
+        "when": {
+          "any": [
+            { "input": "emergencyButton", "equals": "ON" },
+            { "input": "smoke", "equals": true }
+          ]
+        },
+        "then": [
+          { "output": "lockPower", "value": "OFF" },
+          { "output": "emergencyLight", "value": "on" }
+        ]
+      }
+    ]
+  }
+}

@@ -8,7 +8,7 @@ public class GameTests
 {
     static readonly DateTimeOffset Now = DateTimeOffset.UnixEpoch;
 
-    static Room Lab() => JsonSerializer.Deserialize<Room>(
+    internal static Room Lab() => JsonSerializer.Deserialize<Room>(
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "examples", "lab.json")), Engine.Json)!;
 
     static string[] Feed(Game g, string input, string value) => g.Input(input, value, Now).Select(p => p.Id).ToArray();

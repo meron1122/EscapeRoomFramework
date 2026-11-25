@@ -7,8 +7,9 @@ namespace EscapeRoom;
 
 /// <summary>MCP tools: lets an AI game master run games and rewire puzzles while they are being played.</summary>
 [McpServerToolType]
-public class McpTools(Engine engine, Mqtt mqtt)
+public class McpTools(Engine engine, Mqtt mqtt, Safety safety)
 {
+    // Deliberately no tool changes, triggers or simulates anything in the safety layer.
     const string Live =
         " Applies to the running game at once and keeps its progress. A puzzle whose condition already holds is solved"
         + " immediately and runs its steps, which moves real hardware. Invalid changes are rejected with the reasons.";
@@ -22,6 +23,8 @@ public class McpTools(Engine engine, Mqtt mqtt)
         {"z2m":"<friendly name>","path":"contact"} input zigbee2mqtt/<name>, output zigbee2mqtt/<name>/set,
         {"camera":"<camera id>"} QR codes read by an RTSP camera (input only).
         Use list_mqtt_topics to see which devices exist and what they send.
+        Devices of the venue's safety functions (emergency exits, alarms, lock power) are off-limits to games:
+        outputs that would publish to them are rejected, and list_mqtt_topics marks their topics with safety=true.
         """;
 
     const string PuzzleFormat =
@@ -121,7 +124,7 @@ public class McpTools(Engine engine, Mqtt mqtt)
     [McpServerTool(Name = "trigger_output"), Description(
         "Send a value to an output right now, game running or not: open a locker, switch a lamp. Value is text like \"ON\" or JSON like {\"state\":\"ON\"}.")]
     public async Task<string> TriggerOutput(string roomId, string outputId, JsonElement value) =>
-        await engine.Trigger(roomId, outputId, value) ? "Sent." : throw new McpException($"Room '{roomId}' or its output '{outputId}' not found");
+        await engine.Trigger(roomId, outputId, value) is { } error ? throw new McpException(error) : "Sent.";
 
     [McpServerTool(Name = "list_mqtt_topics", ReadOnly = true), Description(
         "MQTT topics seen since the engine started, with their last payload: to discover devices and wire them as inputs or outputs. At most 200; narrow with a prefix such as zigbee2mqtt/ or stat/.")]
@@ -129,7 +132,13 @@ public class McpTools(Engine engine, Mqtt mqtt)
         .Where(kv => prefix is null || kv.Key.StartsWith(prefix, StringComparison.Ordinal))
         .OrderBy(kv => kv.Key, StringComparer.Ordinal)
         .Take(200)
-        .Select(kv => new { topic = kv.Key, payload = kv.Value.Payload.Length > 300 ? kv.Value.Payload[..300] + "…" : kv.Value.Payload, at = kv.Value.At })
+        .Select(kv => new
+        {
+            topic = kv.Key,
+            payload = kv.Value.Payload.Length > 300 ? kv.Value.Payload[..300] + "…" : kv.Value.Payload,
+            at = kv.Value.At,
+            safety = safety.Current.Protects(kv.Key),
+        })
         .ToList();
 
     async Task<object> Save(string roomId, Func<Room?, Room> change)
