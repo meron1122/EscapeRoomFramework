@@ -1,0 +1,66 @@
+{
+  "name": "Laboratorium",
+  "inputs": {
+    "qr":         { "camera": "lab-cam" },
+    "flaskLeft":  { "z2m": "trap_flask_left", "path": "contact" },
+    "flaskRight": { "z2m": "trap_flask_right", "path": "contact" },
+    "thermo":     { "esphome": "trap-panel", "entity": "sensor/thermometer" },
+    "btnRed":     { "tasmota": "trap-buttons", "path": "Button1.Action" },
+    "btnGreen":   { "tasmota": "trap-buttons", "path": "Button2.Action" },
+    "btnBlue":    { "tasmota": "trap-buttons", "path": "Button3.Action" },
+    "exitKey":    { "esphome": "exit-panel", "entity": "binary_sensor/key" }
+  },
+  "outputs": {
+    "trapLock": { "tasmota": "trap-relay", "command": "Power1" },
+    "locker2":  { "esphome": "locker2", "entity": "switch/solenoid" },
+    "lamp":     { "z2m": "lab_lamp" },
+    "exitDoor": { "topic": "shellies/exit-door/relay/0/command" }
+  },
+  "start": [
+    { "output": "trapLock", "value": "ON" },
+    { "output": "exitDoor", "value": "on" },
+    { "output": "lamp", "value": { "state": "ON", "color": { "hex": "#ffffff" } } }
+  ],
+  "puzzles": [
+    {
+      "id": "qr-code",
+      "when": { "input": "qr", "equals": "LAB-7731" },
+      "then": [ { "output": "trapLock", "value": "OFF" } ]
+    },
+    {
+      "id": "flasks",
+      "after": [ "qr-code" ],
+      "when": {
+        "all": [
+          { "input": "flaskLeft", "equals": false },
+          { "input": "flaskRight", "equals": false },
+          { "input": "thermo", "gt": 40 }
+        ]
+      },
+      "then": [
+        { "output": "locker2", "value": "ON" },
+        { "delay": 3000 },
+        { "output": "locker2", "value": "OFF" }
+      ]
+    },
+    {
+      "id": "buttons",
+      "after": [ "qr-code" ],
+      "when": {
+        "sequence": [
+          { "input": "btnRed", "equals": "SINGLE" },
+          { "input": "btnBlue", "equals": "SINGLE" },
+          { "input": "btnRed", "equals": "SINGLE" },
+          { "input": "btnGreen", "equals": "SINGLE" }
+        ]
+      },
+      "then": [ { "output": "lamp", "value": { "state": "ON", "color": { "hex": "#ff0000" } } } ]
+    },
+    {
+      "id": "exit",
+      "after": [ "flasks", "buttons" ],
+      "when": { "input": "exitKey", "equals": "ON" },
+      "then": [ { "output": "exitDoor", "value": "off" } ]
+    }
+  ]
+}

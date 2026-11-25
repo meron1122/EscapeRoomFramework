@@ -1,0 +1,16 @@
+# Local dev infrastructure: Postgres for the engine, Mosquitto as the MQTT bus for all devices.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: escaperoom
+      POSTGRES_PASSWORD: escaperoom
+      POSTGRES_DB: escaperoom
+    ports: ["5433:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883"]
+    volumes: ["./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro"]
+volumes:
+  pgdata: {}
