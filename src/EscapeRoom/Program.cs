@@ -14,13 +14,16 @@ builder.Services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<Engine
 foreach (var cam in builder.Configuration.GetSection("Cameras").Get<CameraConfig[]>() ?? [])
     builder.Services.AddSingleton<IHostedService>(sp =>
         new QrCamera(cam, sp.GetRequiredService<Mqtt>(), sp.GetRequiredService<ILogger<QrCamera>>()));
+builder.Services.AddMcpServer().WithHttpTransport(o => o.Stateless = true).WithTools<McpTools>();
 
 var app = builder.Build();
 var db = app.Services.GetRequiredService<NpgsqlDataSource>();
 // shortcut: idempotent schema instead of migrations; switch to migrations once a released schema has to change
 await db.Exec(Engine.Schema);
 
-app.MapPut("/rooms/{id}", async (string id, HttpRequest request) =>
+app.MapMcp("/mcp");
+
+app.MapPut("/rooms/{id}", async (string id, HttpRequest request, Engine engine) =>
 {
     Room? room;
     try
@@ -31,19 +34,13 @@ app.MapPut("/rooms/{id}", async (string id, HttpRequest request) =>
     {
         return Results.BadRequest(new { errors = new[] { ex.Message } });
     }
-    var errors = room?.Validate().ToArray() ?? ["empty definition"];
-    if (errors.Length > 0) return Results.BadRequest(new { errors });
-    await db.Exec("""
-        insert into rooms (id, definition) values ($1, $2::jsonb)
-        on conflict (id) do update set definition = excluded.definition, updated_at = now()
-        """, id, JsonSerializer.Serialize(room, Engine.Json));
-    return Results.NoContent();
+    if (room is null) return Results.BadRequest(new { errors = new[] { "empty definition" } });
+    var errors = await engine.SaveRoom(id, _ => room);
+    return errors.Length > 0 ? Results.BadRequest(new { errors }) : Results.NoContent();
 });
 
-app.MapGet("/rooms/{id}", async (string id) =>
-    await db.Scalar("select definition from rooms where id = $1", id) is string json
-        ? Results.Text(json, "application/json")
-        : Results.NotFound());
+app.MapGet("/rooms/{id}", async (string id, Engine engine) =>
+    await engine.RoomJson(id) is { } json ? Results.Text(json, "application/json") : Results.NotFound());
 
 app.MapPost("/rooms/{id}/start", async (string id, Engine engine) =>
     await engine.Start(id) is { } session ? Results.Ok(new { session }) : Results.NotFound());

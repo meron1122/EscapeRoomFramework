@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MQTTnet;
 using MQTTnet.Protocol;
 
@@ -10,13 +11,21 @@ public class Mqtt(IConfiguration config, ILogger<Mqtt> log) : BackgroundService
 
     public event Func<string, string, Task>? Received;
 
+    /// <summary>Last payload per topic since startup, so new devices can be discovered and wired in.</summary>
+    // shortcut: unbounded and in memory; fine for one venue's broker
+    public ConcurrentDictionary<string, (string Payload, DateTimeOffset At)> Seen { get; } = new();
+
     public Task Publish(string topic, string payload) =>
         client.PublishStringAsync(topic, payload, MqttQualityOfServiceLevel.AtLeastOnce);
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         client.ApplicationMessageReceivedAsync += e =>
-            Received?.Invoke(e.ApplicationMessage.Topic, e.ApplicationMessage.ConvertPayloadToString()) ?? Task.CompletedTask;
+        {
+            var (topic, payload) = (e.ApplicationMessage.Topic, e.ApplicationMessage.ConvertPayloadToString());
+            Seen[topic] = (payload, DateTimeOffset.UtcNow);
+            return Received?.Invoke(topic, payload) ?? Task.CompletedTask;
+        };
 
         var options = new MqttClientOptionsBuilder()
             .WithTcpServer(config["Mqtt:Host"] ?? "localhost", config.GetValue("Mqtt:Port", 1883))

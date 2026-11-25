@@ -99,10 +99,38 @@ Wymaga `ffmpeg` w PATH. Ten sam kod publikowany jest ponownie dopiero wtedy, gdy
 | `POST /rooms/{id}/puzzles/{puzzle}/solve` | ręczne zaliczenie przez MG (wykonuje `then`) |
 | `GET /rooms/{id}/session` | stan ostatniej gry: status zagadek i wartości wejść |
 
-Każde zdarzenie (`input`, `solved`, `output`, `gm-solve`, `started`, `finished`…) trafia do tabeli `events`.
-Trwająca gra jest wznawiana po restarcie procesu.
+Każde zdarzenie (`input`, `solved`, `output`, `gm-solve`, `room-updated`, `started`, `finished`…) trafia
+do tabeli `events`. Trwająca gra jest wznawiana po restarcie procesu.
+
+Zapis pokoju (`PUT` lub MCP) w trakcie gry od razu podmienia definicję w tej grze i zachowuje postęp.
+Nowa lub przepięta zagadka, której warunek już jest spełniony, rozwiązuje się od razu i wykonuje swoje kroki.
+
+## Serwer MCP
+
+Silnik wystawia serwer MCP (Streamable HTTP) pod `/mcp`. Dzięki temu model AI może prowadzić grę i przepinać
+zagadki na żywo. Podłączenie do Claude Code:
+
+```bash
+claude mcp add --transport http escaperoom http://localhost:5201/mcp
+```
+
+| Narzędzie | Do czego |
+|---|---|
+| `list_rooms`, `get_room`, `game_status` | odczyt pokoi i stanu gry |
+| `list_mqtt_topics` | co jest na szynie MQTT i co wysyła, żeby znaleźć nowe urządzenia |
+| `upsert_input`, `upsert_output` | dodanie lub podmiana czujnika albo wyjścia |
+| `upsert_puzzle` | spięcie wejść i wyjść w zagadkę (dodanie lub podmiana po `id`) |
+| `remove_from_room`, `save_room` | usunięcie elementu, zapis całego pokoju |
+| `start_game`, `stop_game`, `solve_puzzle` | przebieg gry |
+| `simulate_input` | wartość „jakby z czujnika”: test zagadki albo zastępstwo za zepsuty czujnik |
+| `trigger_output` | sterowanie wyjściem od ręki, także bez gry |
+
+Każda zmiana przechodzi tę samą walidację co `PUT`. Błędna zmiana jest odrzucana z listą powodów i nic się nie zapisuje.
+
+API i MCP odpowiadają tylko dla hostów z `AllowedHosts` (domyślnie localhost), co chroni przed DNS rebindingiem
+ze stron WWW. Żeby sięgnąć do serwera z innej maszyny, dopisz jej nazwę lub IP serwera w `appsettings.json`.
 
 ## Czego jeszcze nie ma
 
-Front, uwierzytelnianie API i brokera, limit czasu gry i podpowiedzi, ręczne sterowanie wyjściami z API,
-ponawianie komend przy zerwanym MQTT, migracje bazy (schemat to `create if not exists`).
+Front, uwierzytelnianie API, MCP i brokera, limit czasu gry i podpowiedzi, `simulate_input` i `trigger_output`
+w HTTP API (na razie tylko w MCP), ponawianie komend przy zerwanym MQTT, migracje bazy (schemat to `create if not exists`).

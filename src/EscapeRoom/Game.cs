@@ -31,7 +31,7 @@ public class Game(Room room, GameState state)
             if (p.When?.Sequence is not { } seq || !seq.Any(s => s.Input == input && s.Matches(value))) continue;
             if (!state.Recent.TryGetValue(p.Id, out var recent)) state.Recent[p.Id] = recent = [];
             recent.Add(new(input, value));
-            if (recent.Count > seq.Length) recent.RemoveAt(0);
+            if (recent.Count > seq.Length) recent.RemoveRange(0, recent.Count - seq.Length); // sequence may have been shortened live
         }
         return Settle(now);
     }
@@ -45,7 +45,8 @@ public class Game(Room room, GameState state)
         return [p, .. Settle(now)];
     }
 
-    List<Puzzle> Settle(DateTimeOffset now)
+    /// <summary>Solves every active puzzle whose condition holds now, e.g. after the room was rewired mid-game.</summary>
+    public List<Puzzle> Settle(DateTimeOffset now)
     {
         var solved = new List<Puzzle>();
         // A solve activates later puzzles whose condition may already hold (the sensors are in place), so repeat.
@@ -65,8 +66,8 @@ public class Game(Room room, GameState state)
 
     bool Met(Puzzle p, Condition c) => c switch
     {
-        { Sequence: { } seq } => state.Recent.TryGetValue(p.Id, out var r) && r.Count == seq.Length
-            && seq.Zip(r).All(x => x.First.Input == x.Second.Input && x.First.Matches(x.Second.Value)),
+        { Sequence: { } seq } => state.Recent.TryGetValue(p.Id, out var r) && r.Count >= seq.Length
+            && seq.Zip(r.Skip(r.Count - seq.Length)).All(x => x.First.Input == x.Second.Input && x.First.Matches(x.Second.Value)),
         { All: { } all } => all.All(x => Met(p, x)),
         { Any: { } any } => any.Any(x => Met(p, x)),
         _ => state.Inputs.TryGetValue(c.Input!, out var v) && c.Matches(v),

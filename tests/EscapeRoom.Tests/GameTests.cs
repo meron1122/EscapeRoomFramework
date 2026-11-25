@@ -50,6 +50,32 @@ public class GameTests
     }
 
     [Fact]
+    public void Rewiring_mid_game_keeps_progress_and_solves_what_already_holds()
+    {
+        var room = Lab();
+        var g = new Game(room, new GameState());
+        Feed(g, "qr", "LAB-7731");
+        Feed(g, "thermo", "35");
+        foreach (var button in new[] { "btnRed", "btnBlue", "btnRed" }) Feed(g, button, "SINGLE");
+
+        // Live edit: the button code shrinks to blue, red, and a new puzzle wires the thermometer to the lamp.
+        var buttons = room.Puzzles.Single(p => p.Id == "buttons");
+        var rewired = room with
+        {
+            Puzzles =
+            [
+                .. room.Puzzles.Select(p => p == buttons ? p with { When = new(Sequence: buttons.When!.Sequence![1..3]) } : p),
+                new("warm", new(Input: "thermo", Gt: 30), [new(Output: "lamp", Value: JsonDocument.Parse("\"ON\"").RootElement)], ["qr-code"]),
+            ],
+        };
+        Assert.Empty(rewired.Validate());
+        var live = new Game(rewired, g.State);
+        Assert.Equal(["buttons", "warm"], live.Settle(Now).Select(p => p.Id));
+        Assert.Equal("solved", live.Status(rewired.Puzzles[0]));
+        Assert.Equal("active", live.Status(rewired.Puzzles.Single(p => p.Id == "flasks")));
+    }
+
+    [Fact]
     public void Validation_reports_broken_definitions()
     {
         var room = Lab() with

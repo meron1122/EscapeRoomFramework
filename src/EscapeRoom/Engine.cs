@@ -61,12 +61,96 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, ILogger<Engine> log) : Backg
         mqtt.Received += OnMessage;
     }
 
+    public async Task<List<object>> ListRooms()
+    {
+        await using var cmd = db.Cmd("""
+            select id, definition->>'name',
+                   exists (select 1 from sessions s where s.room_id = rooms.id and s.ended_at is null)
+            from rooms order by id
+            """);
+        await using var r = await cmd.ExecuteReaderAsync();
+        var rooms = new List<object>();
+        while (await r.ReadAsync()) rooms.Add(new { id = r.GetString(0), name = r.GetString(1), running = r.GetBoolean(2) });
+        return rooms;
+    }
+
+    public async Task<string?> RoomJson(string roomId) => await db.Scalar("select definition from rooms where id = $1", roomId) as string;
+
+    /// <summary>
+    /// Validates and stores a change to the room (null = room doesn't exist yet). A running game switches
+    /// to the new definition at once and keeps its progress.
+    /// </summary>
+    public async Task<string[]> SaveRoom(string roomId, Func<Room?, Room> change)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            var room = change(await RoomJson(roomId) is { } current ? Parse<Room>(current) : null);
+            var errors = room.Validate().ToArray();
+            if (errors.Length > 0) return errors;
+            var json = Serialize(room);
+            await db.Exec("""
+                insert into rooms (id, definition) values ($1, $2::jsonb)
+                on conflict (id) do update set definition = excluded.definition, updated_at = now()
+                """, roomId, json);
+            if (running.TryGetValue(roomId, out var old))
+            {
+                var s = Add(old.Id, roomId, room, old.Game.State);
+                await db.Exec("update sessions set definition = $2::jsonb where id = $1", s.Id, json);
+                await Log(s, "room-updated", new { });
+                // New or rewired puzzles may already be satisfied by what the sensors report right now.
+                await Apply(s, s.Game.Settle(DateTimeOffset.UtcNow));
+            }
+            return [];
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>Feeds a value as if the sensor sent it: to test a puzzle or stand in for a broken sensor.</summary>
+    public async Task<bool> Inject(string roomId, string input, string value)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            if (!running.TryGetValue(roomId, out var s) || !s.Room.Inputs.ContainsKey(input)) return false;
+            await Feed(s, input, value, "gm-input");
+            return true;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>Drives an output right now, game running or not: open a locker, test a lamp.</summary>
+    public async Task<bool> Trigger(string roomId, string output, JsonElement value)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            var room = running.TryGetValue(roomId, out var s) ? s.Room
+                : await RoomJson(roomId) is { } json ? Parse<Room>(json) : null;
+            if (room is null || !room.Outputs.ContainsKey(output)) return false;
+            var (topic, payload) = Message(room, output, value);
+            await mqtt.Publish(topic, payload);
+            if (s is not null) await Log(s, "gm-output", new { output, topic, payload });
+            return true;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     public async Task<Guid?> Start(string roomId)
     {
         await gate.WaitAsync();
         try
         {
-            if (await db.Scalar("select definition from rooms where id = $1", roomId) is not string json) return null;
+            if (await RoomJson(roomId) is not { } json) return null;
             if (running.TryGetValue(roomId, out var old)) await End(old, "restarted");
             var s = Add(Guid.NewGuid(), roomId, Parse<Room>(json), new GameState());
             await db.Exec("insert into sessions (id, room_id, definition, state) values ($1, $2, $3::jsonb, $4::jsonb)",
@@ -139,10 +223,7 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, ILogger<Engine> log) : Backg
             foreach (var s in running.Values.ToList())
                 foreach (var (input, path) in s.Topics[topic])
                     if (Payload.Extract(payload, path) is { } value && running.ContainsKey(s.RoomId))
-                    {
-                        await Log(s, "input", new { input, value });
-                        await Apply(s, s.Game.Input(input, value, DateTimeOffset.UtcNow));
-                    }
+                        await Feed(s, input, value, "input");
         }
         catch (Exception ex)
         {
@@ -152,6 +233,12 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, ILogger<Engine> log) : Backg
         {
             gate.Release();
         }
+    }
+
+    async Task Feed(Session s, string input, string value, string eventType)
+    {
+        await Log(s, eventType, new { input, value });
+        await Apply(s, s.Game.Input(input, value, DateTimeOffset.UtcNow));
     }
 
     async Task Apply(Session s, List<Puzzle> solved)
@@ -180,8 +267,7 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, ILogger<Engine> log) : Backg
                     await Task.Delay(ms);
                     continue;
                 }
-                var (topic, path) = s.Room.Outputs[step.Output!].AsOutput();
-                var payload = Payload.ForOutput(step.Value!.Value, path);
+                var (topic, payload) = Message(s.Room, step.Output!, step.Value!.Value);
                 await mqtt.Publish(topic, payload);
                 await Log(s, "output", new { output = step.Output, topic, payload });
             }
@@ -197,6 +283,12 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, ILogger<Engine> log) : Backg
             .Select(kv => (Id: kv.Key, Io: kv.Value.AsInput()))
             .ToLookup(x => x.Io.Topic, x => (x.Id, x.Io.Path));
         return running[roomId] = new Session(id, roomId, room, new Game(room, state), topics);
+    }
+
+    static (string Topic, string Payload) Message(Room room, string output, JsonElement value)
+    {
+        var (topic, path) = room.Outputs[output].AsOutput();
+        return (topic, Payload.ForOutput(value, path));
     }
 
     Task Log(Session s, string type, object data) =>
