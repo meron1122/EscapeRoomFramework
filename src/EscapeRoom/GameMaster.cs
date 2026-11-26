@@ -42,12 +42,19 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
         - Every line players hear is Polish, under 20 words, in character. Never repeat a recent line. Never reveal a
           solution outright except in a level 3 hint.
         - Exits and emergency systems are not yours: you cannot lock or unlock them, and you never pretend you can.
+
+        The next block is the scenario document the venue wrote for this room: the world, the characters, what each
+        puzzle looks like and where its clue is, the staging and the tone. Use it so hints point at things players can
+        see ("look at what the ad in the lobby draws") and lines fit the room's vibe. The JSON you get wins over the
+        document: its variant and solutions are the live ones.
         """;
 
     static readonly string[] Speakers = ["ZETA", "KRUK"];
     static readonly string[] Twists = ["patrol", "blackout", "lockdown"];
 
     readonly Random rng = new();
+    readonly string brief = Brief(config);
+    bool openRouter;
     readonly List<string> memory = [];
     double lastSolveClock;
     int rulesHintLevel;
@@ -59,7 +66,8 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
         var gameSeconds = config.GetValue("GameMaster:IntervalSeconds", 40.0);
         var speed = 1.0;
         var client = Client();
-        log.LogInformation("Game master for {Room}: {Mode}", room, client is null ? "rules only" : Model);
+        log.LogInformation("Game master for {Room}: {Mode}{Via}, scenario brief {Brief} chars", room,
+            client is null ? "rules only" : Model, openRouter ? " via OpenRouter" : "", brief.Length);
         var wake = Channel.CreateBounded<string>(new BoundedChannelOptions(16) { FullMode = BoundedChannelFullMode.DropOldest });
         engine.Changed += (r, type) =>
         {
@@ -107,14 +115,36 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
         }
     }
 
-    string Model => config["GameMaster:Model"] ?? "claude-opus-5-5";
+    string Model => openRouter
+        ? ForOpenRouter(config["GameMaster:Model"] ?? "claude-opus-5-5")
+        : config["GameMaster:Model"] ?? "claude-opus-5-5";
+
+    /// <summary>OpenRouter names models "anthropic/claude-opus-5.5" where Anthropic says "claude-opus-5-5".</summary>
+    public static string ForOpenRouter(string model) => model.StartsWith("claude-")
+        ? "anthropic/" + System.Text.RegularExpressions.Regex.Replace(model, @"-(\d+)-(\d+)$", "-$1.$2")
+        : model;
+
+    static string Brief(IConfiguration config)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, config["GameMaster:Brief"] ?? "scenariusz-jadro.md");
+        // The venue's open questions are notes for people, not instructions for the game master.
+        return File.Exists(path) ? File.ReadAllText(path).Split("\n## Otwarte pytania")[0] : "";
+    }
 
     AnthropicClient? Client()
     {
         if (config.GetValue("GameMaster:RulesOnly", false)) return null;
         // On a Sprite the key lives in a Connector: BaseUrl points at the gateway and the key here is only a placeholder.
-        // Elsewhere the SDK finds credentials itself (ANTHROPIC_API_KEY or an `ant auth login` profile).
         var baseUrl = config["GameMaster:BaseUrl"];
+        var routerKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
+        openRouter = config["GameMaster:Provider"] is { } provider ? provider == "openrouter" : !string.IsNullOrEmpty(routerKey);
+        if (openRouter)
+            return new AnthropicClient
+            {
+                AuthToken = string.IsNullOrEmpty(routerKey) ? "injected-by-connector" : routerKey,
+                BaseUrl = string.IsNullOrEmpty(baseUrl) ? "https://openrouter.ai/api" : baseUrl,
+            };
+        // Elsewhere the SDK finds credentials itself (ANTHROPIC_API_KEY or an `ant auth login` profile).
         if (string.IsNullOrEmpty(baseUrl)) return new AnthropicClient();
         var key = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
         return new AnthropicClient { ApiKey = string.IsNullOrEmpty(key) ? "injected-by-connector" : key, BaseUrl = baseUrl };
@@ -127,13 +157,16 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
         {
             Model = Model,
             MaxTokens = 4000,
-            Betas = [AnthropicBeta.ServerSideFallback2026_07_01],
-            Fallbacks = new Default(),
+            // OpenRouter attaches betas itself and has its own fallbacks.
+            Betas = openRouter ? null : [AnthropicBeta.ServerSideFallback2026_07_01],
+            Fallbacks = openRouter ? null : new Default(),
             OutputConfig = new BetaOutputConfig { Effort = (config["GameMaster:Effort"] ?? "low") switch
             {
                 "medium" => Effort.Medium, "high" => Effort.High, _ => Effort.Low,
             } },
-            System = new List<BetaTextBlockParam> { new() { Text = Prompt, CacheControl = new BetaCacheControlEphemeral() } },
+            System = brief == ""
+                ? new List<BetaTextBlockParam> { new() { Text = Prompt, CacheControl = new BetaCacheControlEphemeral() } }
+                : new List<BetaTextBlockParam> { new() { Text = Prompt }, new() { Text = brief, CacheControl = new BetaCacheControlEphemeral() } },
             Tools = Tools(),
             Messages = [new BetaUserMessageParam { Content = input }],
         }, cancellationToken: ct);

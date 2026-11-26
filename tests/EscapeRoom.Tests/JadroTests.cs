@@ -68,4 +68,11 @@ public class JadroTests
         Assert.True(game.Finished);
         Assert.Equal("uklad", game.Ending);
     }
+
+    [Theory]
+    [InlineData("claude-opus-5-5", "anthropic/claude-opus-5.5")]
+    [InlineData("claude-opus-5", "anthropic/claude-opus-5")]
+    [InlineData("anthropic/claude-sonnet-5.5", "anthropic/claude-sonnet-5.5")]
+    public void Model_names_map_to_OpenRouter(string model, string expected) =>
+        Assert.Equal(expected, GameMaster.ForOpenRouter(model));
 }

@@ -14,4 +14,9 @@
     <PackageReference Include="ZXing.Net" Version="0.16.11" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The game master reads the room's scenario document as its brief. -->
+    <None Include="..\..\docs\scenariusz-jadro.md" Link="scenariusz-jadro.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

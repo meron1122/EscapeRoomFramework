@@ -59,8 +59,10 @@ blokada zmiany rozwiązania, którego wskazówkę gracze już widzieli.
 ## Sprites i Connectory
 
 - Cały stos żyje na jednym Sprite: Mosquitto, Postgres, silnik z agentem i pliki symulatora.
-- Model przez **Connector OpenRouter**: agent woła endpoint bez klucza, klucz zostaje w Fly. Lokalnie ten sam klient
-  działa z dowolnym endpointem zgodnym z OpenAI (np. Ollama).
+- Model przez **Connector OpenRouter**: agent woła endpoint bez klucza, klucz zostaje w Fly. Agent używa oficjalnego SDK
+  Anthropic, bo OpenRouter wystawia API zgodne z Messages API (`https://openrouter.ai/api`). Na Sprite:
+  `GameMaster:Provider=openrouter` i `GameMaster:BaseUrl` na bramkę Connectora. Lokalnie wystarczy `OPENROUTER_API_KEY`
+  albo klucz Anthropic.
 - Do sprawdzenia na miejscu: checkpoint Sprite przed każdą grą jako „przewinięcie” gry.
 
 ## Plan prac
