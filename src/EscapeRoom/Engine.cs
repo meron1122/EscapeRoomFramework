@@ -13,6 +13,8 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
             id text primary key,
             definition jsonb not null,
             updated_at timestamptz not null default now());
+        -- the venue's description of the room for the game master (Markdown): story, mood, staging, pacing
+        alter table rooms add column if not exists brief text;
         create table if not exists sessions (
             id uuid primary key,
             room_id text not null references rooms (id),
@@ -49,6 +51,8 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
         public string? Nonce;  // set by whoever started the game, so a client can tell its game from an older one
         public JsonElement? Players;  // latest tracking snapshot from the room's cameras or the simulator
         public readonly List<object> Recent = [];  // last events, for the game master agent
+        // shortcut: in memory, so a resumed game may fire a twist again; persist it if engine restarts mid-game matter
+        public readonly HashSet<string> Fired = [];  // twists used this game
     }
 
     /// <summary>Raised after every logged event of a running game: (room, event type). The game master agent wakes on it.</summary>
@@ -147,6 +151,7 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
                 inputs = s.Game.State.Inputs,
                 recent = s.Recent.TakeLast(25),
                 players = s.Players,
+                twistsUsed = s.Fired,
             };
         }
         finally
@@ -170,6 +175,104 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
 
     public async Task<string?> RoomJson(string roomId) => await db.Scalar("select definition from rooms where id = $1", roomId) as string;
 
+    public async Task<string?> Brief(string roomId) => await db.Scalar("select brief from rooms where id = $1", roomId) as string;
+
+    public async Task<bool> SaveBrief(string roomId, string brief) =>
+        await db.Scalar("update rooms set brief = $2, updated_at = now() where id = $1 returning id", roomId, brief) is not null;
+
+    /// <summary>Rooms with a game running now.</summary>
+    public async Task<string[]> Running()
+    {
+        await gate.WaitAsync();
+        try { return [.. running.Keys]; }
+        finally { gate.Release(); }
+    }
+
+    /// <summary>What a running game plays right now: the room with this game's variants and twists.</summary>
+    public async Task<Room?> Playing(string roomId)
+    {
+        await gate.WaitAsync();
+        try { return running.TryGetValue(roomId, out var s) ? s.Room : null; }
+        finally { gate.Release(); }
+    }
+
+    /// <summary>
+    /// Draws another variant for a running game: solutions and clues change together. Only this game changes;
+    /// the stored room keeps its authored default, which the start steps' clues match.
+    /// </summary>
+    public async Task<(bool Ok, string Message)> Reroll(string roomId, string handle, Random rng)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            if (!running.TryGetValue(roomId, out var s)) return (false, "no game running");
+            if (s.Room.Variants?.GetValueOrDefault(handle) is not { } options) return (false, $"'{handle}' has no variants");
+            var puzzles = options.SelectMany(v => v.Solutions.Keys).Distinct()
+                .Select(id => s.Room.Puzzles.FirstOrDefault(p => p.Id == id)).ToList();
+            if (puzzles.Contains(null)) return (false, $"'{handle}' is not in this game");
+            // Players may already be reading the clue of a puzzle in play, so it keeps its solution after the first minute.
+            if (s.Game.State.Clock > 60 && puzzles.Any(p => s.Game.Status(p!) != "locked")) return (false, $"'{handle}' is already in play");
+            var others = options.Where(v => v.Solutions.Any(kv => Serialize(s.Room.Puzzles.First(p => p.Id == kv.Key).When!) != Serialize(kv.Value))).ToArray();
+            var pick = others.Length > 0 ? others[rng.Next(others.Length)] : options[rng.Next(options.Length)];
+            var changed = await Rewire(s, s.Room.WithVariant(pick));
+            await Log(changed, "reroll", new { variants = handle, pick.Summary });
+            _ = Run(changed, pick.Clues ?? []);
+            return (true, pick.Summary ?? handle);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>Fires a prepared twist, once per game: its steps run, its puzzles join (with a drawn variant) and block.</summary>
+    public async Task<(bool Ok, string Message)> Twist(string roomId, string id, Random rng)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            if (!running.TryGetValue(roomId, out var s)) return (false, "no game running");
+            if (s.Room.Twists?.GetValueOrDefault(id) is not { } twist) return (false, $"no twist '{id}'");
+            if (s.Fired.Contains(id)) return (false, $"'{id}' was already used this game");
+            string Status(string p) => s.Room.Puzzles.FirstOrDefault(q => q.Id == p) is { } q ? s.Game.Status(q) : "missing";
+            if ((twist.After ?? []).FirstOrDefault(p => Status(p) != "solved") is { } early) return (false, $"'{id}' waits for '{early}'");
+            if ((twist.Blocks ?? []).FirstOrDefault(p => Status(p) == "solved") is { } late) return (false, $"too late, '{late}' is solved");
+            s.Fired.Add(id);
+            var room = s.Room.WithTwist(twist);
+            var steps = new List<Step>(twist.Then ?? []);
+            var summary = new List<string> { id };
+            var added = (twist.Adds ?? []).Select(p => p.Id).ToHashSet();
+            foreach (var options in (room.Variants ?? []).Values.Where(o => o.SelectMany(v => v.Solutions.Keys).All(added.Contains)))
+            {
+                var pick = options[rng.Next(options.Length)];
+                room = room.WithVariant(pick);
+                steps.AddRange(pick.Clues ?? []);
+                if (pick.Summary is { } text) summary.Add(text);
+            }
+            var changed = await Rewire(s, room);
+            await Log(changed, "twist", new { twist = id });
+            _ = Run(changed, steps);
+            return (true, string.Join(", ", summary));
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>Switches a running game to a changed room; it keeps its progress. Call inside the gate.</summary>
+    async Task<Session> Rewire(Session old, Room room)
+    {
+        var json = Serialize(room);
+        var s = Add(old.Id, old.RoomId, room, old.Game.State);
+        await db.Exec("update sessions set definition = $2::jsonb where id = $1", s.Id, json);
+        await mqtt.Publish($"escaperoom/{s.RoomId}/definition", json, retain: true);
+        await Log(s, "room-updated", new { });
+        // New or rewired puzzles may already be satisfied by what the sensors report right now.
+        await Apply(s, s.Game.Settle(DateTimeOffset.UtcNow));
+        return s;
+    }
+
     /// <summary>
     /// Validates and stores a change to the room (null = room doesn't exist yet). A running game switches
     /// to the new definition at once and keeps its progress.
@@ -188,15 +291,7 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
                 insert into rooms (id, definition) values ($1, $2::jsonb)
                 on conflict (id) do update set definition = excluded.definition, updated_at = now()
                 """, roomId, json);
-            if (running.TryGetValue(roomId, out var old))
-            {
-                var s = Add(old.Id, roomId, room, old.Game.State);
-                await db.Exec("update sessions set definition = $2::jsonb where id = $1", s.Id, json);
-                await mqtt.Publish($"escaperoom/{roomId}/definition", json, retain: true);
-                await Log(s, "room-updated", new { });
-                // New or rewired puzzles may already be satisfied by what the sensors report right now.
-                await Apply(s, s.Game.Settle(DateTimeOffset.UtcNow));
-            }
+            if (running.TryGetValue(roomId, out var old)) await Rewire(old, room);
             return [];
         }
         finally
@@ -411,6 +506,7 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
             s.Nonce = previous.Nonce;
             s.Players = previous.Players;
             s.Recent.AddRange(previous.Recent);
+            s.Fired.UnionWith(previous.Fired);
         }
         return running[roomId] = s;
     }

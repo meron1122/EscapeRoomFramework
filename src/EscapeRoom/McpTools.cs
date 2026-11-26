@@ -116,6 +116,22 @@ public class McpTools(Engine engine, Mqtt mqtt, Safety safety)
     public async Task<object> SolvePuzzle(string roomId, string puzzleId) =>
         await engine.Solve(roomId, puzzleId) ? (await engine.Status(roomId))! : throw NoGame(roomId, $"puzzle '{puzzleId}'");
 
+    [McpServerTool(Name = "get_brief", ReadOnly = true), Description(
+        "The venue's Markdown brief of the room: story, mood, characters, puzzles, pacing and staging. Read it before running a game.")]
+    public async Task<string> GetBrief(string roomId) => await engine.Brief(roomId) ?? throw new McpException($"Room '{roomId}' has no brief");
+
+    [McpServerTool(Name = "reroll_variant"), Description(
+        "Draw another of the room's prepared variants for the running game: the puzzle's solution and its clue change together."
+        + " Only for puzzles nobody works on yet (any in the first game minute). The stored room keeps its default.")]
+    public async Task<string> RerollVariant(string roomId, [Description("A key of the room's 'variants'")] string variant) =>
+        await engine.Reroll(roomId, variant, Random.Shared) is var (ok, message) && ok ? message : throw new McpException(message);
+
+    [McpServerTool(Name = "fire_twist"), Description(
+        "Fire one of the room's prepared twists in the running game, once per game and only when its 'after' puzzles are solved"
+        + " and its 'blocks' puzzles are not. It runs its steps (moving real hardware) and may add puzzles.")]
+    public async Task<string> FireTwist(string roomId, [Description("A key of the room's 'twists'")] string twist) =>
+        await engine.Twist(roomId, twist, Random.Shared) is var (ok, message) && ok ? message : throw new McpException(message);
+
     [McpServerTool(Name = "simulate_input"), Description(
         "Feed an input value as if its sensor had sent it: to test a puzzle or stand in for a broken sensor. Values are text, e.g. \"ON\", \"false\", \"42\".")]
     public async Task<object> SimulateInput(string roomId, string inputId, string value) =>

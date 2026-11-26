@@ -66,56 +66,56 @@
     { "output": "sensors", "value": { "active": [1, 3, 4] } }
   ],
   "puzzles": [
-    { "id": "przeszukanie", "name": "Przeszukanie holu", "when": { "input": "badge_found", "equals": "found" } },
+    { "id": "przeszukanie", "name": "Przeszukanie holu", "hints": ["Przeszukajcie hol. Ktoś tu zgubił identyfikator.", "Zajrzyjcie do donicy z rośliną."], "when": { "input": "badge_found", "equals": "found" } },
     {
-      "id": "telefon", "name": "Telefon recepcjonistki",
+      "id": "telefon", "name": "Telefon recepcjonistki", "hints": ["Reklama w holu coś rysuje. Patrzcie na palec.", "Narysujcie ten sam kształt na dziewięciu przyciskach telefonu."],
       "when": { "sequence": [
         { "input": "phone_key", "equals": "1" }, { "input": "phone_key", "equals": "2" }, { "input": "phone_key", "equals": "3" },
         { "input": "phone_key", "equals": "5" }, { "input": "phone_key", "equals": "7" }, { "input": "phone_key", "equals": "8" },
         { "input": "phone_key", "equals": "9" } ] }
     },
-    { "id": "szafka", "name": "Grafik i szafka ochrony", "after": ["telefon"], "when": { "input": "locker_code", "equals": "0614" } },
+    { "id": "szafka", "name": "Grafik i szafka ochrony", "hints": ["Grafik ochrony na monitorze. Kto ma dziś dyżur?", "Kod szafki to godziny zmiany dyżurnego, np. 06–14 daje 0614."], "after": ["telefon"], "when": { "input": "locker_code", "equals": "0614" } },
     {
-      "id": "bramka", "name": "Bramka", "after": ["szafka", "przeszukanie"],
+      "id": "bramka", "name": "Bramka", "hints": ["Bramka wpuści tylko jedną osobę z ochrony.", "Pokażcie kamerze identyfikator dzisiejszego dyżurnego."], "after": ["szafka", "przeszukanie"],
       "when": { "input": "gate_qr", "equals": "OCHRONA-MAREK" },
       "then": [ { "output": "door_winda", "value": "open" } ]
     },
     {
-      "id": "sciana", "name": "Ściana powiadomień", "after": ["bramka"],
+      "id": "sciana", "name": "Ściana powiadomień", "hints": ["Raport czasu ekranowego mówi, co wciąga najmocniej.", "Ułóżcie telefony od najdłuższego do najkrótszego czasu z raportu."], "after": ["bramka"],
       "when": { "all": [
         { "input": "slot1", "equals": "Z-FEED" }, { "input": "slot2", "equals": "Z-BET" }, { "input": "slot3", "equals": "Z-DATE" },
         { "input": "slot4", "equals": "Z-NEWS" }, { "input": "slot5", "equals": "Z-PLAY" }, { "input": "slot6", "equals": "Z-FIT" } ] }
     },
     {
-      "id": "zdrive", "name": "Kokpit Z-Drive", "after": ["bramka"],
+      "id": "zdrive", "name": "Kokpit Z-Drive", "hints": ["Instrukcja serwisowa leży na fotelu. Czytajcie kod z ekranu.", "SRV to ciśnienie, temperatura i obroty. Ustawcie je pokrętłami."], "after": ["bramka"],
       "when": { "all": [
         { "input": "knob_pressure", "gt": 2.35 }, { "input": "knob_pressure", "lt": 2.45 },
         { "input": "knob_temp", "gt": 87.5 }, { "input": "knob_temp", "lt": 92.5 },
         { "input": "knob_rpm", "gt": 3150 }, { "input": "knob_rpm", "lt": 3250 } ] }
     },
     {
-      "id": "zmart", "name": "Kasa Z-Mart", "after": ["bramka"],
+      "id": "zmart", "name": "Kasa Z-Mart", "hints": ["Kiosk pokazuje klientkę, plakaty mówią, co algorytm jej wciśnie.", "Zeskanujcie przy kasie cztery produkty dla niej, w kolejności z plakatów."], "after": ["bramka"],
       "when": { "sequence": [
         { "input": "mart_qr", "equals": "Z-BOOST" }, { "input": "mart_qr", "equals": "Z-KIDS" },
         { "input": "mart_qr", "equals": "Z-SNACK" }, { "input": "mart_qr", "equals": "Z-SEN" } ] }
     },
     {
-      "id": "skanery", "name": "Skanery dłoni", "after": ["sciana", "zdrive", "zmart"],
+      "id": "skanery", "name": "Skanery dłoni", "hints": ["Skanery dłoni nie zapalają się przypadkiem.", "Dwie osoby, dwa zapalone skanery, dłonie razem przez trzy sekundy."], "after": ["sciana", "zdrive", "zmart"],
       "when": { "all": [ { "input": "scanner2", "equals": "ON" }, { "input": "scanner3", "equals": "ON" } ] },
       "then": [ { "output": "door_zejscie", "value": "open" } ]
     },
     {
-      "id": "firewall", "name": "Firewall ze światła", "after": ["skanery"],
+      "id": "firewall", "name": "Firewall ze światła", "hints": ["Diody nad czujnikami pokazują cele.", "Obróćcie lustra tak, żeby każda wiązka trafiła w czujnik z zapaloną diodą."], "after": ["skanery"],
       "when": { "all": [ { "input": "light1", "gt": 600 }, { "input": "light3", "gt": 600 }, { "input": "light4", "gt": 600 } ] }
     },
     {
-      "id": "uzbrojenie", "name": "Uzbrojenie", "after": ["firewall"],
+      "id": "uzbrojenie", "name": "Uzbrojenie", "hints": ["Trzy rdzenie do skrzyni, potem kod z trzech fragmentów.", "Hasło ZETY mówi, w jakiej kolejności wpisać fragmenty ze stanowisk."], "after": ["firewall"],
       "when": { "all": [
         { "input": "rod1", "equals": "ROD" }, { "input": "rod2", "equals": "ROD" }, { "input": "rod3", "equals": "ROD" },
         { "input": "bomb_code", "equals": "835127" } ] }
     },
     {
-      "id": "detonacja", "name": "Detonacja", "after": ["uzbrojenie"], "ends": true,
+      "id": "detonacja", "name": "Detonacja", "hints": ["Dwa zamki, dwa klucze. Szafa serwisowa.", "Przekręćcie oba klucze w tej samej chwili."], "after": ["uzbrojenie"], "ends": true,
       "when": { "all": [ { "input": "key_left", "equals": "ON" }, { "input": "key_right", "equals": "ON" } ] },
       "then": [ { "output": "door_wyjscie", "value": "open" } ]
     },
@@ -124,5 +124,124 @@
       "when": { "input": "accept", "equals": "PRESSED" },
       "then": [ { "output": "door_wyjscie", "value": "open" } ]
     }
-  ]
+  ],
+  "characters": [
+    {
+      "name": "KRUK", "output": "voice", "voice": "N2lVS1w4EtoT3dr4eOWO",
+      "about": "Nomad z ekipy w aucie pod wieżą, mówi przez radio. Krótko, po ulicznemu, zawsze po stronie graczy. Daje podpowiedzi."
+    },
+    {
+      "name": "ZETA", "output": "voice", "screen": "screen_zeta", "voice": "XB0fDUnXU5powFXDhCwa",
+      "about": "Sztuczna inteligencja Korporacji Z, antagonistka. W holu uprzejma jak recepcja, na piętrze kpiąca, w Jądrze kusząca. Nigdy nie kłamie o zagadkach."
+    }
+  ],
+  "twists": {
+    "patrol": {
+      "about": "ZETA ogłasza patrol na Piętrze Nawyków: przez 20 sekund nikt nie może się ruszyć.",
+      "after": ["bramka"], "blocks": ["skanery"],
+      "then": [ { "output": "twist", "value": { "kind": "patrol", "seconds": 20 } } ]
+    },
+    "blackout": {
+      "about": "Zaciemnienie w holu albo na piętrze: przez 60 sekund świeci tylko UV i oznaczenia wyjść, praca idzie wolniej.",
+      "blocks": ["skanery"],
+      "then": [ { "output": "twist", "value": { "kind": "blackout", "seconds": 60 } } ]
+    },
+    "lockdown": {
+      "about": "Blokada: ZETA znów zamyka zejście do Jądra. Otwiera je sekwencja trzech przycisków, którą ZETA podaje w zagadce słownej; firewall czeka na blokadę.",
+      "after": ["skanery"], "blocks": ["firewall"],
+      "then": [ { "output": "door_zejscie", "value": "closed" }, { "output": "twist", "value": { "kind": "lockdown", "seconds": 0 } } ],
+      "adds": [
+        {
+          "id": "blokada", "name": "Blokada drzwi",
+          "hints": ["ZETA zamknęła zejście. Panel przy drzwiach chce sekwencji.", "Zagadka ZETY mówi, które przyciski i w jakiej kolejności."],
+          "when": { "sequence": [ { "input": "lockdown_panel", "equals": "1" }, { "input": "lockdown_panel", "equals": "2" }, { "input": "lockdown_panel", "equals": "3" } ] },
+          "then": [ { "output": "door_zejscie", "value": "open" } ]
+        }
+      ]
+    }
+  },
+  "variants": {
+    "telefon": [
+      {"solutions": {"telefon": {"sequence": [{"input": "phone_key", "equals": "1"}, {"input": "phone_key", "equals": "4"}, {"input": "phone_key", "equals": "7"}, {"input": "phone_key", "equals": "8"}, {"input": "phone_key", "equals": "9"}]}}, "clues": [{"output": "screen_reklama", "value": {"gest": "L"}}], "summary": "gest L"},
+      {"solutions": {"telefon": {"sequence": [{"input": "phone_key", "equals": "3"}, {"input": "phone_key", "equals": "2"}, {"input": "phone_key", "equals": "1"}, {"input": "phone_key", "equals": "4"}, {"input": "phone_key", "equals": "5"}, {"input": "phone_key", "equals": "6"}, {"input": "phone_key", "equals": "9"}, {"input": "phone_key", "equals": "8"}, {"input": "phone_key", "equals": "7"}]}}, "clues": [{"output": "screen_reklama", "value": {"gest": "S"}}], "summary": "gest S"},
+      {"solutions": {"telefon": {"sequence": [{"input": "phone_key", "equals": "1"}, {"input": "phone_key", "equals": "4"}, {"input": "phone_key", "equals": "7"}, {"input": "phone_key", "equals": "8"}, {"input": "phone_key", "equals": "9"}, {"input": "phone_key", "equals": "6"}, {"input": "phone_key", "equals": "3"}]}}, "clues": [{"output": "screen_reklama", "value": {"gest": "U"}}], "summary": "gest U"},
+      {"solutions": {"telefon": {"sequence": [{"input": "phone_key", "equals": "1"}, {"input": "phone_key", "equals": "2"}, {"input": "phone_key", "equals": "3"}, {"input": "phone_key", "equals": "5"}, {"input": "phone_key", "equals": "7"}]}}, "clues": [{"output": "screen_reklama", "value": {"gest": "7"}}], "summary": "gest 7"},
+      {"solutions": {"telefon": {"sequence": [{"input": "phone_key", "equals": "7"}, {"input": "phone_key", "equals": "4"}, {"input": "phone_key", "equals": "1"}, {"input": "phone_key", "equals": "5"}, {"input": "phone_key", "equals": "9"}, {"input": "phone_key", "equals": "6"}, {"input": "phone_key", "equals": "3"}]}}, "clues": [{"output": "screen_reklama", "value": {"gest": "N"}}], "summary": "gest N"},
+      {"solutions": {"telefon": {"sequence": [{"input": "phone_key", "equals": "1"}, {"input": "phone_key", "equals": "2"}, {"input": "phone_key", "equals": "3"}, {"input": "phone_key", "equals": "5"}, {"input": "phone_key", "equals": "7"}, {"input": "phone_key", "equals": "8"}, {"input": "phone_key", "equals": "9"}]}}, "clues": [{"output": "screen_reklama", "value": {"gest": "Z"}}], "summary": "gest Z"}
+    ],
+    "szafka": [
+      {"solutions": {"szafka": {"input": "locker_code", "equals": "2206"}, "bramka": {"input": "gate_qr", "equals": "OCHRONA-OLA"}}, "clues": [{"output": "screen_grafik", "value": {"duty": "Ola", "shifts": {"Marek": [6, 14], "Ola": [22, 6], "Tomek": [6, 14]}}}], "summary": "dyżur Ola, kod 2206"},
+      {"solutions": {"szafka": {"input": "locker_code", "equals": "1018"}, "bramka": {"input": "gate_qr", "equals": "OCHRONA-TOMEK"}}, "clues": [{"output": "screen_grafik", "value": {"duty": "Tomek", "shifts": {"Marek": [14, 22], "Ola": [22, 6], "Tomek": [10, 18]}}}], "summary": "dyżur Tomek, kod 1018"},
+      {"solutions": {"szafka": {"input": "locker_code", "equals": "1422"}, "bramka": {"input": "gate_qr", "equals": "OCHRONA-TOMEK"}}, "clues": [{"output": "screen_grafik", "value": {"duty": "Tomek", "shifts": {"Marek": [10, 18], "Ola": [6, 14], "Tomek": [14, 22]}}}], "summary": "dyżur Tomek, kod 1422"},
+      {"solutions": {"szafka": {"input": "locker_code", "equals": "1018"}, "bramka": {"input": "gate_qr", "equals": "OCHRONA-MAREK"}}, "clues": [{"output": "screen_grafik", "value": {"duty": "Marek", "shifts": {"Marek": [10, 18], "Ola": [14, 22], "Tomek": [14, 22]}}}], "summary": "dyżur Marek, kod 1018"},
+      {"solutions": {"szafka": {"input": "locker_code", "equals": "2206"}, "bramka": {"input": "gate_qr", "equals": "OCHRONA-MAREK"}}, "clues": [{"output": "screen_grafik", "value": {"duty": "Marek", "shifts": {"Marek": [22, 6], "Ola": [22, 6], "Tomek": [10, 18]}}}], "summary": "dyżur Marek, kod 2206"},
+      {"solutions": {"szafka": {"input": "locker_code", "equals": "0614"}, "bramka": {"input": "gate_qr", "equals": "OCHRONA-OLA"}}, "clues": [{"output": "screen_grafik", "value": {"duty": "Ola", "shifts": {"Marek": [22, 6], "Ola": [6, 14], "Tomek": [8, 16]}}}], "summary": "dyżur Ola, kod 0614"},
+      {"solutions": {"szafka": {"input": "locker_code", "equals": "1422"}, "bramka": {"input": "gate_qr", "equals": "OCHRONA-MAREK"}}, "clues": [{"output": "screen_grafik", "value": {"duty": "Marek", "shifts": {"Marek": [14, 22], "Ola": [10, 18], "Tomek": [8, 16]}}}], "summary": "dyżur Marek, kod 1422"},
+      {"solutions": {"szafka": {"input": "locker_code", "equals": "2206"}, "bramka": {"input": "gate_qr", "equals": "OCHRONA-TOMEK"}}, "clues": [{"output": "screen_grafik", "value": {"duty": "Tomek", "shifts": {"Marek": [22, 6], "Ola": [22, 6], "Tomek": [22, 6]}}}], "summary": "dyżur Tomek, kod 2206"}
+    ],
+    "sciana": [
+      {"solutions": {"sciana": {"all": [{"input": "slot1", "equals": "Z-NEWS"}, {"input": "slot2", "equals": "Z-BET"}, {"input": "slot3", "equals": "Z-DATE"}, {"input": "slot4", "equals": "Z-FIT"}, {"input": "slot5", "equals": "Z-PLAY"}, {"input": "slot6", "equals": "Z-FEED"}]}}, "clues": [{"output": "screen_raport", "value": {"minutes": {"Z-FEED": 52, "Z-BET": 204, "Z-DATE": 193, "Z-NEWS": 225, "Z-PLAY": 66, "Z-FIT": 168}}}], "summary": "raport: Z-NEWS > Z-BET > Z-DATE > Z-FIT > Z-PLAY > Z-FEED"},
+      {"solutions": {"sciana": {"all": [{"input": "slot1", "equals": "Z-NEWS"}, {"input": "slot2", "equals": "Z-PLAY"}, {"input": "slot3", "equals": "Z-FIT"}, {"input": "slot4", "equals": "Z-BET"}, {"input": "slot5", "equals": "Z-DATE"}, {"input": "slot6", "equals": "Z-FEED"}]}}, "clues": [{"output": "screen_raport", "value": {"minutes": {"Z-FEED": 55, "Z-BET": 131, "Z-DATE": 95, "Z-NEWS": 248, "Z-PLAY": 181, "Z-FIT": 158}}}], "summary": "raport: Z-NEWS > Z-PLAY > Z-FIT > Z-BET > Z-DATE > Z-FEED"},
+      {"solutions": {"sciana": {"all": [{"input": "slot1", "equals": "Z-FEED"}, {"input": "slot2", "equals": "Z-FIT"}, {"input": "slot3", "equals": "Z-BET"}, {"input": "slot4", "equals": "Z-PLAY"}, {"input": "slot5", "equals": "Z-DATE"}, {"input": "slot6", "equals": "Z-NEWS"}]}}, "clues": [{"output": "screen_raport", "value": {"minutes": {"Z-FEED": 255, "Z-BET": 231, "Z-DATE": 80, "Z-NEWS": 63, "Z-PLAY": 94, "Z-FIT": 239}}}], "summary": "raport: Z-FEED > Z-FIT > Z-BET > Z-PLAY > Z-DATE > Z-NEWS"},
+      {"solutions": {"sciana": {"all": [{"input": "slot1", "equals": "Z-PLAY"}, {"input": "slot2", "equals": "Z-FEED"}, {"input": "slot3", "equals": "Z-BET"}, {"input": "slot4", "equals": "Z-DATE"}, {"input": "slot5", "equals": "Z-FIT"}, {"input": "slot6", "equals": "Z-NEWS"}]}}, "clues": [{"output": "screen_raport", "value": {"minutes": {"Z-FEED": 150, "Z-BET": 126, "Z-DATE": 70, "Z-NEWS": 49, "Z-PLAY": 195, "Z-FIT": 65}}}], "summary": "raport: Z-PLAY > Z-FEED > Z-BET > Z-DATE > Z-FIT > Z-NEWS"},
+      {"solutions": {"sciana": {"all": [{"input": "slot1", "equals": "Z-PLAY"}, {"input": "slot2", "equals": "Z-FEED"}, {"input": "slot3", "equals": "Z-FIT"}, {"input": "slot4", "equals": "Z-BET"}, {"input": "slot5", "equals": "Z-DATE"}, {"input": "slot6", "equals": "Z-NEWS"}]}}, "clues": [{"output": "screen_raport", "value": {"minutes": {"Z-FEED": 194, "Z-BET": 170, "Z-DATE": 146, "Z-NEWS": 46, "Z-PLAY": 249, "Z-FIT": 189}}}], "summary": "raport: Z-PLAY > Z-FEED > Z-FIT > Z-BET > Z-DATE > Z-NEWS"},
+      {"solutions": {"sciana": {"all": [{"input": "slot1", "equals": "Z-NEWS"}, {"input": "slot2", "equals": "Z-FEED"}, {"input": "slot3", "equals": "Z-PLAY"}, {"input": "slot4", "equals": "Z-FIT"}, {"input": "slot5", "equals": "Z-DATE"}, {"input": "slot6", "equals": "Z-BET"}]}}, "clues": [{"output": "screen_raport", "value": {"minutes": {"Z-FEED": 182, "Z-BET": 118, "Z-DATE": 137, "Z-NEWS": 196, "Z-PLAY": 160, "Z-FIT": 146}}}], "summary": "raport: Z-NEWS > Z-FEED > Z-PLAY > Z-FIT > Z-DATE > Z-BET"},
+      {"solutions": {"sciana": {"all": [{"input": "slot1", "equals": "Z-PLAY"}, {"input": "slot2", "equals": "Z-NEWS"}, {"input": "slot3", "equals": "Z-FIT"}, {"input": "slot4", "equals": "Z-DATE"}, {"input": "slot5", "equals": "Z-BET"}, {"input": "slot6", "equals": "Z-FEED"}]}}, "clues": [{"output": "screen_raport", "value": {"minutes": {"Z-FEED": 61, "Z-BET": 79, "Z-DATE": 149, "Z-NEWS": 236, "Z-PLAY": 257, "Z-FIT": 154}}}], "summary": "raport: Z-PLAY > Z-NEWS > Z-FIT > Z-DATE > Z-BET > Z-FEED"},
+      {"solutions": {"sciana": {"all": [{"input": "slot1", "equals": "Z-BET"}, {"input": "slot2", "equals": "Z-FEED"}, {"input": "slot3", "equals": "Z-NEWS"}, {"input": "slot4", "equals": "Z-PLAY"}, {"input": "slot5", "equals": "Z-DATE"}, {"input": "slot6", "equals": "Z-FIT"}]}}, "clues": [{"output": "screen_raport", "value": {"minutes": {"Z-FEED": 159, "Z-BET": 169, "Z-DATE": 87, "Z-NEWS": 147, "Z-PLAY": 105, "Z-FIT": 58}}}], "summary": "raport: Z-BET > Z-FEED > Z-NEWS > Z-PLAY > Z-DATE > Z-FIT"}
+    ],
+    "zdrive": [
+      {"solutions": {"zdrive": {"all": [{"input": "knob_pressure", "gt": 2.55}, {"input": "knob_pressure", "lt": 2.65}, {"input": "knob_temp", "gt": 72.5}, {"input": "knob_temp", "lt": 77.5}, {"input": "knob_rpm", "gt": 1450}, {"input": "knob_rpm", "lt": 1550}]}}, "clues": [{"output": "screen_zdrive", "value": {"kod": "SRV-2.6/75/1500"}}], "summary": "kod SRV-2.6/75/1500"},
+      {"solutions": {"zdrive": {"all": [{"input": "knob_pressure", "gt": 1.75}, {"input": "knob_pressure", "lt": 1.85}, {"input": "knob_temp", "gt": 77.5}, {"input": "knob_temp", "lt": 82.5}, {"input": "knob_rpm", "gt": 3750}, {"input": "knob_rpm", "lt": 3850}]}}, "clues": [{"output": "screen_zdrive", "value": {"kod": "SRV-1.8/80/3800"}}], "summary": "kod SRV-1.8/80/3800"},
+      {"solutions": {"zdrive": {"all": [{"input": "knob_pressure", "gt": 2.95}, {"input": "knob_pressure", "lt": 3.05}, {"input": "knob_temp", "gt": 57.5}, {"input": "knob_temp", "lt": 62.5}, {"input": "knob_rpm", "gt": 1350}, {"input": "knob_rpm", "lt": 1450}]}}, "clues": [{"output": "screen_zdrive", "value": {"kod": "SRV-3.0/60/1400"}}], "summary": "kod SRV-3.0/60/1400"},
+      {"solutions": {"zdrive": {"all": [{"input": "knob_pressure", "gt": 2.65}, {"input": "knob_pressure", "lt": 2.75}, {"input": "knob_temp", "gt": 62.5}, {"input": "knob_temp", "lt": 67.5}, {"input": "knob_rpm", "gt": 3350}, {"input": "knob_rpm", "lt": 3450}]}}, "clues": [{"output": "screen_zdrive", "value": {"kod": "SRV-2.7/65/3400"}}], "summary": "kod SRV-2.7/65/3400"},
+      {"solutions": {"zdrive": {"all": [{"input": "knob_pressure", "gt": 1.85}, {"input": "knob_pressure", "lt": 1.95}, {"input": "knob_temp", "gt": 57.5}, {"input": "knob_temp", "lt": 62.5}, {"input": "knob_rpm", "gt": 3150}, {"input": "knob_rpm", "lt": 3250}]}}, "clues": [{"output": "screen_zdrive", "value": {"kod": "SRV-1.9/60/3200"}}], "summary": "kod SRV-1.9/60/3200"},
+      {"solutions": {"zdrive": {"all": [{"input": "knob_pressure", "gt": 2.45}, {"input": "knob_pressure", "lt": 2.55}, {"input": "knob_temp", "gt": 72.5}, {"input": "knob_temp", "lt": 77.5}, {"input": "knob_rpm", "gt": 2150}, {"input": "knob_rpm", "lt": 2250}]}}, "clues": [{"output": "screen_zdrive", "value": {"kod": "SRV-2.5/75/2200"}}], "summary": "kod SRV-2.5/75/2200"},
+      {"solutions": {"zdrive": {"all": [{"input": "knob_pressure", "gt": 1.85}, {"input": "knob_pressure", "lt": 1.95}, {"input": "knob_temp", "gt": 72.5}, {"input": "knob_temp", "lt": 77.5}, {"input": "knob_rpm", "gt": 2650}, {"input": "knob_rpm", "lt": 2750}]}}, "clues": [{"output": "screen_zdrive", "value": {"kod": "SRV-1.9/75/2700"}}], "summary": "kod SRV-1.9/75/2700"},
+      {"solutions": {"zdrive": {"all": [{"input": "knob_pressure", "gt": 2.75}, {"input": "knob_pressure", "lt": 2.85}, {"input": "knob_temp", "gt": 57.5}, {"input": "knob_temp", "lt": 62.5}, {"input": "knob_rpm", "gt": 1150}, {"input": "knob_rpm", "lt": 1250}]}}, "clues": [{"output": "screen_zdrive", "value": {"kod": "SRV-2.8/60/1200"}}], "summary": "kod SRV-2.8/60/1200"}
+    ],
+    "zmart": [
+      {"solutions": {"zmart": {"sequence": [{"input": "mart_qr", "equals": "Z-CALM"}, {"input": "mart_qr", "equals": "Z-BOOST"}, {"input": "mart_qr", "equals": "Z-SNACK"}, {"input": "mart_qr", "equals": "Z-SEN"}]}}, "clues": [{"output": "screen_kiosk", "value": {"klientka": "Marta, 41 lat, stres w pracy"}}], "summary": "Marta, 41 lat, stres w pracy"},
+      {"solutions": {"zmart": {"sequence": [{"input": "mart_qr", "equals": "Z-BOOST"}, {"input": "mart_qr", "equals": "Z-SNACK"}, {"input": "mart_qr", "equals": "Z-BOOST-MAX"}, {"input": "mart_qr", "equals": "Z-SEN"}]}}, "clues": [{"output": "screen_kiosk", "value": {"klientka": "Piotr, 23 lata, gra nocami"}}], "summary": "Piotr, 23 lata, gra nocami"},
+      {"solutions": {"zmart": {"sequence": [{"input": "mart_qr", "equals": "Z-BOOST"}, {"input": "mart_qr", "equals": "Z-KIDS"}, {"input": "mart_qr", "equals": "Z-SNACK"}, {"input": "mart_qr", "equals": "Z-SEN"}]}}, "clues": [{"output": "screen_kiosk", "value": {"klientka": "Anna, 34 lata, bezsenność, dwoje dzieci"}}], "summary": "Anna, 34 lata, bezsenność, dwoje dzieci"},
+      {"solutions": {"zmart": {"sequence": [{"input": "mart_qr", "equals": "Z-CALM"}, {"input": "mart_qr", "equals": "Z-NEWS-PRINT"}, {"input": "mart_qr", "equals": "Z-SNACK"}, {"input": "mart_qr", "equals": "Z-SEN"}]}}, "clues": [{"output": "screen_kiosk", "value": {"klientka": "Halina, 67 lat, mieszka sama"}}], "summary": "Halina, 67 lat, mieszka sama"}
+    ],
+    "skanery": [
+      {"solutions": {"skanery": {"all": [{"input": "scanner1", "equals": "ON"}, {"input": "scanner3", "equals": "ON"}]}}, "clues": [{"output": "scanners", "value": {"active": ["1", "3"]}}], "summary": "skanery 1 i 3"},
+      {"solutions": {"skanery": {"all": [{"input": "scanner2", "equals": "ON"}, {"input": "scanner4", "equals": "ON"}]}}, "clues": [{"output": "scanners", "value": {"active": ["2", "4"]}}], "summary": "skanery 2 i 4"},
+      {"solutions": {"skanery": {"all": [{"input": "scanner2", "equals": "ON"}, {"input": "scanner3", "equals": "ON"}]}}, "clues": [{"output": "scanners", "value": {"active": ["2", "3"]}}], "summary": "skanery 2 i 3"},
+      {"solutions": {"skanery": {"all": [{"input": "scanner1", "equals": "ON"}, {"input": "scanner4", "equals": "ON"}]}}, "clues": [{"output": "scanners", "value": {"active": ["1", "4"]}}], "summary": "skanery 1 i 4"}
+    ],
+    "firewall": [
+      {"solutions": {"firewall": {"all": [{"input": "light2", "gt": 600}, {"input": "light3", "gt": 600}, {"input": "light5", "gt": 600}]}}, "clues": [{"output": "sensors", "value": {"active": [2, 3, 5]}}], "summary": "czujniki 2, 3, 5"},
+      {"solutions": {"firewall": {"all": [{"input": "light3", "gt": 600}, {"input": "light4", "gt": 600}, {"input": "light5", "gt": 600}]}}, "clues": [{"output": "sensors", "value": {"active": [3, 4, 5]}}], "summary": "czujniki 3, 4, 5"},
+      {"solutions": {"firewall": {"all": [{"input": "light1", "gt": 600}, {"input": "light3", "gt": 600}, {"input": "light5", "gt": 600}]}}, "clues": [{"output": "sensors", "value": {"active": [1, 3, 5]}}], "summary": "czujniki 1, 3, 5"},
+      {"solutions": {"firewall": {"all": [{"input": "light2", "gt": 600}, {"input": "light4", "gt": 600}, {"input": "light5", "gt": 600}]}}, "clues": [{"output": "sensors", "value": {"active": [2, 4, 5]}}], "summary": "czujniki 2, 4, 5"},
+      {"solutions": {"firewall": {"all": [{"input": "light2", "gt": 600}, {"input": "light3", "gt": 600}, {"input": "light4", "gt": 600}]}}, "clues": [{"output": "sensors", "value": {"active": [2, 3, 4]}}], "summary": "czujniki 2, 3, 4"},
+      {"solutions": {"firewall": {"all": [{"input": "light1", "gt": 600}, {"input": "light4", "gt": 600}, {"input": "light5", "gt": 600}]}}, "clues": [{"output": "sensors", "value": {"active": [1, 4, 5]}}], "summary": "czujniki 1, 4, 5"},
+      {"solutions": {"firewall": {"all": [{"input": "light1", "gt": 600}, {"input": "light2", "gt": 600}, {"input": "light3", "gt": 600}]}}, "clues": [{"output": "sensors", "value": {"active": [1, 2, 3]}}], "summary": "czujniki 1, 2, 3"},
+      {"solutions": {"firewall": {"all": [{"input": "light1", "gt": 600}, {"input": "light2", "gt": 600}, {"input": "light4", "gt": 600}]}}, "clues": [{"output": "sensors", "value": {"active": [1, 2, 4]}}], "summary": "czujniki 1, 2, 4"},
+      {"solutions": {"firewall": {"all": [{"input": "light1", "gt": 600}, {"input": "light3", "gt": 600}, {"input": "light4", "gt": 600}]}}, "clues": [{"output": "sensors", "value": {"active": [1, 3, 4]}}], "summary": "czujniki 1, 3, 4"},
+      {"solutions": {"firewall": {"all": [{"input": "light1", "gt": 600}, {"input": "light2", "gt": 600}, {"input": "light5", "gt": 600}]}}, "clues": [{"output": "sensors", "value": {"active": [1, 2, 5]}}], "summary": "czujniki 1, 2, 5"}
+    ],
+    "uzbrojenie": [
+      {"solutions": {"uzbrojenie": {"all": [{"input": "rod1", "equals": "ROD"}, {"input": "rod2", "equals": "ROD"}, {"input": "rod3", "equals": "ROD"}, {"input": "bomb_code", "equals": "261460"}]}}, "clues": [{"output": "screen_fragmenty", "value": {"fragments": [26, 60, 14], "haslo": "Telefon. Sklep. Auto."}}], "summary": "hasło „Telefon. Sklep. Auto.”, kod 261460"},
+      {"solutions": {"uzbrojenie": {"all": [{"input": "rod1", "equals": "ROD"}, {"input": "rod2", "equals": "ROD"}, {"input": "rod3", "equals": "ROD"}, {"input": "bomb_code", "equals": "768431"}]}}, "clues": [{"output": "screen_fragmenty", "value": {"fragments": [84, 31, 76], "haslo": "Sklep. Telefon. Auto."}}], "summary": "hasło „Sklep. Telefon. Auto.”, kod 768431"},
+      {"solutions": {"uzbrojenie": {"all": [{"input": "rod1", "equals": "ROD"}, {"input": "rod2", "equals": "ROD"}, {"input": "rod3", "equals": "ROD"}, {"input": "bomb_code", "equals": "357176"}]}}, "clues": [{"output": "screen_fragmenty", "value": {"fragments": [76, 71, 35], "haslo": "Sklep. Auto. Telefon."}}], "summary": "hasło „Sklep. Auto. Telefon.”, kod 357176"},
+      {"solutions": {"uzbrojenie": {"all": [{"input": "rod1", "equals": "ROD"}, {"input": "rod2", "equals": "ROD"}, {"input": "rod3", "equals": "ROD"}, {"input": "bomb_code", "equals": "449954"}]}}, "clues": [{"output": "screen_fragmenty", "value": {"fragments": [99, 54, 44], "haslo": "Sklep. Telefon. Auto."}}], "summary": "hasło „Sklep. Telefon. Auto.”, kod 449954"},
+      {"solutions": {"uzbrojenie": {"all": [{"input": "rod1", "equals": "ROD"}, {"input": "rod2", "equals": "ROD"}, {"input": "rod3", "equals": "ROD"}, {"input": "bomb_code", "equals": "862474"}]}}, "clues": [{"output": "screen_fragmenty", "value": {"fragments": [24, 86, 74], "haslo": "Auto. Telefon. Sklep."}}], "summary": "hasło „Auto. Telefon. Sklep.”, kod 862474"},
+      {"solutions": {"uzbrojenie": {"all": [{"input": "rod1", "equals": "ROD"}, {"input": "rod2", "equals": "ROD"}, {"input": "rod3", "equals": "ROD"}, {"input": "bomb_code", "equals": "883399"}]}}, "clues": [{"output": "screen_fragmenty", "value": {"fragments": [88, 99, 33], "haslo": "Telefon. Sklep. Auto."}}], "summary": "hasło „Telefon. Sklep. Auto.”, kod 883399"},
+      {"solutions": {"uzbrojenie": {"all": [{"input": "rod1", "equals": "ROD"}, {"input": "rod2", "equals": "ROD"}, {"input": "rod3", "equals": "ROD"}, {"input": "bomb_code", "equals": "209661"}]}}, "clues": [{"output": "screen_fragmenty", "value": {"fragments": [61, 96, 20], "haslo": "Sklep. Auto. Telefon."}}], "summary": "hasło „Sklep. Auto. Telefon.”, kod 209661"},
+      {"solutions": {"uzbrojenie": {"all": [{"input": "rod1", "equals": "ROD"}, {"input": "rod2", "equals": "ROD"}, {"input": "rod3", "equals": "ROD"}, {"input": "bomb_code", "equals": "859293"}]}}, "clues": [{"output": "screen_fragmenty", "value": {"fragments": [92, 85, 93], "haslo": "Auto. Telefon. Sklep."}}], "summary": "hasło „Auto. Telefon. Sklep.”, kod 859293"}
+    ],
+    "blokada": [
+      {"solutions": {"blokada": {"sequence": [{"input": "lockdown_panel", "equals": "3"}, {"input": "lockdown_panel", "equals": "2"}, {"input": "lockdown_panel", "equals": "1"}]}}, "clues": [], "summary": "sekwencja 3-2-1"},
+      {"solutions": {"blokada": {"sequence": [{"input": "lockdown_panel", "equals": "1"}, {"input": "lockdown_panel", "equals": "2"}, {"input": "lockdown_panel", "equals": "4"}]}}, "clues": [], "summary": "sekwencja 1-2-4"},
+      {"solutions": {"blokada": {"sequence": [{"input": "lockdown_panel", "equals": "3"}, {"input": "lockdown_panel", "equals": "3"}, {"input": "lockdown_panel", "equals": "3"}]}}, "clues": [], "summary": "sekwencja 3-3-3"},
+      {"solutions": {"blokada": {"sequence": [{"input": "lockdown_panel", "equals": "4"}, {"input": "lockdown_panel", "equals": "1"}, {"input": "lockdown_panel", "equals": "4"}]}}, "clues": [], "summary": "sekwencja 4-1-4"},
+      {"solutions": {"blokada": {"sequence": [{"input": "lockdown_panel", "equals": "1"}, {"input": "lockdown_panel", "equals": "3"}, {"input": "lockdown_panel", "equals": "1"}]}}, "clues": [], "summary": "sekwencja 1-3-1"},
+      {"solutions": {"blokada": {"sequence": [{"input": "lockdown_panel", "equals": "4"}, {"input": "lockdown_panel", "equals": "4"}, {"input": "lockdown_panel", "equals": "4"}]}}, "clues": [], "summary": "sekwencja 4-4-4"},
+      {"solutions": {"blokada": {"sequence": [{"input": "lockdown_panel", "equals": "4"}, {"input": "lockdown_panel", "equals": "3"}, {"input": "lockdown_panel", "equals": "4"}]}}, "clues": [], "summary": "sekwencja 4-3-4"},
+      {"solutions": {"blokada": {"sequence": [{"input": "lockdown_panel", "equals": "1"}, {"input": "lockdown_panel", "equals": "1"}, {"input": "lockdown_panel", "equals": "4"}]}}, "clues": [], "summary": "sekwencja 1-1-4"}
+    ]
+  }
 }

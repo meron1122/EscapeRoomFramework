@@ -75,6 +75,28 @@ Tasmota wysyła przyciski i przełączniki na `stat/.../RESULT` dopiero po odpi�
 
 `start` (na poziomie pokoju) to kroki wykonywane przy starcie gry, np. zamknięcie wszystkiego.
 
+### Dla mistrza gry (`characters`, `variants`, `twists`, `hints`, brief)
+
+Mistrz gry AI nie ma w kodzie nic o konkretnym pokoju. Wszystko, co wie, dostaje z silnika, więc prowadzi każdy pokój,
+jeden naraz.
+
+- **Brief** (`PUT /rooms/{id}/brief`, Markdown): historia, klimat, postacie, wygląd zagadek, tempo i reżyseria,
+  opisane przez lokal tak jak dla człowieka. Przykład: [docs/scenariusz-jadro.md](docs/scenariusz-jadro.md).
+- `characters`: głosy, którymi mówi, np. `{"name": "KRUK", "about": "...", "output": "voice", "voice": "<id głosu TTS>", "screen": "screen_zeta"}`.
+  Kwestia trafia na `output` jako `{speaker, text, to, audio}`, a tekst także na `screen`.
+- `variants`: dla klucza lista wariantów `{"solutions": {"zagadka": {warunek}}, "clues": [kroki], "summary": "..."}`.
+  Losowanie podmienia rozwiązanie i wskazówkę razem, tylko w bieżącej grze (zapisany pokój zostaje przy domyślnym).
+- `twists`: przygotowane zwroty akcji `{"about": "...", "then": [kroki], "adds": [zagadki], "blocks": [...], "after": [...]}`,
+  raz na grę. `adds` dokłada zagadki, `blocks` każe im czekać na dodane, `after` mówi, co musi być już rozwiązane.
+- `hints` w zagadce: przygotowane podpowiedzi lokalu, od najdelikatniejszej. Bez modelu mistrz gry używa tylko ich.
+
+Wyjścia o nazwach `gm` (myśli mistrza gry) i `hint` (która zagadka dostała pomoc) są opcjonalne.
+
+Model: `OPENROUTER_API_KEY` (przez OpenRouter) albo `ANTHROPIC_API_KEY` / `ant auth login`; bez danych logowania gra
+prowadzi się na regułach. Głos: `ELEVENLABS_API_KEY` (model `Voice:Model`, domyślnie `eleven_v3`); pliki mp3 trafiają
+pod `/voice/…` (adres publiczny w `Voice:PublicUrl`). Na Sprite klucze trzymają Connectory: `GameMaster:BaseUrl`
+i `Voice:BaseUrl` wskazują ich bramki.
+
 Definicja jest walidowana przy zapisie: nieznane pola (literówka `"equal"`), nieistniejące wejścia, wyjścia
 i zagadki oraz cykle w `after` zwracają 400 z listą błędów.
 
@@ -98,6 +120,8 @@ Wymaga `ffmpeg` w PATH. Ten sam kod publikowany jest ponownie dopiero wtedy, gdy
 | `POST /rooms/{id}/stop` | koniec gry |
 | `POST /rooms/{id}/puzzles/{puzzle}/solve` | ręczne zaliczenie przez MG (wykonuje `then`) |
 | `GET /rooms/{id}/session` | stan ostatniej gry: status zagadek i wartości wejść |
+| `PUT /rooms/{id}/brief`, `GET /rooms/{id}/brief` | brief pokoju dla mistrza gry (Markdown) |
+| `GET /voice/{plik}.mp3` | nagrane kwestie postaci dla głośników pokoju |
 | `GET /safety`, `GET /safety/log`, `PUT /safety` | warstwa bezpieczeństwa, patrz niżej (zmiana tylko z tokenem operatora) |
 
 Każde zdarzenie (`input`, `solved`, `output`, `gm-solve`, `room-updated`, `started`, `finished`…) trafia
@@ -125,6 +149,7 @@ claude mcp add --transport http escaperoom http://localhost:5201/mcp
 | `start_game`, `stop_game`, `solve_puzzle` | przebieg gry |
 | `simulate_input` | wartość „jakby z czujnika”: test zagadki albo zastępstwo za zepsuty czujnik |
 | `trigger_output` | sterowanie wyjściem od ręki, także bez gry |
+| `get_brief`, `reroll_variant`, `fire_twist` | brief pokoju, losowanie wariantu i zwrot akcji w trwającej grze |
 
 Każda zmiana przechodzi tę samą walidację co `PUT`. Błędna zmiana jest odrzucana z listą powodów i nic się nie zapisuje.
 

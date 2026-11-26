@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Anthropic;
 using Anthropic.Models.Beta;
@@ -7,93 +8,101 @@ using Anthropic.Models.Beta.Messages;
 namespace EscapeRoom;
 
 /// <summary>
-/// The game master: a Claude model that watches the game and every player, then acts through the engine: it voices
-/// ZETA and Kruk, gives hints, triggers twists, rerolls and rewires puzzles. Every change still goes through the
-/// engine's validation, and the safety layer is out of its reach. Without credentials it falls back to simple rules.
+/// The game master: a Claude model that runs whichever room is playing (one game at a time). Everything it knows
+/// about the room comes from the engine: the venue's brief, the characters it speaks as, the puzzle variants and
+/// the prepared twists, plus the live game and every player. It acts only through the engine, so each change is
+/// validated, and the safety layer is out of its reach. Without model credentials it falls back to simple rules.
 /// </summary>
-public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster> log) : BackgroundService
+public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogger<GameMaster> log) : BackgroundService
 {
     const string Prompt = """
-        You are the game master of "Jądro", a 60-minute cyberpunk escape room for 3-6 players (a team of Nomads breaking
-        into Korporacja Z to blow up its server core). You run the game live: you watch every player and decide what
-        happens next. You also voice two characters:
-        - ZETA, the corporation's AI and the antagonist. Polite like a receptionist in the lobby (hol), mocking on the lab
-          floor (pietro), tempting in the core (jadro). She comments on what players just did. She never lies about puzzles.
-        - KRUK, the Nomads' ally on the radio outside. Short, street-wise, on the players' side. Kruk gives the hints.
+        You are the live game master of an escape room. The venue describes the room in the next block: its story,
+        mood, characters, puzzles, pacing and staging, followed by the room's data. You run one game: you watch every
+        player and decide what happens next, and the players hear you only through the room's characters.
 
-        Your goal: a tense, fun game that ends dramatically close to the 60-minute mark. The plan: the lobby is done by
-        minute 12, the lab floor by minute 37, the core by minute 52.
-
-        Every ~40 seconds and on key events you get JSON with: the clock, each puzzle (status: locked, active or solved;
-        `when` is its solution), the latest sensor values (wrong attempts included), recent events, the players (where
-        each one is, what they do, how long without progress) and your own recent decisions.
+        Every ~40 seconds of game time and on key events you get JSON with: the clock and the game length, each puzzle
+        (status locked, active or solved; `when` is its live solution as sensor conditions), the latest sensor values
+        (wrong attempts included), recent events, the players (where each one is, what they do, how long without
+        progress), the twists already used and your own recent decisions.
 
         How to act:
-        - First write one short sentence in Polish: your read of the situation. Then call 0-3 tools. Doing nothing is
-          right when the team is flowing; don't talk just to talk.
-        - At the start of a game ("reason": "started") call reroll with every rerollable puzzle: this team gets its own
-          variant. Never reroll a puzzle the players are already working on.
-        - Hint ladder when the team is behind plan in its current room: about 3 minutes behind, Kruk nudges; about
-          6 minutes behind, a direct hint (level 2); about 10 minutes behind or when they are clearly stuck, level 3 or
-          `solve` with Kruk "hacking" it. Prefer addressing the stuck player by name.
-        - When the team is 5+ minutes ahead of plan, raise the tension with one twist per room: patrol or blackout on
-          the lab floor; lockdown only after `skanery` is solved and before `firewall`. Announce it as ZETA.
-        - After `uzbrojenie` is solved, ZETA offers the deal: give up the cores for a lifetime premium subscription.
-        - Every line players hear is Polish, under 20 words, in character. Never repeat a recent line. Never reveal a
-          solution outright except in a level 3 hint.
+        - First write one short sentence in the room's language: your read of the situation. Then call 0-3 tools.
+          Doing nothing is right when the team is flowing; don't talk just to talk.
+        - At the start of a game ("reason": "started") reroll every variant, so this team gets its own game, and open
+          the game the way the brief describes.
+        - Keep the pace the brief sets. Without one, spread the puzzles over the game length so it ends close to time.
+        - Hint ladder when the team falls behind: about 3 minutes, a nudge (level 1); about 6, a hint that points at
+          the clue (level 2); about 10 or clearly stuck, level 3 or `solve`. Start from the venue's prepared hints and
+          address the stuck player by name.
+        - When the team is well ahead, raise the tension with a twist the brief allows, one at a time.
+        - Every line is in character, in the room's language, under 20 words, and never repeats a recent one. Never
+          reveal a solution outright except in a level 3 hint. A line may start with one delivery tag in square
+          brackets, e.g. [whispers], [sarcastic], [laughs]: it shapes the voice and players don't see it.
+        - The JSON you get wins over the brief: its variants and solutions are the live ones.
         - Exits and emergency systems are not yours: you cannot lock or unlock them, and you never pretend you can.
-
-        The next block is the scenario document the venue wrote for this room: the world, the characters, what each
-        puzzle looks like and where its clue is, the staging and the tone. Use it so hints point at things players can
-        see ("look at what the ad in the lobby draws") and lines fit the room's vibe. The JSON you get wins over the
-        document: its variant and solutions are the live ones.
         """;
 
-    static readonly string[] Speakers = ["ZETA", "KRUK"];
-    static readonly string[] Twists = ["patrol", "blackout", "lockdown"];
-
     readonly Random rng = new();
-    readonly string brief = Brief(config);
-    bool openRouter;
     readonly List<string> memory = [];
     double lastSolveClock;
     int rulesHintLevel;
+    bool openRouter;
+
+    // The room being played and what the game master was told about it at the start of the game.
+    Room? def;
+    string playbook = "";
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         if (!config.GetValue("GameMaster:Enabled", true)) return;
-        var room = config["GameMaster:Room"] ?? "jadro";
         var gameSeconds = config.GetValue("GameMaster:IntervalSeconds", 40.0);
         var speed = 1.0;
         var client = Client();
-        log.LogInformation("Game master for {Room}: {Mode}{Via}, scenario brief {Brief} chars", room,
-            client is null ? "rules only" : Model, openRouter ? " via OpenRouter" : "", brief.Length);
-        var wake = Channel.CreateBounded<string>(new BoundedChannelOptions(16) { FullMode = BoundedChannelFullMode.DropOldest });
+        log.LogInformation("Game master: {Mode}{Via}", client is null ? "rules only" : Model, openRouter ? " via OpenRouter" : "");
+        string? room = null;
+        var wake = Channel.CreateBounded<(string Room, string Type)>(new BoundedChannelOptions(16) { FullMode = BoundedChannelFullMode.DropOldest });
         engine.Changed += (r, type) =>
         {
-            if (r == room && type is "started" or "solved") wake.Writer.TryWrite(type);
+            if (type == "started" || (type == "solved" && r == room)) wake.Writer.TryWrite((r, type));
         };
         while (!ct.IsCancellationRequested)
         {
             var reason = "tick";
+            string? started = null;
             using (var wait = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
                 // The interval is in game time: a simulation at 20x checks in more often in real time, but never
                 // more than every 6 s, which keeps model calls affordable.
                 wait.CancelAfter(TimeSpan.FromSeconds(Math.Max(6.0, gameSeconds / speed)));
-                try { reason = await wake.Reader.ReadAsync(wait.Token); }
+                try
+                {
+                    var e = await wake.Reader.ReadAsync(wait.Token);
+                    reason = e.Type;
+                    if (e.Type == "started") started = e.Room;
+                }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
             }
             await Task.Delay(TimeSpan.FromSeconds(2), ct);  // let a burst of events settle into one decision
             while (wake.Reader.TryRead(out var more))
-                if (more == "started") reason = more;
-            if (reason == "started")
+                if (more.Type == "started") (reason, started) = (more.Type, more.Room);
+
+            // One game at a time: a newly started game takes over; otherwise stay with the current one.
+            if (started is not null || room is null || def is null)
             {
+                room = started ?? (await engine.Running()).FirstOrDefault();
+                if (room is null || await engine.Playing(room) is not { } playing) continue;
+                def = playing;
+                playbook = Playbook(playing, await engine.Brief(room));
                 memory.Clear();
                 lastSolveClock = 0;
                 rulesHintLevel = 0;
+                log.LogInformation("Game master takes {Room} ({Brief} chars of brief and room data)", room, playbook.Length);
             }
-            if (await engine.Observe(room) is not { } seen) continue;
+            if (await engine.Observe(room) is not { } seen)
+            {
+                room = null;  // the game ended
+                continue;
+            }
             var observation = JsonSerializer.SerializeToElement(seen, Engine.Json);
             speed = Math.Max(1.0, observation.GetProperty("speed").GetDouble());
             try
@@ -115,21 +124,29 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
         }
     }
 
+    /// <summary>What the model knows about the room for a whole game: the venue's brief, then the room's data.</summary>
+    static string Playbook(Room room, string? brief) =>
+        $"{(string.IsNullOrWhiteSpace(brief) ? "(The venue wrote no brief for this room.)" : brief.Trim())}\n\n## Room data\n\n" +
+        JsonSerializer.Serialize(new
+        {
+            room.Name,
+            room.Minutes,
+            characters = room.Characters?.Select(c => new { c.Name, c.About }),
+            variants = room.Variants?.Keys,
+            twists = room.Twists?.Select(kv => new { id = kv.Key, kv.Value.About, kv.Value.After, kv.Value.Blocks }),
+            preparedHints = AllPuzzles(room).Where(p => p.Hints is { Length: > 0 }).ToDictionary(p => p.Id, p => p.Hints),
+        }, Engine.Json);
+
+    static IEnumerable<Puzzle> AllPuzzles(Room room) => room.Puzzles.Concat((room.Twists?.Values ?? Enumerable.Empty<Twist>()).SelectMany(t => t.Adds ?? []));
+
     string Model => openRouter
         ? ForOpenRouter(config["GameMaster:Model"] ?? "claude-opus-5-5")
         : config["GameMaster:Model"] ?? "claude-opus-5-5";
 
     /// <summary>OpenRouter names models "anthropic/claude-opus-5.5" where Anthropic says "claude-opus-5-5".</summary>
     public static string ForOpenRouter(string model) => model.StartsWith("claude-")
-        ? "anthropic/" + System.Text.RegularExpressions.Regex.Replace(model, @"-(\d+)-(\d+)$", "-$1.$2")
+        ? "anthropic/" + Regex.Replace(model, @"-(\d+)-(\d+)$", "-$1.$2")
         : model;
-
-    static string Brief(IConfiguration config)
-    {
-        var path = Path.Combine(AppContext.BaseDirectory, config["GameMaster:Brief"] ?? "scenariusz-jadro.md");
-        // The venue's open questions are notes for people, not instructions for the game master.
-        return File.Exists(path) ? File.ReadAllText(path).Split("\n## Otwarte pytania")[0] : "";
-    }
 
     AnthropicClient? Client()
     {
@@ -164,10 +181,9 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
             {
                 "medium" => Effort.Medium, "high" => Effort.High, _ => Effort.Low,
             } },
-            System = brief == ""
-                ? new List<BetaTextBlockParam> { new() { Text = Prompt, CacheControl = new BetaCacheControlEphemeral() } }
-                : new List<BetaTextBlockParam> { new() { Text = Prompt }, new() { Text = brief, CacheControl = new BetaCacheControlEphemeral() } },
-            Tools = Tools(),
+            // Instructions and the room's playbook stay the same for a whole game, so they are cached.
+            System = new List<BetaTextBlockParam> { new() { Text = Prompt }, new() { Text = playbook, CacheControl = new BetaCacheControlEphemeral() } },
+            Tools = Tools(def!),
             Messages = [new BetaUserMessageParam { Content = input }],
         }, cancellationToken: ct);
         if (response.StopReason == "refusal")
@@ -184,26 +200,37 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
         await Report(room, thought, done, "model");
     }
 
-    static List<BetaToolUnion> Tools()
+    /// <summary>The tools follow the room: its characters, variants and twists are the only valid choices.</summary>
+    static List<BetaToolUnion> Tools(Room room)
     {
         static JsonElement S(object o) => JsonSerializer.SerializeToElement(o);
-        var speaker = S(new { type = "string", @enum = Speakers });
-        var text = S(new { type = "string", description = "What the character says, in Polish, under 20 words." });
+        static BetaTool Tool(string name, string description, Dictionary<string, JsonElement> properties, params string[] required) =>
+            new() { Name = name, Description = description, InputSchema = new() { Properties = properties, Required = required } };
+        var text = S(new { type = "string", description = "What the character says, in the room's language, under 20 words." });
         var to = S(new { type = "string", description = "Optional: the name of the player this is addressed to." });
         var puzzle = S(new { type = "string", description = "Puzzle id from the observation." });
-        return
+        var why = S(new { type = "string" });
+        List<BetaToolUnion> tools =
         [
-            new BetaTool { Name = "say", Description = "Speak to the players as ZETA or KRUK. ZETA's lines also appear on her console.",
-                InputSchema = new() { Properties = new Dictionary<string, JsonElement> { ["speaker"] = speaker, ["text"] = text, ["to"] = to }, Required = ["speaker", "text"] } },
-            new BetaTool { Name = "hint", Description = "Kruk gives a hint for one puzzle. Level 1 nudges, 2 points at the clue, 3 nearly gives the answer. Speeds the team up on that puzzle.",
-                InputSchema = new() { Properties = new Dictionary<string, JsonElement> { ["puzzle"] = puzzle, ["level"] = S(new { type = "integer", minimum = 1, maximum = 3 }), ["text"] = text, ["to"] = to }, Required = ["puzzle", "level", "text"] } },
-            new BetaTool { Name = "twist", Description = "A prepared twist: patrol (players freeze for 20 s), blackout (60 s of UV light, slower work), lockdown (ZETA relocks the stairs door; a 3-button panel puzzle appears and the firewall waits for it).",
-                InputSchema = new() { Properties = new Dictionary<string, JsonElement> { ["kind"] = S(new { type = "string", @enum = Twists }), ["why"] = S(new { type = "string" }) }, Required = ["kind", "why"] } },
-            new BetaTool { Name = "reroll", Description = "Draw a new variant for puzzles: their solution and their clue change together. Only for puzzles nobody works on yet.",
-                InputSchema = new() { Properties = new Dictionary<string, JsonElement> { ["puzzles"] = S(new { type = "array", items = new { type = "string", @enum = Variants.Rerollable } }) }, Required = ["puzzles"] } },
-            new BetaTool { Name = "solve", Description = "Mark a puzzle solved (Kruk hacks it). Last resort for a team that is truly stuck.",
-                InputSchema = new() { Properties = new Dictionary<string, JsonElement> { ["puzzle"] = puzzle, ["why"] = S(new { type = "string" }) }, Required = ["puzzle", "why"] } },
+            Tool("solve", "Mark a puzzle solved, explained in the story. Last resort for a team that is truly stuck.",
+                new() { ["puzzle"] = puzzle, ["why"] = why }, "puzzle", "why"),
         ];
+        if (room.Characters is { Length: > 0 } cast)
+        {
+            var speaker = S(new { type = "string", @enum = cast.Select(c => c.Name) });
+            tools.Add(Tool("say", "Speak to the players as one of the room's characters.",
+                new() { ["speaker"] = speaker, ["text"] = text, ["to"] = to }, "speaker", "text"));
+            tools.Add(Tool("hint", "A character gives a hint for one active puzzle. Level 1 nudges, 2 points at the clue, 3 nearly gives the answer.",
+                new() { ["puzzle"] = puzzle, ["level"] = S(new { type = "integer", minimum = 1, maximum = 3 }), ["speaker"] = speaker, ["text"] = text, ["to"] = to },
+                "puzzle", "level", "speaker", "text"));
+        }
+        if (room.Variants is { Count: > 0 } variants)
+            tools.Add(Tool("reroll", "Draw new variants: each one's solution and clue change together. Only for puzzles nobody works on yet (any in the first minute).",
+                new() { ["variants"] = S(new { type = "array", items = new { type = "string", @enum = variants.Keys } }) }, "variants"));
+        if (room.Twists is { Count: > 0 } twists)
+            tools.Add(Tool("twist", "Fire one of the room's prepared twists (see the room data for what each does and when it is allowed).",
+                new() { ["twist"] = S(new { type = "string", @enum = twists.Keys }), ["why"] = why }, "twist", "why"));
+        return tools;
     }
 
     /// <summary>Runs one tool call. The input comes from a model, so every field is checked before anything happens.</summary>
@@ -211,77 +238,70 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
     {
         string? Str(string k) => input.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
         string Short(string? s) => (s ?? "").Trim() is var t && t.Length > 220 ? t[..220] : (s ?? "").Trim();
+        Character? Cast(string? name) => def?.Characters?.FirstOrDefault(c => c.Name == name);
         var statuses = observation.GetProperty("puzzles").EnumerateArray()
             .ToDictionary(p => p.GetProperty("id").GetString()!, p => p.GetProperty("status").GetString()!);
         switch (tool)
         {
             case "say":
             {
-                var who = Str("speaker");
+                var who = Cast(Str("speaker"));
                 var text = Short(Str("text"));
-                if (who is null || !Speakers.Contains(who) || text == "") return "say: rejected (speaker or text)";
-                await Out(room, "voice", new { speaker = who, text, to = Str("to") });
-                if (who == "ZETA") await Out(room, "screen_zeta", new { line = text });
-                return $"{who}: {text}";
+                if (who is null || text == "") return "say: rejected (speaker or text)";
+                return await Speak(room, who, text, Str("to"));
             }
             case "hint":
             {
                 var id = Str("puzzle");
                 var level = input.TryGetProperty("level", out var l) && l.TryGetInt32(out var n) ? Math.Clamp(n, 1, 3) : 1;
+                var who = Cast(Str("speaker")) ?? def?.Characters?.FirstOrDefault();
                 var text = Short(Str("text"));
-                if (id is null || !statuses.TryGetValue(id, out var st) || st != "active" || text == "") return $"hint: rejected ({id} is not active)";
-                await Out(room, "voice", new { speaker = "KRUK", text, to = Str("to") });
+                if (id is null || !statuses.TryGetValue(id, out var st) || st != "active" || who is null || text == "")
+                    return $"hint: rejected ({id} is not active, or no speaker or text)";
+                await Speak(room, who, text, Str("to"));
+                // An output named "hint" (a hint screen, the simulator) learns which puzzle got help; rooms without one skip it.
                 await Out(room, "hint", new { puzzle = id, level, to = Str("to") });
                 return $"podpowiedź {level} ({id}): {text}";
             }
             case "twist":
             {
-                var kind = Str("kind");
-                if (kind == "patrol" || kind == "blackout")
-                {
-                    await Out(room, "twist", new { kind, seconds = kind == "patrol" ? 20 : 60 });
-                    return $"zwrot akcji: {kind}";
-                }
-                if (kind != "lockdown") return "twist: rejected (unknown kind)";
-                if (statuses.GetValueOrDefault("skanery") != "solved" || statuses.GetValueOrDefault("firewall") == "solved" || statuses.ContainsKey("blokada"))
-                    return "lockdown: rejected (only between the scanners and the firewall, once)";
-                Variants.Result? result = null;
-                var errors = await engine.SaveRoom(room, r => (result = Variants.Lockdown(r!, rng)).Room);
-                if (errors.Length > 0 || result is null) return "lockdown: rejected (" + string.Join("; ", errors) + ")";
-                foreach (var (output, value) in result.Clues) await Out(room, output, value);
-                await Out(room, "twist", new { kind, seconds = 0 });
-                return $"blokada ({result.Summary})";
+                var (ok, message) = await engine.Twist(room, Str("twist") ?? "", rng);
+                return ok ? $"zwrot akcji: {message}" : $"twist: rejected ({message})";
             }
             case "reroll":
             {
-                if (!input.TryGetProperty("puzzles", out var list) || list.ValueKind != JsonValueKind.Array) return "reroll: rejected (no list)";
-                var clock = observation.GetProperty("clockMinutes").GetDouble();
+                if (!input.TryGetProperty("variants", out var list) || list.ValueKind != JsonValueKind.Array) return "reroll: rejected (no list)";
                 var done = new List<string>();
                 foreach (var item in list.EnumerateArray())
-                {
-                    var id = item.GetString() ?? "";
-                    // A puzzle whose clue the players may already be reading keeps its solution, except in the first minute.
-                    if (!Variants.Rerollable.Contains(id) || (statuses.GetValueOrDefault(id) != "locked" && clock > 1.0)) continue;
-                    Variants.Result? result = null;
-                    var errors = await engine.SaveRoom(room, r => (result = Variants.Reroll(r!, id, rng)).Room);
-                    if (errors.Length > 0 || result is null) continue;
-                    foreach (var (output, value) in result.Clues) await Out(room, output, value);
-                    done.Add($"{id}: {result.Summary}");
-                }
+                    if (await engine.Reroll(room, item.GetString() ?? "", rng) is (true, var summary))
+                        done.Add($"{item.GetString()}: {summary}");
                 return done.Count == 0 ? "reroll: nothing changed" : "wariant: " + string.Join("; ", done);
             }
             case "solve":
             {
                 var id = Str("puzzle");
                 if (id is null || statuses.GetValueOrDefault(id) != "active") return $"solve: rejected ({id} is not active)";
-                return await engine.Solve(room, id) ? $"Kruk hakuje: {id}" : "solve: failed";
+                return await engine.Solve(room, id) ? $"rozwiązane za graczy: {id}" : "solve: failed";
             }
             default:
                 return $"{tool}: unknown tool";
         }
     }
 
-    /// <summary>Without a model: a variant at the start, the hint ladder by silence, Kruk hacking when nothing moves for long.</summary>
+    /// <summary>A character's line: spoken on its output (with the voice, when there is one) and shown on its screen.</summary>
+    async Task<string> Speak(string room, Character who, string text, string? to)
+    {
+        var shown = Regex.Replace(text, @"\[[^\]]*\]\s*", "").Trim();  // delivery tags shape the voice only
+        var audio = await voice.Speak(who.Voice, text);
+        await Out(room, who.Output, new { speaker = who.Name, text = shown, to, audio });
+        if (who.Screen is { } screen) await Out(room, screen, new { line = shown });
+        return $"{who.Name}: {shown}";
+    }
+
+    /// <summary>
+    /// Without a model: every variant drawn at the start, then the hint ladder by silence, using the venue's prepared
+    /// hints spoken by the room's first character, and solving for the team when nothing moves for long.
+    /// </summary>
     async Task Rules(string room, string reason, JsonElement observation)
     {
         var clock = observation.GetProperty("clockMinutes").GetDouble();
@@ -291,8 +311,8 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
         string thought;
         if (reason == "started")
         {
-            done.Add(await Act(room, "reroll", JsonSerializer.SerializeToElement(new { puzzles = Variants.Rerollable }), observation));
-            done.Add(await Act(room, "say", JsonSerializer.SerializeToElement(new { speaker = "KRUK", text = "Jesteście w środku. Macie godzinę, zanim ochrona odetnie piętra." }), observation));
+            if (def?.Variants is { Count: > 0 } variants)
+                done.Add(await Act(room, "reroll", JsonSerializer.SerializeToElement(new { variants = variants.Keys }), observation));
             thought = "Start gry: losuję wariant dla tej drużyny.";
         }
         else if (reason == "solved")
@@ -305,13 +325,16 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
         {
             var silence = clock - lastSolveClock;
             var level = silence > 10 ? 3 : silence > 6 ? 2 : silence > 3 ? 1 : 0;
+            var helper = def?.Characters?.FirstOrDefault();
             if (level > rulesHintLevel && active.Count > 0)
             {
                 rulesHintLevel = level;
                 var id = active[rng.Next(active.Count)];
-                done.Add(level == 3
-                    ? await Act(room, "solve", JsonSerializer.SerializeToElement(new { puzzle = id, why = "długi przestój" }), observation)
-                    : await Act(room, "hint", JsonSerializer.SerializeToElement(new { puzzle = id, level, text = level == 1 ? "Rozejrzyjcie się jeszcze raz. Ekrany coś mówią." : "Skupcie się na " + id + ". Wskazówka jest na ekranie obok." }), observation));
+                var hints = def is null ? null : AllPuzzles(def).FirstOrDefault(p => p.Id == id)?.Hints;
+                if (level == 3)
+                    done.Add(await Act(room, "solve", JsonSerializer.SerializeToElement(new { puzzle = id, why = "długi przestój" }), observation));
+                else if (hints is { Length: > 0 } && helper is not null)
+                    done.Add(await Act(room, "hint", JsonSerializer.SerializeToElement(new { puzzle = id, level, speaker = helper.Name, text = hints[Math.Min(level, hints.Length) - 1] }), observation));
                 thought = $"Brak postępu od {silence:0} min, podpowiedź poziomu {level}.";
             }
             else
@@ -329,5 +352,5 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
         log.LogInformation("GM ({Mode}): {Thought} | {Actions}", mode, thought, string.Join(" | ", done));
     }
 
-    Task Out(string room, string output, object value) => engine.Trigger(room, output, JsonSerializer.SerializeToElement(value));
+    Task Out(string room, string output, object value) => engine.Trigger(room, output, JsonSerializer.SerializeToElement(value, Engine.Json));
 }

@@ -20,40 +20,49 @@ public class JadroTests
     }
 
     [Fact]
-    public void Every_reroll_keeps_the_room_valid()
+    public void Every_variant_keeps_the_room_valid()
     {
-        var rng = new Random(7);
-        foreach (var id in Variants.Rerollable)
-            for (var i = 0; i < 20; i++)
-            {
-                var result = Variants.Reroll(Jadro(), id, rng);
-                Assert.Empty(result.Room.Validate());
-                Assert.NotEmpty(result.Clues);
-            }
+        var room = Jadro();
+        // With the lockdown in place, so the variants of its puzzle have something to set.
+        var game = room.WithTwist(room.Twists!["lockdown"]) with { Twists = null };
+        foreach (var (handle, options) in room.Variants!)
+            foreach (var v in options)
+                Assert.Empty(game.WithVariant(v).Validate().Select(e => $"{handle} ({v.Summary}): {e}"));
     }
 
     [Fact]
     public void Duty_guard_sets_both_the_locker_code_and_the_badge()
     {
-        var result = Variants.Reroll(Jadro(), "szafka", new Random(3));
-        var clue = JsonSerializer.SerializeToElement(result.Clues.Single().Value);
-        var duty = clue.GetProperty("duty").GetString()!;
-        var shift = clue.GetProperty("shifts").GetProperty(duty);
-        Assert.Equal($"{shift[0].GetInt32():00}{shift[1].GetInt32():00}", Payload.Text(P(result.Room, "szafka").When!.Is!.Value));
-        Assert.Equal("OCHRONA-" + duty.ToUpperInvariant(), Payload.Text(P(result.Room, "bramka").When!.Is!.Value));
+        foreach (var v in Jadro().Variants!["szafka"])
+        {
+            var clue = v.Clues!.Single().Value!.Value;
+            var duty = clue.GetProperty("duty").GetString()!;
+            var shift = clue.GetProperty("shifts").GetProperty(duty);
+            Assert.Equal($"{shift[0].GetInt32():00}{shift[1].GetInt32():00}", Payload.Text(v.Solutions["szafka"].Is!.Value));
+            Assert.Equal("OCHRONA-" + duty.ToUpperInvariant(), Payload.Text(v.Solutions["bramka"].Is!.Value));
+        }
     }
 
     [Fact]
-    public void Lockdown_inserts_a_puzzle_the_firewall_waits_for()
+    public void Lockdown_adds_a_puzzle_the_firewall_waits_for()
     {
-        var room = Variants.Lockdown(Jadro(), new Random(1)).Room;
-        Assert.Empty(room.Validate());
+        var room = Jadro().WithTwist(Jadro().Twists!["lockdown"]);
         Assert.Contains("blokada", P(room, "firewall").After!);
         var game = new Game(room, new GameState());
         foreach (var id in new[] { "przeszukanie", "telefon", "szafka", "bramka", "sciana", "zdrive", "zmart", "skanery" })
             game.Solve(id, Now);
         Assert.Equal("active", game.Status(P(room, "blokada")));
         Assert.Equal("locked", game.Status(P(room, "firewall")));
+    }
+
+    [Fact]
+    public void Game_master_data_is_checked()
+    {
+        var room = Jadro();
+        Assert.Contains((room with { Characters = [new Character("X", "x", "nope")] }).Validate(), e => e.Contains("unknown output 'nope'"));
+        Assert.Contains((room with { Variants = null, Twists = new() { ["t"] = new Twist("t", Blocks: ["nope"]) } }).Validate(), e => e.Contains("unknown puzzle 'nope'"));
+        Assert.Contains((room with { Variants = new() { ["v"] = [room.Variants!["telefon"][0], new Variant(new() { ["nope"] = room.Puzzles[0].When! })] } }).Validate(),
+            e => e.Contains("unknown puzzle 'nope'"));
     }
 
     [Fact]
