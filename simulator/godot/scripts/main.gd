@@ -125,6 +125,15 @@ func _ready() -> void:
 
 func _shoot(path: String) -> void:
 	## Test hook: `godot -- --autostart --shot=/tmp/x.png` saves a frame (and one screen texture) after a few seconds and quits.
+	## With `--at=<game seconds>` (and `--speed=`) it waits for that moment of the game first.
+	var at := 0.0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--at="):
+			at = float(arg.get_slice("=", 1))
+	while sim.t < at and sim.running or not sim.running and at > 0.0 and sim.t == 0.0:
+		await get_tree().process_frame
+	if at > 0.0:
+		speed = 1.0
 	await get_tree().create_timer(6.0).timeout
 	get_viewport().get_texture().get_image().save_png(path)
 	for c in get_children():
@@ -555,7 +564,8 @@ func _build_lights() -> void:
 	for p in [Vector3(10.6, 2.4, 7.6), Vector3(20.4, 2.4, 7.6), Vector3(15.4, 2.6, 1.3)]:
 		_light("pietro", OmniLight3D.new(), p, Color("#7fe6ee"), 0.35, 6.0)
 	for p in [Vector3(24.0, 2.6, 6.2), Vector3(29.0, 2.6, 6.2)]:
-		_light("jadro", OmniLight3D.new(), p, Color("#5a78c8"), 0.7, 7.0)
+		_light("jadro", OmniLight3D.new(), p, Color("#8fa3cf"), 1.3, 8.0)
+	_light("jadro", OmniLight3D.new(), Vector3(26.5, 3.4, 6.8), Color("#dfe6f2"), 0.8, 9.0)  # neutral fill: cold, not monochrome
 	_light("jadro", OmniLight3D.new(), Vector3(26.3, 1.7, 3.6), Color("#00f0ff"), 2.0, 6.5, true)
 	for p in [Vector3(23.4, 3.0, 2.4), Vector3(29.2, 3.0, 2.4)]:
 		_light("jadro", SpotLight3D.new(), p, Color("#5f8bff"), 2.2, 5.0, true)

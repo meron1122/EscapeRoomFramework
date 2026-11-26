@@ -27,6 +27,7 @@ const HINTS := {
 	"wybor": "Dwa klucze, jednocześnie. Albo jej przycisk.",
 }
 
+var taunts := 0
 var layout: Dictionary
 var rng := RandomNumberGenerator.new()
 var t := 0.0
@@ -233,8 +234,10 @@ func _direct() -> void:
 		say("KRUK", "Za wolno. " + HINTS.get(active[rng.randi() % active.size()], ""))
 	elif t - last_event > 300.0 and t - last_taunt > 300.0:
 		last_taunt = t
+		# In order, so the same taunt never comes twice in a row.
 		say("ZETA", ["Ciekawe, ile wytrzymacie bez powiadomień.", "Statystycznie poddajecie się w siedemnastej minucie.",
-			"Mogę wam pomóc. Wystarczy się zalogować."][rng.randi() % 3])
+			"Mogę wam pomóc. Wystarczy się zalogować.", "Wasz czas ekranowy dziś: zero. Niepokojące."][taunts % 4])
+		taunts += 1
 
 
 func _run_twist(kind: String) -> void:
