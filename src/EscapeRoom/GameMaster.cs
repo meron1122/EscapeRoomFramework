@@ -59,7 +59,7 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
         var gameSeconds = config.GetValue("GameMaster:IntervalSeconds", 40.0);
         var speed = 1.0;
         var client = Client();
-        log.LogInformation("Game master for {Room}: {Mode}", room, client is null ? "rules (no model credentials)" : Model);
+        log.LogInformation("Game master for {Room}: {Mode}", room, client is null ? "rules only" : Model);
         var wake = Channel.CreateBounded<string>(new BoundedChannelOptions(16) { FullMode = BoundedChannelFullMode.DropOldest });
         engine.Changed += (r, type) =>
         {
@@ -95,7 +95,13 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
-                log.LogError(ex, "Game master decision failed; using rules this time");
+                if (ex is Anthropic.Exceptions.AnthropicUnauthorizedException or Anthropic.Exceptions.AnthropicForbiddenException
+                    || ex.Message.Contains("credential", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("api key", StringComparison.OrdinalIgnoreCase))
+                {
+                    log.LogWarning("No working model credentials ({Error}); the game master runs on rules", ex.Message);
+                    client = null;
+                }
+                else log.LogError(ex, "Game master decision failed; using rules this time");
                 await Rules(room, reason, observation);
             }
         }
@@ -105,13 +111,13 @@ public class GameMaster(Engine engine, IConfiguration config, ILogger<GameMaster
 
     AnthropicClient? Client()
     {
+        if (config.GetValue("GameMaster:RulesOnly", false)) return null;
         // On a Sprite the key lives in a Connector: BaseUrl points at the gateway and the key here is only a placeholder.
+        // Elsewhere the SDK finds credentials itself (ANTHROPIC_API_KEY or an `ant auth login` profile).
         var baseUrl = config["GameMaster:BaseUrl"];
+        if (string.IsNullOrEmpty(baseUrl)) return new AnthropicClient();
         var key = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
-        if (string.IsNullOrEmpty(key) && string.IsNullOrEmpty(baseUrl)) return null;
-        return string.IsNullOrEmpty(baseUrl)
-            ? new AnthropicClient { ApiKey = key }
-            : new AnthropicClient { ApiKey = string.IsNullOrEmpty(key) ? "injected-by-connector" : key, BaseUrl = baseUrl };
+        return new AnthropicClient { ApiKey = string.IsNullOrEmpty(key) ? "injected-by-connector" : key, BaseUrl = baseUrl };
     }
 
     async Task Decide(AnthropicClient client, string room, string reason, JsonElement observation, CancellationToken ct)
