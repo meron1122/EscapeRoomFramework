@@ -1086,7 +1086,7 @@ func _update_camera(delta: float) -> void:
 				center += n.position
 				count += 1
 		if count > 0:
-			cam_target = cam_target.lerp(center / count + Vector3(0, 0, -0.5), minf(1.0, delta * 1.2))
+			cam_target = cam_target.lerp(center / count + Vector3(0.6, 0, -2.6), minf(1.0, delta * 1.2))
 	cam.size = lerpf(cam.size, zoom, minf(1.0, delta * 6.0))
 	_place_camera()
 	atmosphere.follow(cam_target)
