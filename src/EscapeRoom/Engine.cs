@@ -38,7 +38,21 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    record Session(Guid Id, string RoomId, Room Room, Game Game, ILookup<string, (string Input, string? Path)> Topics);
+    class Session(Guid id, string roomId, Room room, Game game, ILookup<string, (string Input, string? Path)> topics)
+    {
+        public Guid Id => id;
+        public string RoomId => roomId;
+        public Room Room => room;
+        public Game Game => game;
+        public ILookup<string, (string Input, string? Path)> Topics => topics;
+        public double Speed = 1.0;  // game seconds per real second; a simulation runs faster
+        public string? Nonce;  // set by whoever started the game, so a client can tell its game from an older one
+        public JsonElement? Players;  // latest tracking snapshot from the room's cameras or the simulator
+        public readonly List<object> Recent = [];  // last events, for the game master agent
+    }
+
+    /// <summary>Raised after every logged event of a running game: (room, event type). The game master agent wakes on it.</summary>
+    public event Action<string, string>? Changed;
 
     readonly SemaphoreSlim gate = new(1, 1); // one change at a time across all rooms; a venue's traffic is tiny
     readonly Dictionary<string, Session> running = [];
@@ -66,7 +80,79 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
             inbox.Writer.TryWrite((topic, payload));
             return Task.CompletedTask;
         };
+        _ = Tick(ct);
         await foreach (var (topic, payload) in inbox.Reader.ReadAllAsync(ct)) await OnMessage(topic, payload);
+    }
+
+    /// <summary>The game clock: advances every running game, publishes its state, and ends it when time runs out.</summary>
+    async Task Tick(CancellationToken ct)
+    {
+        var n = 0;
+        while (!ct.IsCancellationRequested)
+        {
+            await Task.Delay(1000, ct);
+            await gate.WaitAsync(ct);
+            try
+            {
+                n++;
+                foreach (var s in running.Values.ToList())
+                {
+                    s.Game.State.Clock += s.Speed;
+                    if (s.Room.Minutes is { } m && s.Game.State.Clock >= m * 60)
+                    {
+                        await End(s, "timeout");
+                        continue;
+                    }
+                    if (n % 10 == 0)
+                        await db.Exec("update sessions set state = $2::jsonb where id = $1", s.Id, Serialize(s.Game.State));
+                    await PublishState(s, null);
+                }
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                log.LogError(ex, "Game clock tick failed");
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+    }
+
+    Task PublishState(Session s, string? ending) => mqtt.Publish($"escaperoom/{s.RoomId}/state", Serialize(new
+    {
+        session = s.Id,
+        nonce = s.Nonce,
+        clock = Math.Round(s.Game.State.Clock),
+        minutes = s.Room.Minutes,
+        speed = s.Speed,
+        ended = ending != null,
+        ending,
+        puzzles = s.Room.Puzzles.Select(p => new { p.Id, status = s.Game.Status(p) }),
+    }), retain: true);
+
+    /// <summary>What the game master agent sees: the clock, every puzzle with its condition, recent events and the players.</summary>
+    public async Task<object?> Observe(string roomId)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            if (!running.TryGetValue(roomId, out var s)) return null;
+            return new
+            {
+                clockMinutes = Math.Round(s.Game.State.Clock / 60.0, 1),
+                minutes = s.Room.Minutes,
+                speed = s.Speed,
+                puzzles = s.Room.Puzzles.Select(p => new { p.Id, p.Name, status = s.Game.Status(p), p.After, p.Ends, when = p.When }),
+                inputs = s.Game.State.Inputs,
+                recent = s.Recent.TakeLast(25),
+                players = s.Players,
+            };
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     public async Task<List<object>> ListRooms()
@@ -106,6 +192,7 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
             {
                 var s = Add(old.Id, roomId, room, old.Game.State);
                 await db.Exec("update sessions set definition = $2::jsonb where id = $1", s.Id, json);
+                await mqtt.Publish($"escaperoom/{roomId}/definition", json, retain: true);
                 await Log(s, "room-updated", new { });
                 // New or rewired puzzles may already be satisfied by what the sensors report right now.
                 await Apply(s, s.Game.Settle(DateTimeOffset.UtcNow));
@@ -155,7 +242,7 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
         }
     }
 
-    public async Task<Guid?> Start(string roomId)
+    public async Task<Guid?> Start(string roomId, string? nonce = null)
     {
         await gate.WaitAsync();
         try
@@ -163,8 +250,10 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
             if (await RoomJson(roomId) is not { } json) return null;
             if (running.TryGetValue(roomId, out var old)) await End(old, "restarted");
             var s = Add(Guid.NewGuid(), roomId, Parse<Room>(json), new GameState());
+            s.Nonce = nonce;
             await db.Exec("insert into sessions (id, room_id, definition, state) values ($1, $2, $3::jsonb, $4::jsonb)",
                 s.Id, roomId, json, Serialize(s.Game.State));
+            await mqtt.Publish($"escaperoom/{roomId}/definition", json, retain: true);
             await Log(s, "started", new { });
             _ = Run(s, s.Room.Start ?? []);
             return s.Id;
@@ -227,13 +316,32 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
 
     async Task OnMessage(string topic, string payload)
     {
+        // escaperoom/<room>/control {"command":"start"} starts a game; the simulator uses it instead of the HTTP API.
+        if (topic.StartsWith("escaperoom/") && topic.EndsWith("/control") && Payload.Extract(payload, "command") == "start")
+        {
+            await Start(topic.Split('/')[1], Payload.Extract(payload, "nonce"));
+            return;
+        }
         await gate.WaitAsync();
         try
         {
             foreach (var s in running.Values.ToList())
+            {
+                if (topic == $"escaperoom/{s.RoomId}/players")
+                {
+                    s.Players = JsonSerializer.Deserialize<JsonElement>(payload);
+                    continue;
+                }
+                if (topic == $"escaperoom/{s.RoomId}/control" && Payload.Extract(payload, "speed") is { } sp && double.TryParse(sp,
+                        System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var speed))
+                {
+                    s.Speed = Math.Clamp(speed, 0.0, 120.0);
+                    continue;
+                }
                 foreach (var (input, path) in s.Topics[topic])
                     if (Payload.Extract(payload, path) is { } value && running.ContainsKey(s.RoomId))
                         await Feed(s, input, value, "input");
+            }
         }
         catch (Exception ex)
         {
@@ -256,14 +364,16 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
         foreach (var p in solved) await Log(s, "solved", new { puzzle = p.Id });
         await db.Exec("update sessions set state = $2::jsonb where id = $1", s.Id, Serialize(s.Game.State));
         _ = Run(s, solved.SelectMany(p => p.Then ?? []).ToList());
-        if (s.Game.Finished) await End(s, "finished");
+        if (s.Game.Finished) await End(s, "finished", s.Game.Ending);
+        else await PublishState(s, null);
     }
 
-    async Task End(Session s, string reason)
+    async Task End(Session s, string reason, string? ending = null)
     {
         running.Remove(s.RoomId);
-        await db.Exec("update sessions set ended_at = now() where id = $1", s.Id);
-        await Log(s, reason, new { });
+        await db.Exec("update sessions set ended_at = now(), state = $2::jsonb where id = $1", s.Id, Serialize(s.Game.State));
+        await Log(s, reason, new { ending });
+        await PublishState(s, ending ?? reason);
     }
 
     /// <summary>Runs outside the gate so delays (e.g. pulsing a solenoid) don't hold up other rooms.</summary>
@@ -293,11 +403,25 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
         var topics = room.Inputs
             .Select(kv => (Id: kv.Key, Io: kv.Value.AsInput()))
             .ToLookup(x => x.Io.Topic, x => (x.Id, x.Io.Path));
-        return running[roomId] = new Session(id, roomId, room, new Game(room, state), topics);
+        var s = new Session(id, roomId, room, new Game(room, state), topics);
+        if (running.TryGetValue(roomId, out var previous) && previous.Id == id)
+        {
+            // A live room change keeps the game's speed, players and history.
+            s.Speed = previous.Speed;
+            s.Nonce = previous.Nonce;
+            s.Players = previous.Players;
+            s.Recent.AddRange(previous.Recent);
+        }
+        return running[roomId] = s;
     }
 
-    Task Log(Session s, string type, object data) =>
-        db.Exec("insert into events (session_id, type, data) values ($1, $2, $3::jsonb)", s.Id, type, Serialize(data));
+    async Task Log(Session s, string type, object data)
+    {
+        await db.Exec("insert into events (session_id, type, data) values ($1, $2, $3::jsonb)", s.Id, type, Serialize(data));
+        s.Recent.Add(new { minute = Math.Round(s.Game.State.Clock / 60.0, 1), type, data });
+        if (s.Recent.Count > 60) s.Recent.RemoveRange(0, s.Recent.Count - 60);
+        Changed?.Invoke(s.RoomId, type);
+    }
 
     static T Parse<T>(string json) => JsonSerializer.Deserialize<T>(json, Json)!;
     static string Serialize(object value) => JsonSerializer.Serialize(value, Json);

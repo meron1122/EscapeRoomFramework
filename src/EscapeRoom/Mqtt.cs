@@ -15,8 +15,8 @@ public class Mqtt(IConfiguration config, ILogger<Mqtt> log) : BackgroundService
     // shortcut: unbounded and in memory; fine for one venue's broker
     public ConcurrentDictionary<string, (string Payload, DateTimeOffset At)> Seen { get; } = new();
 
-    public Task Publish(string topic, string payload) =>
-        client.PublishStringAsync(topic, payload, MqttQualityOfServiceLevel.AtLeastOnce);
+    public Task Publish(string topic, string payload, bool retain = false) =>
+        client.PublishStringAsync(topic, payload, MqttQualityOfServiceLevel.AtLeastOnce, retain);
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {

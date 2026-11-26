@@ -10,7 +10,8 @@ public record Room(
     Dictionary<string, Io> Inputs,
     Dictionary<string, Io> Outputs,
     Puzzle[] Puzzles,
-    Step[]? Start = null)
+    Step[]? Start = null,
+    int? Minutes = null)
 {
     public IEnumerable<string> Validate()
     {
@@ -132,7 +133,8 @@ public record Io(
     }
 }
 
-public record Puzzle(string Id, Condition? When = null, Step[]? Then = null, string[]? After = null);
+/// <summary>A puzzle; one marked <c>ends</c> finishes the game when solved (a room can have several endings).</summary>
+public record Puzzle(string Id, Condition? When = null, Step[]? Then = null, string[]? After = null, bool Ends = false, string? Name = null);
 
 /// <summary>Either a test on one input (equals/gt/lt, none = any value) or all/any/sequence of conditions.</summary>
 public record Condition(

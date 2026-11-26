@@ -10,13 +10,20 @@ public class GameState
 
     /// <summary>Per sequence puzzle: the last relevant input events, at most as many as the sequence has steps.</summary>
     public Dictionary<string, List<InputEvent>> Recent { get; init; } = [];
+
+    /// <summary>Game time in seconds; it can run faster than the wall clock in a simulation.</summary>
+    public double Clock { get; set; }
 }
 
 /// <summary>Pure puzzle logic: feed it input values, it returns the puzzles that got solved, in order.</summary>
 public class Game(Room room, GameState state)
 {
     public GameState State => state;
-    public bool Finished => room.Puzzles.All(p => state.Solved.ContainsKey(p.Id));
+    public bool Finished => room.Puzzles.Any(p => p.Ends)
+        ? room.Puzzles.Any(p => p.Ends && state.Solved.ContainsKey(p.Id))
+        : room.Puzzles.All(p => state.Solved.ContainsKey(p.Id));
+
+    public string? Ending => room.Puzzles.FirstOrDefault(p => p.Ends && state.Solved.ContainsKey(p.Id))?.Id;
 
     public bool IsActive(Puzzle p) => !state.Solved.ContainsKey(p.Id) && (p.After ?? []).All(state.Solved.ContainsKey);
 

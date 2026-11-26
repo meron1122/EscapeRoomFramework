@@ -11,6 +11,7 @@ builder.Services.AddSingleton<Safety>();
 builder.Services.AddSingleton<Engine>();
 builder.Services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<Mqtt>());
 builder.Services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<Engine>());
+builder.Services.AddHostedService<GameMaster>();
 // AddHostedService would keep only one QrCamera (it dedupes by type), hence AddSingleton per camera.
 foreach (var cam in builder.Configuration.GetSection("Cameras").Get<CameraConfig[]>() ?? [])
     builder.Services.AddSingleton<IHostedService>(sp =>

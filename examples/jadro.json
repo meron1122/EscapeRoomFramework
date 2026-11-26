@@ -1,0 +1,128 @@
+{
+  "name": "Jądro",
+  "minutes": 60,
+  "inputs": {
+    "badge_found":    { "topic": "sim/jadro/hol/badge" },
+    "phone_key":      { "topic": "sim/jadro/hol/phone" },
+    "locker_code":    { "topic": "sim/jadro/hol/locker" },
+    "gate_qr":        { "topic": "sim/jadro/hol/gate-qr" },
+    "slot1":          { "topic": "sim/jadro/pietro/slot/1" },
+    "slot2":          { "topic": "sim/jadro/pietro/slot/2" },
+    "slot3":          { "topic": "sim/jadro/pietro/slot/3" },
+    "slot4":          { "topic": "sim/jadro/pietro/slot/4" },
+    "slot5":          { "topic": "sim/jadro/pietro/slot/5" },
+    "slot6":          { "topic": "sim/jadro/pietro/slot/6" },
+    "knob_pressure":  { "topic": "sim/jadro/pietro/knob/pressure" },
+    "knob_temp":      { "topic": "sim/jadro/pietro/knob/temp" },
+    "knob_rpm":       { "topic": "sim/jadro/pietro/knob/rpm" },
+    "mart_qr":        { "topic": "sim/jadro/pietro/mart-qr" },
+    "scanner1":       { "topic": "sim/jadro/pietro/scanner/1" },
+    "scanner2":       { "topic": "sim/jadro/pietro/scanner/2" },
+    "scanner3":       { "topic": "sim/jadro/pietro/scanner/3" },
+    "scanner4":       { "topic": "sim/jadro/pietro/scanner/4" },
+    "lockdown_panel": { "topic": "sim/jadro/pietro/lockdown-panel" },
+    "light1":         { "topic": "sim/jadro/jadro/light/1" },
+    "light2":         { "topic": "sim/jadro/jadro/light/2" },
+    "light3":         { "topic": "sim/jadro/jadro/light/3" },
+    "light4":         { "topic": "sim/jadro/jadro/light/4" },
+    "light5":         { "topic": "sim/jadro/jadro/light/5" },
+    "rod1":           { "topic": "sim/jadro/jadro/rod/1" },
+    "rod2":           { "topic": "sim/jadro/jadro/rod/2" },
+    "rod3":           { "topic": "sim/jadro/jadro/rod/3" },
+    "bomb_code":      { "topic": "sim/jadro/jadro/keypad" },
+    "key_left":       { "topic": "sim/jadro/jadro/key/left" },
+    "key_right":      { "topic": "sim/jadro/jadro/key/right" },
+    "accept":         { "topic": "sim/jadro/jadro/accept" }
+  },
+  "outputs": {
+    "door_winda":      { "topic": "sim/jadro/door/winda" },
+    "door_zejscie":    { "topic": "sim/jadro/door/zejscie" },
+    "door_wyjscie":    { "topic": "sim/jadro/door/wyjscie" },
+    "screen_reklama":  { "topic": "sim/jadro/screen/reklama" },
+    "screen_grafik":   { "topic": "sim/jadro/screen/grafik" },
+    "screen_raport":   { "topic": "sim/jadro/screen/raport" },
+    "screen_zdrive":   { "topic": "sim/jadro/screen/zdrive" },
+    "screen_kiosk":    { "topic": "sim/jadro/screen/kiosk" },
+    "screen_zeta":     { "topic": "sim/jadro/screen/zeta" },
+    "screen_fragmenty": { "topic": "sim/jadro/screen/fragmenty" },
+    "scanners":        { "topic": "sim/jadro/fx/scanners" },
+    "sensors":         { "topic": "sim/jadro/fx/sensors" },
+    "voice":           { "topic": "escaperoom/jadro/voice" },
+    "hint":            { "topic": "escaperoom/jadro/hint" },
+    "twist":           { "topic": "escaperoom/jadro/twist" },
+    "gm":              { "topic": "escaperoom/jadro/gm" }
+  },
+  "start": [
+    { "output": "door_winda", "value": "closed" },
+    { "output": "door_zejscie", "value": "closed" },
+    { "output": "door_wyjscie", "value": "closed" },
+    { "output": "screen_reklama", "value": { "gest": "Z" } },
+    { "output": "screen_grafik", "value": { "duty": "Marek", "shifts": { "Marek": [6, 14], "Ola": [14, 22], "Tomek": [22, 6] } } },
+    { "output": "screen_raport", "value": { "minutes": { "Z-FEED": 212, "Z-BET": 171, "Z-DATE": 133, "Z-NEWS": 96, "Z-PLAY": 74, "Z-FIT": 41 } } },
+    { "output": "screen_zdrive", "value": { "kod": "SRV-2.4/90/3200" } },
+    { "output": "screen_kiosk", "value": { "klientka": "Anna, 34 lata, bezsenność, dwoje dzieci" } },
+    { "output": "screen_fragmenty", "value": { "fragments": [83, 51, 27], "haslo": "Telefon. Auto. Sklep." } },
+    { "output": "scanners", "value": { "active": ["2", "3"] } },
+    { "output": "sensors", "value": { "active": [1, 3, 4] } }
+  ],
+  "puzzles": [
+    { "id": "przeszukanie", "name": "Przeszukanie holu", "when": { "input": "badge_found", "equals": "found" } },
+    {
+      "id": "telefon", "name": "Telefon recepcjonistki",
+      "when": { "sequence": [
+        { "input": "phone_key", "equals": "1" }, { "input": "phone_key", "equals": "2" }, { "input": "phone_key", "equals": "3" },
+        { "input": "phone_key", "equals": "5" }, { "input": "phone_key", "equals": "7" }, { "input": "phone_key", "equals": "8" },
+        { "input": "phone_key", "equals": "9" } ] }
+    },
+    { "id": "szafka", "name": "Grafik i szafka ochrony", "after": ["telefon"], "when": { "input": "locker_code", "equals": "0614" } },
+    {
+      "id": "bramka", "name": "Bramka", "after": ["szafka", "przeszukanie"],
+      "when": { "input": "gate_qr", "equals": "OCHRONA-MAREK" },
+      "then": [ { "output": "door_winda", "value": "open" } ]
+    },
+    {
+      "id": "sciana", "name": "Ściana powiadomień", "after": ["bramka"],
+      "when": { "all": [
+        { "input": "slot1", "equals": "Z-FEED" }, { "input": "slot2", "equals": "Z-BET" }, { "input": "slot3", "equals": "Z-DATE" },
+        { "input": "slot4", "equals": "Z-NEWS" }, { "input": "slot5", "equals": "Z-PLAY" }, { "input": "slot6", "equals": "Z-FIT" } ] }
+    },
+    {
+      "id": "zdrive", "name": "Kokpit Z-Drive", "after": ["bramka"],
+      "when": { "all": [
+        { "input": "knob_pressure", "gt": 2.35 }, { "input": "knob_pressure", "lt": 2.45 },
+        { "input": "knob_temp", "gt": 87.5 }, { "input": "knob_temp", "lt": 92.5 },
+        { "input": "knob_rpm", "gt": 3150 }, { "input": "knob_rpm", "lt": 3250 } ] }
+    },
+    {
+      "id": "zmart", "name": "Kasa Z-Mart", "after": ["bramka"],
+      "when": { "sequence": [
+        { "input": "mart_qr", "equals": "Z-BOOST" }, { "input": "mart_qr", "equals": "Z-KIDS" },
+        { "input": "mart_qr", "equals": "Z-SNACK" }, { "input": "mart_qr", "equals": "Z-SEN" } ] }
+    },
+    {
+      "id": "skanery", "name": "Skanery dłoni", "after": ["sciana", "zdrive", "zmart"],
+      "when": { "all": [ { "input": "scanner2", "equals": "ON" }, { "input": "scanner3", "equals": "ON" } ] },
+      "then": [ { "output": "door_zejscie", "value": "open" } ]
+    },
+    {
+      "id": "firewall", "name": "Firewall ze światła", "after": ["skanery"],
+      "when": { "all": [ { "input": "light1", "gt": 600 }, { "input": "light3", "gt": 600 }, { "input": "light4", "gt": 600 } ] }
+    },
+    {
+      "id": "uzbrojenie", "name": "Uzbrojenie", "after": ["firewall"],
+      "when": { "all": [
+        { "input": "rod1", "equals": "ROD" }, { "input": "rod2", "equals": "ROD" }, { "input": "rod3", "equals": "ROD" },
+        { "input": "bomb_code", "equals": "835127" } ] }
+    },
+    {
+      "id": "detonacja", "name": "Detonacja", "after": ["uzbrojenie"], "ends": true,
+      "when": { "all": [ { "input": "key_left", "equals": "ON" }, { "input": "key_right", "equals": "ON" } ] },
+      "then": [ { "output": "door_wyjscie", "value": "open" } ]
+    },
+    {
+      "id": "uklad", "name": "Układ z ZETĄ", "after": ["uzbrojenie"], "ends": true,
+      "when": { "input": "accept", "equals": "PRESSED" },
+      "then": [ { "output": "door_wyjscie", "value": "open" } ]
+    }
+  ]
+}
