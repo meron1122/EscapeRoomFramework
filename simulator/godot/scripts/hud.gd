@@ -13,6 +13,7 @@ const CYAN := Color("#00f0ff")
 const BLACK := Color("#000000")
 const WHITE := Color("#ffffff")
 const GREY := Color("#cbcbcb")
+const SCALE := 0.78
 const MUTED := Color("#8fb3b8")  # labels and finished things; cyan is kept for what is active now
 const ROOMS := {"hol": "POKÓJ 1 · HOL", "pietro": "POKÓJ 2 · PIĘTRO NAWYKÓW", "jadro": "POKÓJ 3 · JĄDRO"}
 const STATES := {"locked": "LOCKED_", "active": "ACTIVE_", "solved": "SOLVED_"}
@@ -60,9 +61,13 @@ var _music: Button
 func build(fonts_: Dictionary) -> void:
 	fonts = fonts_
 	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	# The whole overlay is drawn at 78%, so the rooms keep most of the picture.
+	root.scale = Vector2(SCALE, SCALE)
+	var fit := func(): root.size = Vector2(get_viewport().get_visible_rect().size) / SCALE
+	get_viewport().size_changed.connect(fit)
+	fit.call()
 
 	var top := VBoxContainer.new()
 	top.position = Vector2(28, 18)
@@ -123,8 +128,8 @@ func build(fonts_: Dictionary) -> void:
 	lp.anchor_top = 1.0
 	lp.anchor_bottom = 1.0
 	lp.offset_left = 28
-	lp.offset_right = 760
-	lp.offset_top = -214
+	lp.offset_right = 660
+	lp.offset_top = -164
 	lp.offset_bottom = -24
 	root.add_child(lp)
 	_log = RichTextLabel.new()
