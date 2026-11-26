@@ -31,8 +31,8 @@ var speed := 5.0
 var paused := false
 var follow := true
 var cam: Camera3D
-var cam_target := Vector3(4.5, 0, 3.5)
-var zoom := 13.0
+var cam_target := Vector3(6.3, 0, 4.9)
+var zoom := 16.0
 var dragging := false
 var music: Array[AudioStreamPlayer] = []
 var music_active := 0
@@ -393,8 +393,8 @@ func _build_environment() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color("#040507")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("#2a333d")
-	env.ambient_light_energy = 1.0
+	env.ambient_light_color = Color("#27303c")
+	env.ambient_light_energy = 0.75
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 0.95
 	env.glow_enabled = true
@@ -547,28 +547,32 @@ func _light(room: String, l: Light3D, pos: Vector3, color: Color, energy: float,
 		l.omni_range = reach
 	elif l is SpotLight3D:
 		l.spot_range = reach
-		l.spot_angle = 40.0
+		l.spot_angle = 46.0
+		l.spot_angle_attenuation = 0.6
 		l.rotation_degrees.x = -90
 	add_child(l)
 	room_lights.get_or_add(room, []).append(l)
 
 
 func _build_lights() -> void:
-	var white := Color("#eef3ff")
-	for i in 3:
-		var p: Vector3 = [Vector3(2.2, 2.7, 2.6), Vector3(6.6, 2.7, 2.6), Vector3(4.5, 2.7, 5.6)][i]
-		_light("hol", OmniLight3D.new(), p, white, 0.7, 6.5, i < 2)
-	_light("hol", OmniLight3D.new(), Vector3(1.5, 2.2, 0.9), Color("#ffd9a0"), 0.35, 3.5)
-	for p in [Vector3(11.7, 3.1, 1.7), Vector3(18.6, 3.3, 2.6), Vector3(14.0, 3.1, 6.6), Vector3(15.2, 3.1, 3.4)]:
-		_light("pietro", SpotLight3D.new(), p, white, 3.2, 6.0, true)
-	for p in [Vector3(10.6, 2.4, 7.6), Vector3(20.4, 2.4, 7.6), Vector3(15.4, 2.6, 1.3)]:
-		_light("pietro", OmniLight3D.new(), p, Color("#7fe6ee"), 0.35, 6.0)
-	for p in [Vector3(24.0, 2.6, 6.2), Vector3(29.0, 2.6, 6.2)]:
-		_light("jadro", OmniLight3D.new(), p, Color("#8fa3cf"), 1.3, 8.0)
-	_light("jadro", OmniLight3D.new(), Vector3(26.5, 3.4, 6.8), Color("#dfe6f2"), 0.8, 9.0)  # neutral fill: cold, not monochrome
-	_light("jadro", OmniLight3D.new(), Vector3(26.3, 1.7, 3.6), Color("#00f0ff"), 2.0, 6.5, true)
-	for p in [Vector3(23.4, 3.0, 2.4), Vector3(29.2, 3.0, 2.4)]:
-		_light("jadro", SpotLight3D.new(), p, Color("#5f8bff"), 2.2, 5.0, true)
+	## Moody rooms: low ambient, and pools of light over the places where the game happens.
+	var white := Color("#e9eefc")
+	var warm := Color("#ffd2a0")
+	# Hol: warm pools over the desk, the seating and the gate; one cool wash so the stone still reads.
+	for p in [Vector3(4.6, 3.0, 3.9), Vector3(2.6, 2.8, 7.4), Vector3(11.3, 3.0, 2.4), Vector3(10.4, 3.0, 7.6)]:
+		_light("hol", SpotLight3D.new(), p, warm, 3.4, 7.0, true)
+	_light("hol", OmniLight3D.new(), Vector3(6.3, 3.6, 5.0), white, 0.45, 11.0)
+	# Piętro: white work light over each station, a faint cyan from the scanner walls.
+	for p in [Vector3(16.4, 3.2, 2.4), Vector3(26.0, 3.3, 3.6), Vector3(19.6, 3.2, 9.2), Vector3(21.3, 3.2, 4.8), Vector3(24.5, 3.2, 9.8)]:
+		_light("pietro", SpotLight3D.new(), p, white, 3.6, 7.5, true)
+	for p in [Vector3(14.8, 2.4, 10.6), Vector3(28.6, 2.4, 10.6)]:
+		_light("pietro", OmniLight3D.new(), p, Color("#7fe6ee"), 0.4, 7.0)
+	_light("pietro", OmniLight3D.new(), Vector3(21.5, 3.8, 6.3), white, 0.35, 13.0)
+	# Jądro: cold and the darkest; the core is the light.
+	_light("jadro", OmniLight3D.new(), Vector3(36.8, 1.7, 5.0), Color("#00f0ff"), 2.4, 9.0, true)
+	for p in [Vector3(32.8, 3.0, 3.4), Vector3(40.9, 3.0, 3.4), Vector3(34.0, 3.0, 9.4), Vector3(40.0, 3.0, 9.4)]:
+		_light("jadro", SpotLight3D.new(), p, Color("#8fa8e6"), 2.8, 7.0, true)
+	_light("jadro", OmniLight3D.new(), Vector3(37.0, 3.6, 7.5), Color("#c9d4ea"), 0.4, 12.0)
 
 
 func _build_screens() -> void:
@@ -606,7 +610,7 @@ func _build_team() -> void:
 	for i in NAMES.size():
 		var n := Npc.new()
 		n.setup(variants[i % variants.size()], NAMES[i], COLORS[i], rng.randf_range(0.8, 1.25), fonts.display)
-		n.position = Vector3(1.0 + (i % 2) * 0.7, 0, 3.4 + i * 0.3)
+		n.position = Vector3(1.4 + (i % 2) * 0.7, 0, 4.8 + i * 0.35)
 		add_child(n)
 		npcs.append(n)
 
@@ -695,7 +699,7 @@ func _aim_scanners_and_sensors() -> void:
 	var spots := []
 	for k in sim.variant.skanery:
 		var s: Node3D = props["skaner" + k]
-		spots.append([s.position.x + (0.55 if s.position.x < 15.0 else -0.55), s.position.z])
+		spots.append([s.position.x + (0.55 if s.position.x < 21.0 else -0.55), s.position.z])
 		_set_mat("skaner" + k, "Ring", _glow(Color("#00f0ff"), 0.4))
 	sim.tasks.skanery.def.spots = spots
 	for i in 4:
@@ -844,7 +848,7 @@ func _on_finished(kind: String) -> void:
 		n.at_spot = false
 		n.mode = "leave"
 		n.activity = "ucieka" if kind == "detonacja" else "wychodzi"
-		n.go(nav, Vector3(32.2, 0, 4.6 + rng.randf_range(-0.3, 0.3)), Vector3(33, 0, 4.6))
+		n.go(nav, Vector3(45.1, 0, 6.44 + rng.randf_range(-0.3, 0.3)), Vector3(46.2, 0, 6.44))
 	end_shown_at = _clock + 7.0
 
 

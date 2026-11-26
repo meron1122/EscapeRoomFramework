@@ -309,37 +309,37 @@ func _sign(sh: Shader, at: Vector3, yaw: float, size: Vector2, text: String) -> 
 
 func _platform() -> void:
 	var metal := _mat(Color("#394249"), 0.0, 0.65, 0.15)
-	_box(self, Vector3(41, 1.2, 12), Vector3(12.0, -0.72, 5.0), Color(), 0.0, metal)
+	_box(self, Vector3(57.4, 1.2, 16.8), Vector3(16.8, -0.72, 7.0), Color(), 0.0, metal)
 	# One quiet edge line, so the platform has a border without becoming a light show.
-	_box(self, Vector3(41.2, 0.08, 0.12), Vector3(12.0, -0.14, 11.06), Color("#6f8c94"), 0.5)
-	_box(self, Vector3(0.12, 0.08, 12.2), Vector3(32.56, -0.14, 5.0), Color("#6f8c94"), 0.5)
-	for x in [2.0, 12.0, 22.0, 31.0]:  # light the terrace so the platform reads as a floor, not a void
+	_box(self, Vector3(57.6, 0.08, 0.12), Vector3(16.8, -0.14, 15.46), Color("#6f8c94"), 0.5)
+	_box(self, Vector3(0.12, 0.08, 17.0), Vector3(45.56, -0.14, 7.0), Color("#6f8c94"), 0.5)
+	for x in [3.0, 15.0, 28.0, 41.0]:  # light the terrace so the platform reads as a floor, not a void
 		var l := OmniLight3D.new()
-		l.position = Vector3(x, 1.6, 10.4)
+		l.position = Vector3(x, 1.6, 14.6)
 		l.light_color = Color("#a9bcc6")
 		l.light_energy = 0.5
 		l.omni_range = 5.0
 		add_child(l)
 	# Railings along the open edges, with a gap at the landing pad.
-	for x in range(-8, 33, 2):
-		_box(self, Vector3(0.06, 1.0, 0.06), Vector3(x, 0.5, 10.85), Color("#2a3036"), 0.0)
-	_box(self, Vector3(40.6, 0.05, 0.05), Vector3(12.3, 1.0, 10.85), Color("#4a535a"), 0.0)
-	for z in range(0, 11, 2):
-		_box(self, Vector3(0.06, 1.0, 0.06), Vector3(32.3, 0.5, z), Color("#2a3036"), 0.0)
+	for x in range(-11, 46, 2):
+		_box(self, Vector3(0.06, 1.0, 0.06), Vector3(x, 0.5, 15.2), Color("#2a3036"), 0.0)
+	_box(self, Vector3(57.0, 0.05, 0.05), Vector3(17.0, 1.0, 15.2), Color("#4a535a"), 0.0)
+	for z in range(0, 16, 2):
+		_box(self, Vector3(0.06, 1.0, 0.06), Vector3(45.3, 0.5, z), Color("#2a3036"), 0.0)
 
 
 func _van_pad() -> void:
-	_box(self, Vector3(5.6, 0.04, 4.0), Vector3(-5.2, 0.02, 4.8), Color("#1a1f24"), 0.0)
-	for c in [Vector3(-7.9, 0.03, 2.9), Vector3(-2.5, 0.03, 2.9), Vector3(-7.9, 0.03, 6.7), Vector3(-2.5, 0.03, 6.7)]:
+	_box(self, Vector3(5.6, 0.04, 4.0), Vector3(-5.2, 0.02, 6.7), Color("#1a1f24"), 0.0)
+	for c in [Vector3(-7.9, 0.03, 4.8), Vector3(-2.5, 0.03, 4.8), Vector3(-7.9, 0.03, 8.6), Vector3(-2.5, 0.03, 8.6)]:
 		_box(self, Vector3(0.5, 0.02, 0.5), c, YELLOW, 0.5)
 	if not ResourceLoader.exists("res://assets/van.glb"):
 		return
 	_van = load("res://assets/van.glb").instantiate()
-	_van.position = Vector3(-5.2, 0.55, 4.8)
+	_van.position = Vector3(-5.2, 0.55, 6.7)
 	_van.rotation_degrees.y = 90
 	add_child(_van)
 	var glow := OmniLight3D.new()
-	glow.position = Vector3(-5.2, 0.15, 4.8)
+	glow.position = Vector3(-5.2, 0.15, 6.7)
 	glow.light_color = Color("#9fd8e0")
 	glow.light_energy = 0.6
 	glow.omni_range = 4.0

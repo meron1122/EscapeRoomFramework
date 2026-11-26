@@ -10,7 +10,7 @@ var doors := {}  # door id -> Array of Vector2i cells
 
 
 func _init(layout: Dictionary) -> void:
-	grid.region = Rect2i(0, 0, int(36.0 / CELL), int(12.0 / CELL))
+	grid.region = Rect2i(0, 0, int(50.0 / CELL), int(16.0 / CELL))
 	grid.cell_size = Vector2(CELL, CELL)
 	grid.offset = ORIGIN + Vector2(CELL, CELL) * 0.5
 	grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
