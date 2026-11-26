@@ -46,7 +46,7 @@ render_mode unshaded;
 uniform vec3 a : source_color = vec3(1.0, 0.24, 0.65);
 uniform vec3 b : source_color = vec3(0.0, 0.94, 1.0);
 uniform float seed = 0.0;
-uniform float energy = 1.1;
+uniform float energy = 0.6;
 float hash(float x) { return fract(sin(x * 91.7 + seed) * 43758.5453); }
 void fragment() {
 	// An animated ad: a slow gradient, a scrolling bar, a shape in the middle and scanlines; never any text.
@@ -97,9 +97,8 @@ func build(font: Font, main_env: Environment) -> void:
 	_backdrop(main_env)
 	_platform()
 	# Rain only outside the building: the rooms have no ceiling in the cutaway.
-	_rain(self, AABB(Vector3(-14, 0, -4), Vector3(13.5, 1, 18)), 350)
-	_rain(self, AABB(Vector3(-1, 0, 9.6), Vector3(36, 1, 4)), 300)
-	_rain(self, AABB(Vector3(-10, 0, -20), Vector3(55, 1, 19)), 450)
+	# Light rain far from the rooms only, so it reads as weather, not as noise over the play area.
+	_rain(self, AABB(Vector3(-10, 0, -20), Vector3(55, 1, 19)), 250)
 	_van_pad()
 
 
@@ -168,7 +167,7 @@ func _backdrop(main_env: Environment) -> void:
 	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	rect.texture = _city.get_texture()
-	rect.modulate = Color(0.62, 0.68, 0.72)  # the city stays behind the rooms, quieter than them
+	rect.modulate = Color(0.36, 0.4, 0.44)  # the city stays behind the rooms, quieter than them
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(rect)
 
@@ -309,33 +308,30 @@ func _sign(sh: Shader, at: Vector3, yaw: float, size: Vector2, text: String) -> 
 # ---------- the platform the rooms stand on ----------
 
 func _platform() -> void:
-	var metal := _mat(Color("#222a31"), 0.0, 0.3, 0.6)
+	var metal := _mat(Color("#394249"), 0.0, 0.65, 0.15)
 	_box(self, Vector3(41, 1.2, 12), Vector3(12.0, -0.72, 5.0), Color(), 0.0, metal)
-	_box(self, Vector3(41.2, 0.08, 0.12), Vector3(12.0, -0.14, 11.06), TEAL, 3.0)
-	_box(self, Vector3(0.12, 0.08, 12.2), Vector3(32.56, -0.14, 5.0), TEAL, 3.0)
-	_box(self, Vector3(41.2, 0.06, 0.1), Vector3(12.0, -1.0, 11.06), PINK, 2.0)
-	_box(self, Vector3(0.1, 0.06, 12.2), Vector3(32.56, -1.0, 5.0), PINK, 2.0)
+	# One quiet edge line, so the platform has a border without becoming a light show.
+	_box(self, Vector3(41.2, 0.08, 0.12), Vector3(12.0, -0.14, 11.06), Color("#6f8c94"), 0.5)
+	_box(self, Vector3(0.12, 0.08, 12.2), Vector3(32.56, -0.14, 5.0), Color("#6f8c94"), 0.5)
 	for x in [2.0, 12.0, 22.0, 31.0]:  # light the terrace so the platform reads as a floor, not a void
 		var l := OmniLight3D.new()
 		l.position = Vector3(x, 1.6, 10.4)
-		l.light_color = TEAL
-		l.light_energy = 0.8
+		l.light_color = Color("#a9bcc6")
+		l.light_energy = 0.5
 		l.omni_range = 5.0
 		add_child(l)
 	# Railings along the open edges, with a gap at the landing pad.
 	for x in range(-8, 33, 2):
 		_box(self, Vector3(0.06, 1.0, 0.06), Vector3(x, 0.5, 10.85), Color("#2a3036"), 0.0)
-	_box(self, Vector3(40.6, 0.05, 0.05), Vector3(12.3, 1.0, 10.85), CYAN, 1.5)
+	_box(self, Vector3(40.6, 0.05, 0.05), Vector3(12.3, 1.0, 10.85), Color("#4a535a"), 0.0)
 	for z in range(0, 11, 2):
 		_box(self, Vector3(0.06, 1.0, 0.06), Vector3(32.3, 0.5, z), Color("#2a3036"), 0.0)
-	# Floor of the terrace around the rooms: metal plates with inset light lines.
-	_box(self, Vector3(40, 0.01, 0.06), Vector3(12.0, 0.005, 10.2), TEAL, 1.2)
 
 
 func _van_pad() -> void:
 	_box(self, Vector3(5.6, 0.04, 4.0), Vector3(-5.2, 0.02, 4.8), Color("#1a1f24"), 0.0)
 	for c in [Vector3(-7.9, 0.03, 2.9), Vector3(-2.5, 0.03, 2.9), Vector3(-7.9, 0.03, 6.7), Vector3(-2.5, 0.03, 6.7)]:
-		_box(self, Vector3(0.5, 0.02, 0.5), c, YELLOW, 2.5)
+		_box(self, Vector3(0.5, 0.02, 0.5), c, YELLOW, 0.5)
 	if not ResourceLoader.exists("res://assets/van.glb"):
 		return
 	_van = load("res://assets/van.glb").instantiate()
@@ -344,8 +340,8 @@ func _van_pad() -> void:
 	add_child(_van)
 	var glow := OmniLight3D.new()
 	glow.position = Vector3(-5.2, 0.15, 4.8)
-	glow.light_color = CYAN
-	glow.light_energy = 2.0
+	glow.light_color = Color("#9fd8e0")
+	glow.light_energy = 0.6
 	glow.omni_range = 4.0
 	add_child(glow)
 

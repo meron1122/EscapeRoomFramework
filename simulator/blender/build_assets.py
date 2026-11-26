@@ -100,12 +100,11 @@ def fbm(n, rng, cells=(4, 8, 16, 32), stretch=1):
 
 def image(name, rgb, data=False):
     h, w, _ = rgb.shape
-    img = bpy.data.images.new(name, w, h)
+    # is_data at creation: changing the colour space afterwards regenerates the image and wipes the pixels
+    img = bpy.data.images.new(name, w, h, is_data=data)
     px = np.ones((h, w, 4), np.float32)
     px[..., :3] = np.clip(rgb, 0, 1)
     img.pixels.foreach_set(px.ravel())
-    if data:
-        img.colorspace_settings.name = "Non-Color"
     img.pack()
     return img
 
@@ -119,25 +118,26 @@ def normal_map(name, height, strength):
 
 
 def tex_stone():
-    """Black polished stone, 1 m tiles, the image covers 2 m."""
+    """Light warm-grey terrazzo, 1 m tiles, the image covers 2 m."""
     n, rng = 512, np.random.default_rng(1)
-    shade = 1 + (fbm(n, rng) - 0.5) * 0.25
-    vein = np.abs(np.sin(fbm(n, rng, (3, 6, 12, 24)) * 38))
-    rgb = srgb("#101317") * shade[..., None]
-    rgb += np.clip(1 - vein / 0.04, 0, 1)[..., None] * (srgb("#4a525c") - srgb("#101317")) * 0.55
+    shade = 1 + (fbm(n, rng) - 0.5) * 0.08
+    rgb = srgb("#b3ada3") * shade[..., None]
+    chips = np.kron(rng.random((n // 2, n // 2)), np.ones((2, 2)))
+    rgb[chips > 0.975] = srgb("#8c857a")
+    rgb[chips < 0.02] = srgb("#d3cec5")
     idx = np.arange(n) // 256
-    rgb *= 1 + rng.uniform(-0.08, 0.08, (2, 2))[np.ix_(idx, idx)][..., None]
+    rgb *= 1 + rng.uniform(-0.03, 0.03, (2, 2))[np.ix_(idx, idx)][..., None]
     m = np.arange(n) % 256
     g = (m < 1) | (m > 254)
-    rgb[g[:, None] | g[None, :]] = srgb("#050607")
+    rgb[g[:, None] | g[None, :]] = srgb("#9c968c")
     return image("Stone", rgb)
 
 
-def tex_brushed(name, base, seed):
-    """Brushed metal panel, the image covers 1 m."""
+def tex_brushed(name, base, seed, amp=1.0):
+    """Brushed panel, the image covers 1 m; amp < 1 keeps painted walls quiet."""
     n, rng = 256, np.random.default_rng(seed)
     streak = fbm(n, rng, (2, 4, 8, 16), stretch=24)
-    shade = 1 + (streak - 0.5) * 0.35 + (fbm(n, rng, (2, 4)) - 0.5) * 0.25
+    shade = 1 + ((streak - 0.5) * 0.35 + (fbm(n, rng, (2, 4)) - 0.5) * 0.25) * amp
     return image(name, srgb(base) * shade[..., None])
 
 
@@ -156,8 +156,8 @@ def tex_plates():
                 continue
             d = (xx - cx) ** 2 + (yy - cy) ** 2
             height += np.clip(1 - d / 22.0, 0, 1) * 0.8
-    rgb = srgb("#2c333a") * shade[..., None] * (0.55 + 0.45 * np.clip(height, 0, 1))[..., None]
-    rgb += (height > 1.2)[..., None] * 0.06
+    rgb = srgb("#a4aaae") * shade[..., None] * (0.75 + 0.25 * np.clip(height, 0, 1))[..., None]
+    rgb += (height > 1.2)[..., None] * 0.04
     return image("Plates", rgb), normal_map("PlatesN", height, 2.5)
 
 
@@ -170,7 +170,7 @@ def tex_diamond():
     a, b = (u + flip * v) / 1.414, (u - flip * v) / 1.414
     height = np.clip(1 - (a / 0.78) ** 2 - (b / 0.2) ** 2, 0, 1) ** 0.5
     shade = 1 + (fbm(n, rng, (2, 4, 8, 16)) - 0.5) * 0.35
-    rgb = srgb("#3b434b") * shade[..., None] * (0.8 + 0.45 * height)[..., None]
+    rgb = srgb("#6a727b") * shade[..., None] * (0.8 + 0.3 * height)[..., None]
     return image("Diamond", rgb), normal_map("DiamondN", height, 3.0)
 
 
@@ -181,12 +181,12 @@ def tex_grating():
     bar = ((xx % 32) < 7) | ((yy % 96) < 5)
     height = bar * 1.0
     shade = 1 + (fbm(n, rng, (2, 4, 8)) - 0.5) * 0.3
-    rgb = np.where(bar[..., None], srgb("#4b545e") * shade[..., None], srgb("#07090c") + (fbm(n, rng, (4, 8)) * 0.03)[..., None])
+    rgb = np.where(bar[..., None], srgb("#6b7580") * shade[..., None], srgb("#2c323a") + (fbm(n, rng, (4, 8)) * 0.03)[..., None])
     return image("Grating", rgb), normal_map("GratingN", height, 2.0)
 
 
 def tex_concrete():
-    """Dark board-formed concrete with tie holes and water streaks, the image covers 2.4 m."""
+    """Cold blue-grey board-formed concrete with tie holes and water streaks, the image covers 2.4 m."""
     n, rng = 512, np.random.default_rng(5)
     shade = 1 + (fbm(n, rng, (4, 8, 16, 32, 64, 128)) - 0.5) * 0.4
     shade -= (rng.random((n, n)) > 0.994) * 0.25
@@ -202,7 +202,7 @@ def tex_concrete():
         fade = (ys - (top - length)) / length
         for dx in range(w):
             shade[ys, (x + dx) % n] *= 1 - 0.18 * fade
-    return image("Concrete", srgb("#40464e") * shade[..., None])
+    return image("Concrete", srgb("#5c636c") * shade[..., None])
 
 
 def tex_hazard():
@@ -210,16 +210,16 @@ def tex_hazard():
     n, rng = 128, np.random.default_rng(6)
     yy, xx = np.mgrid[0:n, 0:n]
     s = ((xx + yy) % 128) < 64
-    rgb = np.where(s[..., None], srgb("#f2e20c"), srgb("#15171a"))
+    rgb = np.where(s[..., None], srgb("#f2e20c"), srgb("#2a2d32"))
     return image("Hazard", rgb * (1 - (fbm(n, rng, (4, 8, 16)) > 0.64)[..., None] * 0.3))
 
 
 def tex_rug():
-    """A warm kilim for the cosy corner of the lobby, stretched over the whole rug."""
+    """A muted kilim for the cosy corner of the lobby, stretched over the whole rug."""
     n = 256
     yy, xx = np.mgrid[0:n, 0:n] / n
     d = np.minimum(np.minimum(xx, 1 - xx), np.minimum(yy, 1 - yy))
-    pal = [srgb(c) for c in ("#3a1f19", "#8f3a22", "#c97a2e", "#dcc6a0", "#5a2a1e")]
+    pal = [srgb(c) for c in ("#5b5048", "#8a6a58", "#a89276", "#d6ccb8", "#6f6358")]
     rgb = np.empty((n, n, 3))
     rgb[:] = pal[4]
     for lim, c in ((0.14, pal[1]), (0.09, pal[3]), (0.07, pal[2]), (0.03, pal[0])):
@@ -242,93 +242,98 @@ def mats():
     diamond, diamond_n = tex_diamond()
     grating, grating_n = tex_grating()
     M.update({
-        # props and trims
-        "white": material("White", "#e9ecef", 0.25),
-        "matte": material("WhiteMatte", "#d9dde2", 0.6),
-        "black": material("BlackGloss", "#0b0d10", 0.18, 0.2),
-        "graphite": material("Graphite", "#181b20", 0.4, 0.4),
-        "steel": material("Steel", "#a3acb6", 0.28, 0.95),
-        "dsteel": material("DarkSteel", "#2a3037", 0.32, 0.85),
-        "chrome": material("Chrome", "#d5dce3", 0.06, 1.0),
-        "brass": material("Brass", "#b8924f", 0.28, 1.0),
-        "yellow": material("YellowPaint", "#fcee0a", 0.38),
-        "panel": material("PanelDark", "#1d2228", 0.32, 0.6),
-        "panel_t": material("PanelTeal", "#16282a", 0.3, 0.6),
-        "glass": material("Glass", "#bfe9ff", 0.05, alpha=0.22),
-        "wglass": material("WindowGlass", "#8fb8d8", 0.04, 0.0, alpha=0.12),
-        "dglass": material("SmokedGlass", "#0a1014", 0.05, 0.3, alpha=0.6),
-        "leaf": material("Leaf", "#1f5a33", 0.7),
-        "leaf2": material("Leaf2", "#2f7a42", 0.7),
-        "soil": material("Soil", "#1c1612", 0.95),
-        "fabric": material("Fabric", "#3b3330", 0.85),
-        "fabric_d": material("FabricDark", "#221d1b", 0.85),
-        "leather_w": material("LeatherWarm", "#5a3424", 0.45),
-        "wood": material("WoodDark", "#3b261a", 0.5),
-        "olive": material("CaseSteel", "#4a4f45", 0.55, 0.6),
-        "olive2": material("CaseSteelWorn", "#5d6255", 0.7, 0.4),
-        "rubber": material("Rubber", "#101113", 0.85),
-        "cable": material("Cable", "#0f1114", 0.55),
-        "cable_y": material("CableYellow", "#c8b70c", 0.5),
-        "cable_c": material("CableCyan", "#0f8f99", 0.5),
+        # props and trims: a calm, desaturated base at mid values; colour only where play or story needs it
+        "white": material("White", "#e2e0da", 0.45),
+        "matte": material("WhiteMatte", "#cfd1d2", 0.6),
+        "beige": material("Beige", "#cbbfa9", 0.6),
+        "black": material("Charcoal", "#2a2d32", 0.35),
+        "graphite": material("Graphite", "#454b53", 0.45, 0.15),
+        "steel": material("Steel", "#a2a9b0", 0.35, 0.5),
+        "dsteel": material("DarkSteel", "#5d646c", 0.4, 0.35),
+        "chrome": material("Chrome", "#c9d0d6", 0.15, 0.6),
+        "brass": material("Brass", "#a88a58", 0.35, 0.5),
+        "yellow": material("YellowPaint", "#fcee0a", 0.45),  # brand yellow: Z logos, labels, hazard only
+        "ochre": material("Ochre", "#bfae62", 0.6),
+        "panel": material("PanelWarm", "#9a958d", 0.55),
+        "panel_t": material("PanelTeal", "#71878a", 0.5, 0.1),
+        "glass": material("Glass", "#d6e6ee", 0.05, alpha=0.22),
+        "wglass": material("WindowGlass", "#a9bccb", 0.04, 0.0, alpha=0.12),
+        "dglass": material("SmokedGlass", "#2a3238", 0.05, 0.2, alpha=0.6),
+        "leaf": material("Leaf", "#3a6243", 0.7),
+        "leaf2": material("Leaf2", "#527a55", 0.7),
+        "soil": material("Soil", "#3a3029", 0.95),
+        "fabric": material("Fabric", "#6b6560", 0.85),
+        "fabric_d": material("FabricDark", "#4d4a47", 0.85),
+        "leather_w": material("LeatherWarm", "#7d6f62", 0.5),
+        "wood": material("WoodDark", "#5a4030", 0.5),
+        "wood_l": material("WoodLight", "#b89a74", 0.5),
+        "olive": material("CaseSteel", "#5c6255", 0.55, 0.3),
+        "olive2": material("CaseSteelWorn", "#6d7264", 0.7, 0.2),
+        "rubber": material("Rubber", "#2a2b2d", 0.85),
+        "cable": material("Cable", "#2c2f33", 0.55),
+        "cable_y": material("CableYellow", "#b3a54a", 0.5),
+        "cable_c": material("CableCyan", "#3f8288", 0.5),
         "cable_w": material("CableWhite", "#c9ced3", 0.5),
         "tape": material("DuctTape", "#7d8288", 0.8, 0.2),
         "paint_w": material("PaintWhite", "#e4e0d4", 0.9),
-        "paint_c": material("PaintCyan", "#18c8d8", 0.85),
-        "red": material("RedPaint", "#b3141c", 0.4),
-        "pipe": material("PipePaint", "#3a434c", 0.35, 0.7),
-        "pipe_t": material("PipeTeal", "#1f5f5a", 0.35, 0.5),
-        # light
-        "ny": material("NeonYellow", "#fcee0a", 0.3, emit="#fcee0a", strength=4.0),
-        "nc": material("NeonCyan", "#00f0ff", 0.3, emit="#00f0ff", strength=4.0),
-        "nt": material("NeonTeal", "#19f0c8", 0.3, emit="#19f0c8", strength=4.0),
-        "nm": material("NeonMagenta", "#ff3ca6", 0.3, emit="#ff3ca6", strength=4.0),
-        "nr": material("NeonRed", "#ff1a1a", 0.3, emit="#ff1a1a", strength=3.5),
-        "ng": material("NeonExit", "#00c853", 0.3, emit="#00c853", strength=3.0),
-        "nw": material("NeonWhite", "#ffffff", 0.3, emit="#e8f4ff", strength=3.0),
-        "warm": material("WarmLight", "#ffb15c", 0.4, emit="#ffa24a", strength=4.0),
-        "light": material("LightPanel", "#ffffff", 0.3, emit="#dff1ff", strength=2.2),
-        "ledr": material("LedRed", "#ff2020", 0.3, emit="#ff2020", strength=3.0),
-        "liquid": material("LiquidTeal", "#19f0c8", 0.1, emit="#19f0c8", strength=2.6),
-        "liquid_c": material("LiquidCyan", "#00f0ff", 0.1, emit="#00f0ff", strength=2.6),
-        "screen": material("Screen", "#05080a", 0.2, emit="#0b3a44", strength=1.5),
-        "display": material("Display", "#05080a", 0.2, emit="#0f4a57", strength=1.4),
-        "lcd": material("DisplayYellow", "#fcee0a", 0.3, emit="#fcee0a", strength=2.0),
-        "poster_y": material("PosterYellow", "#fcee0a", 0.5, emit="#fcee0a", strength=0.9),
-        "poster_t": material("PosterTeal", "#0d4d47", 0.5, emit="#0f5e57", strength=0.8),
-        "poster_k": material("PosterBlack", "#0c0f12", 0.6),
-        # rooms
-        "floor_hol": tex_material("FloorStone", stone, 0.16, 0.2),
-        "wall_hol": tex_material("WallPanelHol", tex_brushed("BrushedHol", "#252b32", 8), 0.3, 0.6),
-        "floor_pietro": tex_material("FloorPlates", plates, 0.3, 0.45, normal=plates_n),
-        "wall_pietro": tex_material("WallPanelLab", tex_brushed("BrushedLab", "#1d2f31", 9), 0.3, 0.6),
-        "floor_jadro": tex_material("FloorGrating", grating, 0.35, 0.5, normal=grating_n),
-        "diamond": tex_material("DiamondPlate", diamond, 0.28, 0.6, normal=diamond_n),
-        "wall_jadro": tex_material("WallConcrete", tex_concrete(), 0.75, 0.0),
+        "paint_c": material("PaintCyan", "#4aa3aa", 0.85),
+        "red": material("RedPaint", "#a83a34", 0.45),
+        "pipe": material("PipePaint", "#5a636c", 0.4, 0.3),
+        "pipe_t": material("PipeTeal", "#4f7471", 0.4, 0.3),
+        # former neon: plain, muted trim with no emission
+        "ny": material("TrimChampagne", "#b5a27a", 0.4, 0.3),
+        "nc": material("TrimSteelTeal", "#7d9aa0", 0.4, 0.2),
+        "nt": material("TrimTeal", "#7fa39e", 0.45),
+        "nw": material("TrimOffWhite", "#e6e4de", 0.5),
+        "warm": material("Lampshade", "#e3d8c2", 0.7),
+        "light": material("Diffuser", "#e4e6e8", 0.5),
+        "liquid": material("LiquidTeal", "#5f948d", 0.1),
+        "liquid_c": material("LiquidCyan", "#5f8fa0", 0.1),
+        "poster_y": material("PosterPaper", "#e8e4da", 0.6),
+        "poster_t": material("PosterTeal", "#4d6663", 0.6),
+        "poster_k": material("PosterDark", "#2f343a", 0.6),
+        # light that matters for play: small indicators, exit signs, screens, the core
+        "led_c": material("LedCyan", "#7fe6ee", 0.3, emit="#00f0ff", strength=1.5),
+        "led_y": material("LedYellow", "#fcee0a", 0.3, emit="#fcee0a", strength=1.5),
+        "led_w": material("LedWhite", "#f4f6f8", 0.3, emit="#eef4ff", strength=1.5),
+        "ledr": material("LedRed", "#ff2020", 0.3, emit="#ff2020", strength=1.5),
+        "ng": material("ExitGreen", "#00c853", 0.3, emit="#00c853", strength=1.2),
+        "screen": material("Screen", "#05080a", 0.2, emit="#0b3a44", strength=1.0),
+        "display": material("Display", "#05080a", 0.2, emit="#0f4a57", strength=1.0),
+        "lcd": material("DisplayYellow", "#fcee0a", 0.3, emit="#fcee0a", strength=1.2),
+        # rooms (metallic at most 0.2 so floors and walls never go black without reflections)
+        "floor_hol": tex_material("FloorTerrazzo", stone, 0.4, 0.0),
+        "wall_hol": tex_material("WallPanelHol", tex_brushed("PanelHol", "#d3cfc6", 8, 0.25), 0.6, 0.0),
+        "floor_pietro": tex_material("FloorPlates", plates, 0.4, 0.1, normal=plates_n),
+        "wall_pietro": tex_material("WallPanelLab", tex_brushed("PanelLab", "#b2c2c0", 9, 0.25), 0.55, 0.0),
+        "floor_jadro": tex_material("FloorGrating", grating, 0.45, 0.2, normal=grating_n),
+        "diamond": tex_material("DiamondPlate", diamond, 0.35, 0.2, normal=diamond_n),
+        "wall_jadro": tex_material("WallConcrete", tex_concrete(), 0.8, 0.0),
         "hazard": tex_material("Hazard", tex_hazard(), 0.6),
         "rug": tex_material("Rug", tex_rug(), 0.95),
-        # characters
-        "jacket": material("Jacket", "#2b3038", 0.75),
-        "skin": material("Skin", "#c8a080", 0.6),
-        "visor": material("Visor", "#00f0ff", 0.2, emit="#00f0ff", strength=3.0),
-        "pants": material("Pants", "#23272c", 0.85),
-        "boots": material("Boots", "#1a1714", 0.55),
-        "leather": material("Leather", "#3a2a20", 0.5),
-        "webbing": material("Webbing", "#2c3128", 0.9),
-        "canvas": material("Canvas", "#4a4a3c", 0.9),
-        "canvas2": material("CanvasDark", "#33352b", 0.9),
-        "cloth": material("Scarf", "#6a5a48", 0.95),
-        "armor": material("Armor", "#3a4048", 0.4, 0.6),
-        "glove": material("Glove", "#1b1c1e", 0.6),
-        "hair": material("Hair", "#141416", 0.7),
-        "hair_m": material("HairMagenta", "#e2368f", 0.55),
-        "core": material("Core", "#00f0ff", 0.1, emit="#00f0ff", strength=6.0),
-        # van
-        "van": material("VanPaint", "#2f3c3e", 0.55, 0.35),
-        "van2": material("VanPaintFaded", "#46524f", 0.75, 0.2),
-        "primer": material("Primer", "#62686a", 0.85, 0.2),
-        "rust": material("Rust", "#6a432c", 0.9, 0.3),
-        "mud": material("Mud", "#3d3529", 0.95),
-        "tail": material("TailLight", "#7a0a0a", 0.3, emit="#ff2a1a", strength=1.2),
+        # characters (Godot tints Jacket per character and drives the Visor colour)
+        "jacket": material("Jacket", "#4a4f57", 0.75),
+        "skin": material("Skin", "#b8987e", 0.6),
+        "visor": material("Visor", "#7fc8cf", 0.25, emit="#5fd0da", strength=0.6),
+        "pants": material("Pants", "#3a3e44", 0.85),
+        "boots": material("Boots", "#3a332d", 0.55),
+        "leather": material("Leather", "#5a4636", 0.5),
+        "webbing": material("Webbing", "#4a4f44", 0.9),
+        "canvas": material("Canvas", "#6b6a58", 0.9),
+        "canvas2": material("CanvasDark", "#55574a", 0.9),
+        "cloth": material("Scarf", "#8a7a66", 0.95),
+        "armor": material("Armor", "#5a6068", 0.45, 0.3),
+        "glove": material("Glove", "#2e2f31", 0.6),
+        "hair": material("Hair", "#2a2a2c", 0.7),
+        "hair_m": material("HairDyed", "#7a4a3c", 0.55),
+        "core": material("Core", "#00f0ff", 0.1, emit="#00f0ff", strength=3.0),
+        # van: gritty on purpose
+        "van": material("VanPaint", "#4f5a5a", 0.6, 0.2),
+        "van2": material("VanPaintFaded", "#5f6a66", 0.75, 0.15),
+        "primer": material("Primer", "#7a7f80", 0.85, 0.1),
+        "rust": material("Rust", "#7a5a45", 0.9, 0.2),
+        "mud": material("Mud", "#5a5044", 0.95),
+        "tail": material("TailLight", "#7a0a0a", 0.3, emit="#ff2a1a", strength=1.0),
     })
 
 
@@ -601,7 +606,7 @@ def wall_x(name, x, z0, z1, height, mat, gaps=(), t=0.2, lintel=None, tile=None)
 
 
 def low_wall(x, z0, z1, mat, gaps, neon, t=0.4):
-    """A low divider (the camera looks over it): wall, dark cap with a neon line and a reveal groove on both faces."""
+    """A low divider (the camera looks over it): wall, dark cap with a trim line and a reveal groove on both faces."""
     wall_x("Divider", x, z0, z1, LOW, mat, gaps=gaps, t=t)
     cuts = sorted((gz - gw / 2, gz + gw / 2) for gz, gw in gaps)
     edge = z0
@@ -616,8 +621,8 @@ def low_wall(x, z0, z1, mat, gaps, neon, t=0.4):
         edge = b
 
 
-def portal(name, x, zc, width, height, mat, neon, label_w=None, label_e=None, color_e=None):
-    """A heavy door portal in a low divider: posts, header with signs on both faces, neon reveals."""
+def portal(name, x, zc, width, height, mat, neon, label_w=None, label_e=None, ink="nw"):
+    """A heavy door portal in a low divider: posts, header with signs on both faces, trim reveals."""
     t = 0.46
     for s in (-1, 1):
         z = zc + s * (width / 2 + 0.07)
@@ -625,14 +630,14 @@ def portal(name, x, zc, width, height, mat, neon, label_w=None, label_e=None, co
         box(name + "Reveal", (t - 0.06, height - 0.1, 0.012), (x, height / 2, zc + s * (width / 2 + 0.002)), M[neon])
         tbox(name + "Haz", (t + 0.01, 0.5, 0.145), (x, 0.25, z), "hazard", 0.4)
     box(name + "Header", (t, 0.4, width + 0.28), (x, height + 0.2, zc), M[mat], 0.012)
-    for s, label, col in ((-1, label_w, neon), (1, label_e, color_e or neon)):
+    for s, label in ((-1, label_w), (1, label_e)):
         if label:
             box(name + "Sign", (0.01, 0.26, width + 0.1), (x + s * (t / 2 + 0.005), height + 0.2, zc), M["black"])
-            text(name + "Text", label, (x + s * (t / 2 + 0.012), height + 0.2, zc), 0.13, M[col], yaw=90 * s)
+            text(name + "Text", label, (x + s * (t / 2 + 0.012), height + 0.2, zc), 0.13, M[ink], yaw=90 * s)
 
 
 def window(xa, xb, y0, y1, accent, t=0.2):
-    """Window opening in a north wall (inner face at z=0): reveal frame, mullions, transom, glass, lit sill."""
+    """Window opening in a north wall (inner face at z=0): reveal frame, mullions, transom, glass, trimmed sill."""
     w, h, cx, cy = xb - xa, y1 - y0, (xa + xb) / 2, (y0 + y1) / 2
     fm = M["graphite"]
     box("WinJamb", (0.07, h, t + 0.04), (xa + 0.035, cy, -t / 2), fm)
@@ -690,13 +695,13 @@ def seams(face, x0, x1, y0, y1, step, mat, rows=(), at=0.0, skip=()):
 
 
 def light_slot(face, u, y0, y1, mat, at=0.0, w=0.03):
-    """A vertical light slot set into a wall panel."""
+    """A vertical trim slot set into a wall panel."""
     h, y = y1 - y0, (y0 + y1) / 2
     if face == "n":
-        box("SlotFrame", (w + 0.05, h + 0.05, 0.012), (u, y, at + 0.006), M["black"])
+        box("SlotFrame", (w + 0.05, h + 0.05, 0.012), (u, y, at + 0.006), M["panel"])
         box("Slot", (w, h, 0.01), (u, y, at + 0.014), M[mat])
     else:
-        box("SlotFrame", (0.012, h + 0.05, w + 0.05), (at + 0.006, y, u), M["black"])
+        box("SlotFrame", (0.012, h + 0.05, w + 0.05), (at + 0.006, y, u), M["panel"])
         box("Slot", (0.01, h, w), (at + 0.014, y, u), M[mat])
 
 
@@ -732,7 +737,7 @@ def beams_z(z0, z1, x_out=0.38, y=H - 0.2, step=1.5, trough="light"):
 
 
 def pipe_x(x0, x1, y, z, r, mat, flange=1.6, glass=False):
-    """A horizontal pipe along a north wall with flanges, wall brackets and (optionally) glowing glass sections."""
+    """A horizontal pipe along a north wall with flanges, wall brackets and (optionally) glass sight sections."""
     cyl("Pipe", r, x1 - x0, ((x0 + x1) / 2, y, z), M[mat], axis="x", verts=16)
     n = max(1, int((x1 - x0) / flange))
     for i in range(n + 1):
@@ -770,7 +775,7 @@ def tray_x(x0, x1, y, z0, z1, n_cables=6):
 
 
 def poster(w, h, kind):
-    """Backlit poster in a slim frame, built at the origin facing +z (centre at y=0)."""
+    """Printed poster in a slim frame, built at the origin facing +z (centre at y=0)."""
     box("PosterFrame", (w + 0.06, h + 0.06, 0.05), (0, 0, 0.0), M["graphite"], 0.008)
     bg = {"phone": "poster_y", "boost": "poster_y", "drive": "poster_k", "metric": "poster_t", "time": "poster_k",
           "zeta": "poster_t"}[kind]
@@ -781,19 +786,19 @@ def poster(w, h, kind):
         box("PhoneArt", (w * 0.3, h * 0.46, 0.012), (w * 0.2, -h * 0.05, z), M["black"], 0.01)
         for a, b in (((-1, 1), (1, 1)), ((1, 1), (-1, -1)), ((-1, -1), (1, -1))):
             cable("Gesture", [(w * 0.2 + a[0] * w * 0.08, -h * 0.05 + a[1] * h * 0.12, z + 0.01),
-                              (w * 0.2 + b[0] * w * 0.08, -h * 0.05 + b[1] * h * 0.12, z + 0.01)], 0.008, M["ny"])
+                              (w * 0.2 + b[0] * w * 0.08, -h * 0.05 + b[1] * h * 0.12, z + 0.01)], 0.008, M["yellow"])
         text("PosterT1", "JEDEN GEST", (-w * 0.45, h * 0.38, z), h * 0.075, ink, align="LEFT")
         text("PosterT2", "I JESTEŚ", (-w * 0.45, h * 0.28, z), h * 0.055, ink, align="LEFT")
         text("PosterT3", "W DOMU", (-w * 0.45, h * 0.2, z), h * 0.055, ink, align="LEFT")
         box("PosterBar", (w, h * 0.1, 0.012), (0, -h * 0.45, z), M["black"])
-        text("PosterT4", "Z-PHONE", (0, -h * 0.45, z + 0.008), h * 0.06, M["ny"])
+        text("PosterT4", "Z-PHONE", (0, -h * 0.45, z + 0.008), h * 0.06, M["yellow"])
     elif kind == "drive":
         for i, (sx, sy, x, y) in enumerate(((0.7, 0.08, 0, -0.05), (0.42, 0.07, -0.02, 0.02), (0.82, 0.02, 0, -0.1))):
-            box("CarArt", (w * sx, h * sy, 0.012), (w * x, h * y, z), M["ny"] if i < 2 else M["nc"], 0.005)
-        text("PosterT1", "Z-DRIVE", (0, h * 0.36, z), h * 0.1, M["ny"])
+            box("CarArt", (w * sx, h * sy, 0.012), (w * x, h * y, z), M["yellow"] if i < 2 else M["nc"], 0.005)
+        text("PosterT1", "Z-DRIVE", (0, h * 0.36, z), h * 0.1, M["yellow"])
         text("PosterT2", "WIE, DOKĄD", (0, h * 0.24, z), h * 0.05, ink)
         text("PosterT3", "JEDZIESZ", (0, h * 0.18, z), h * 0.05, ink)
-        text("PosterT4", "HAMULCE W ABONAMENCIE", (0, -h * 0.4, z), h * 0.03, M["ny"])
+        text("PosterT4", "HAMULCE W ABONAMENCIE", (0, -h * 0.4, z), h * 0.03, M["yellow"])
     elif kind == "boost":
         text("PosterT1", "NIE ŚPISZ?", (0, h * 0.34, z), h * 0.085, ink)
         box("PosterBar", (w * 0.9, h * 0.004 + 0.01, 0.012), (0, h * 0.24, z), M["black"])
@@ -807,8 +812,8 @@ def poster(w, h, kind):
         for i in range(6):
             bh = h * (0.08 + 0.07 * i)
             box("PosterChart", (w * 0.1, bh, 0.012), (-w * 0.35 + i * w * 0.14, -h * 0.3 + bh / 2, z),
-                M["nt"] if i == 5 else M["nw"] if kind == "metric" else M["ny"])
-        text("PosterT2", "97,4%" if kind == "metric" else "+38 MIN", (0, h * 0.24, z), h * 0.08, M["ny"])
+                M["nt"] if i == 5 else M["nw"] if kind == "metric" else M["yellow"])
+        text("PosterT2", "97,4%" if kind == "metric" else "+38 MIN", (0, h * 0.24, z), h * 0.08, M["yellow"])
         text("PosterT3", "STREFA Z" if kind == "metric" else "NASTOLATKI / DZIEŃ", (0, -h * 0.42, z), h * 0.035, ink)
     elif kind == "zeta":
         torus("PosterEye", w * 0.28, 0.012, (0, h * 0.05, z), M["nc"], axis="z")
@@ -841,9 +846,9 @@ def extinguisher(pos, yaw=0.0):
 
 
 def floor_window(x, z, w, d, glow):
-    """A glass floor panel (decal height) with glowing coolant lines underneath."""
+    """A glass floor panel (decal height) with coolant lines underneath."""
     box("FloorWinFrame", (w + 0.08, 0.006, d + 0.08), (x, 0.003, z), M["dsteel"])
-    box("FloorWinGlass", (w, 0.008, d), (x, 0.004, z), M["black"])
+    box("FloorWinGlass", (w, 0.008, d), (x, 0.004, z), M["graphite"])
     n = max(2, int(min(w, d) / 0.18))
     for k in range(n):
         o = -0.5 + (k + 0.5) / n
@@ -874,7 +879,7 @@ def cable_cover(a, b, w=0.14):
 
 
 def glass_column(pos, h=2.5, r=0.19):
-    """A tall glass cylinder of glowing liquid with steel end caps, bubbles and a feed hose."""
+    """A tall glass cylinder of liquid with steel end caps, bubbles and a feed hose."""
     x, _, z = pos
     cyl("ColBase", r + 0.04, 0.22, (x, 0.11, z), M["dsteel"], verts=20, bevel=0.01)
     cyl("ColBaseRing", r + 0.045, 0.02, (x, 0.23, z), M["nt"], verts=20)
@@ -897,31 +902,31 @@ def room_hol():
     x0, x1, z1 = 0.0, 9.0, 7.0
     doors = {dd["id"]: dd for dd in LAYOUT["doors"]}
     floor_slab(x0, x1, z1, "floor_hol", 2.0, (0, 0, 0))
-    # floor: inset yellow light lines, the Z medallion, entrance mat, a warm rug in the sofa corner, lift threshold
+    # floor: brass inlay lines, the Z medallion, entrance mat, a muted rug in the sofa corner, lift threshold
     for (xa, xb, z) in ((0.6, 3.6, 4.45), (0.6, 3.6, 5.55), (1.0, 4.6, 2.75)):
         box("FloorLine", (xb - xa, 0.004, 0.025), ((xa + xb) / 2, 0.002, z), M["ny"])
     for (za, zb, x) in ((0.5, 1.45, 8.75), (3.0, 6.6, 8.75)):
         box("FloorLine", (0.025, 0.004, zb - za), (x, 0.002, (za + zb) / 2), M["ny"])
-    cyl("Medallion", 1.62, 0.004, (5.2, 0.002, 4.6), M["black"], verts=64)
+    cyl("Medallion", 1.62, 0.004, (5.2, 0.002, 4.6), M["panel"], verts=64)
     torus("MedallionRing", 1.6, 0.018, (5.2, 0.004, 4.6), M["ny"], seg=64, mseg=4, squash=0.25)
     torus("MedallionRing2", 1.45, 0.008, (5.2, 0.004, 4.6), M["brass"], seg=64, mseg=4, squash=0.25)
-    z_flat("FloorZ", 5.2, 4.6, 1.9, M["yellow"], y=0.005)
+    z_flat("FloorZ", 5.2, 4.6, 1.9, M["brass"], y=0.005)
     box("EntryMat", (1.1, 0.008, 1.5), (0.65, 0.004, 5.0), M["rubber"])
     text("EntryMatText", "WITAMY", (0.65, 0.009, 5.0), 0.16, M["yellow"], flat=True, depth=0.002)
     tbox("Rug", (2.5, 0.008, 2.0), (2.3, 0.004, 5.85), "rug", (2.5, 2.0), off=(1.05, 0, 6.85))
     tbox("LiftHazard", (0.45, 0.006, 1.4), (8.75, 0.003, 2.2), "hazard", 0.4)
     # north wall: Z feature wall, one big window, the ad wall, the security corner
     north_wall(-0.2, 9.2, "wall_hol", windows=[(2.35, 4.55)], sill=0.4, head=2.85, accent="ny")
-    seams("n", 4.55, 9.0, 0.12, 2.85, 0.9, "black", rows=(0.12, 1.05, 2.85))
-    box("FeatureBack", (2.15, 2.75, 0.02), (1.2, 1.5, 0.01), M["black"])
+    seams("n", 4.55, 9.0, 0.12, 2.85, 0.9, "panel", rows=(0.12, 1.05, 2.85))
+    box("FeatureBack", (2.15, 2.75, 0.02), (1.2, 1.5, 0.01), M["wood"])
     for i in range(17):
-        box("Fin", (0.045, 2.7, 0.06), (0.2 + i * 0.125, 1.5, 0.05), M["graphite"], 0.005)
+        box("Fin", (0.045, 2.7, 0.06), (0.2 + i * 0.125, 1.5, 0.05), M["wood_l"], 0.005)
     for y in (0.16, 2.84):
         box("FinLight", (2.1, 0.012, 0.012), (1.2, y, 0.085), M["ny"])
     for x in (4.75, 7.35):
         light_slot("n", x, 0.2, 2.8, "ny")
     light_slot("n", 8.95, 0.2, 2.8, "nw")
-    for x in (4.68, 7.32):  # glass fins with neon edges framing the ad screen
+    for x in (4.68, 7.32):  # glass fins with trimmed edges framing the ad screen
         box("GlassFin", (0.02, 2.2, 0.3), (x, 1.75, 0.16), M["glass"])
         box("GlassFinEdge", (0.024, 2.2, 0.012), (x, 1.75, 0.31), M["ny"])
     cctv((8.85, 2.7, 0.0), -35)
@@ -929,12 +934,12 @@ def room_hol():
     box("SecPlate", (0.62, 0.16, 0.02), (8.35, 2.32, 0.01), M["black"])
     text("SecText", "OCHRONA", (8.35, 2.32, 0.025), 0.085, M["nw"])
     box("Reader", (0.09, 0.14, 0.03), (7.55, 1.3, 0.015), M["black"], 0.005)
-    box("ReaderLed", (0.05, 0.01, 0.004), (7.55, 1.35, 0.032), M["nc"])
+    box("ReaderLed", (0.05, 0.01, 0.004), (7.55, 1.35, 0.032), M["led_c"])
     beams_x(0.0, 9.0)
     box("BrandPlate", (3.2, 0.2, 0.02), (6.0, 3.1, 0.49), M["black"])
     box("BrandEdge", (3.2, 0.012, 0.012), (6.0, 2.995, 0.5), M["brass"])
-    text("Brand", "KORPORACJA Z", (6.0, 3.1, 0.505), 0.21, M["ny"])
-    # west wall: entrance with glass sidelights, planter, posters, warm neon sign above the cosy corner
+    text("Brand", "KORPORACJA Z", (6.0, 3.1, 0.505), 0.21, M["yellow"])
+    # west wall: entrance with glass sidelights, planter, posters, a brass sign above the cosy corner
     dd = doors["wejscie"]
     zc, half = dd["z"], dd["width"] / 2
     side = [(3.5, 4.2)]
@@ -954,8 +959,8 @@ def room_hol():
     box("ExitBlade", (0.5, 0.15, 0.04), (0.3, 2.62, zc), M["ng"])
     text("ExitText", "WEJŚCIE", (0.3, 2.62, zc + 0.022), 0.075, M["black"])
     box("EntryReader", (0.03, 0.14, 0.09), (0.015, 1.25, 3.35), M["black"])
-    box("EntryReaderLed", (0.006, 0.012, 0.06), (0.032, 1.3, 3.35), M["nc"])
-    seams("w", 0.0, 3.5, 0.12, 2.85, 0.9, "black", rows=(0.12, 2.85), at=0.0)
+    box("EntryReaderLed", (0.006, 0.012, 0.06), (0.032, 1.3, 3.35), M["led_c"])
+    seams("w", 0.0, 3.5, 0.12, 2.85, 0.9, "panel", rows=(0.12, 2.85), at=0.0)
     box("Planter", (0.42, 0.45, 3.0), (0.21, 0.225, 1.95), M["black"], 0.01)
     box("PlanterRim", (0.44, 0.03, 3.02), (0.22, 0.46, 1.95), M["brass"])
     box("PlanterSoil", (0.36, 0.02, 2.94), (0.21, 0.45, 1.95), M["soil"])
@@ -976,14 +981,14 @@ def room_hol():
         place(g.objs, (0.0, 1.75, z), 90)
         box("PosterLamp", (0.08, 0.03, 0.7), (0.06, 2.53, z), M["graphite"])
     light_slot("w", 1.85, 0.6, 2.8, "nw")
-    text("CosySign", "zostań", (0.03, 2.05, 6.35), 0.26, M["nm"], yaw=90, depth=0.02)
+    text("CosySign", "zostań", (0.03, 2.05, 6.35), 0.26, M["ny"], yaw=90, depth=0.02)
     box("CosySignBack", (0.012, 0.36, 0.9), (0.006, 2.05, 6.35), M["black"])
     cctv((0.0, 2.7, 6.85), 135)
     beams_z(0.0, 7.0)
     # divider with the lift portal
     dd = doors["winda"]
     low_wall(dd["x"], 0.0, 9.0, "panel", [(dd["z"], dd["width"])], "ny")
-    portal("Lift", dd["x"], dd["z"], dd["width"], 2.5, "graphite", "ny", "WINDA", "PIĘTRO NAWYKÓW", "nt")
+    portal("Lift", dd["x"], dd["z"], dd["width"], 2.5, "graphite", "ny", "WINDA", "PIĘTRO NAWYKÓW")
     for i, z in enumerate((5.2, 6.1, 7.0)):  # Z-Mart rules and metrics on the Pietro face of the divider
         with Made() as g:
             poster(0.62, 0.8, ("boost", "metric", "time")[i])
@@ -996,18 +1001,18 @@ def room_pietro():
     doors = {dd["id"]: dd for dd in LAYOUT["doors"]}
     off = (x0, 0, 0)
     floor_slab(x0, x1, z1, "floor_pietro", 2.0, off)
-    # floor: glowing walkway panels, station zones, the Z-Drive turntable, thresholds
+    # floor: walkway panels, station zones, the Z-Drive turntable, thresholds
     for x in (11.4, 12.9, 14.4, 15.9, 17.4, 18.9):
         box("FloorPanel", (0.56, 0.006, 0.56), (x, 0.003, 4.95), M["dsteel"])
         box("FloorGlow", (0.5, 0.008, 0.5), (x, 0.004, 4.95), M["nt"])
     for (xa, xb, za, zb) in ((10.1, 13.3, 0.35, 3.1), (11.0, 17.6, 5.55, 8.7)):
         for (a, b, c, d) in ((xa, xb, za, za), (xa, xb, zb, zb), (xa, xa, za, zb), (xb, xb, za, zb)):
-            box("ZoneLine", (max(b - a, 0.03), 0.004, max(d - c, 0.03)), ((a + b) / 2, 0.003, (c + d) / 2), M["yellow"])
+            box("ZoneLine", (max(b - a, 0.03), 0.004, max(d - c, 0.03)), ((a + b) / 2, 0.003, (c + d) / 2), M["ochre"])
     text("ZoneText", "Z-PHONE", (11.0, 0.006, 3.35), 0.22, M["yellow"], flat=True, depth=0.003)
     text("ZoneText", "Z-MART", (11.9, 0.006, 5.3), 0.22, M["yellow"], flat=True, depth=0.003)
     cyl("Turntable", 1.75, 0.006, (18.6, 0.003, 2.2), M["dsteel"], verts=64)
     torus("TurntableRing", 1.72, 0.016, (18.6, 0.005, 2.2), M["nc"], seg=64, mseg=4, squash=0.25)
-    torus("TurntableRing2", 1.5, 0.006, (18.6, 0.006, 2.2), M["yellow"], seg=64, mseg=4, squash=0.25)
+    torus("TurntableRing2", 1.5, 0.006, (18.6, 0.006, 2.2), M["ochre"], seg=64, mseg=4, squash=0.25)
     text("ZoneText", "Z-DRIVE", (18.6, 0.006, 4.4), 0.3, M["yellow"], flat=True, depth=0.003)
     tbox("LiftHazard", (0.45, 0.006, 1.4), (9.65, 0.003, 2.2), "hazard", 0.4)
     dd = doors["zejscie"]
@@ -1023,18 +1028,18 @@ def room_pietro():
     # north wall: glass columns, phone station, lab cabinets under the counter screen, windows behind the car
     north_wall(9.2, 21.6, "wall_pietro", windows=[(17.65, 19.25), (20.55, 21.35)], sill=0.45, head=2.65, accent="nt",
                off=off)
-    seams("n", 9.4, 17.65, 0.12, 2.65, 1.0, "black", rows=(0.12, 2.65))
+    seams("n", 9.4, 17.65, 0.12, 2.65, 1.0, "panel_t", rows=(0.12, 2.65))
     box("WallStripe", (8.25, 0.05, 0.02), (13.525, 1.0, 0.012), M["nt"])
     for x in (9.8, 13.41, 17.4):
         glass_column((x, 0, 0.22), r=0.17)
     for i in range(6):  # lab cabinets with a worktop and clutter
         x = 13.9 + i * 0.6
-        box("Cabinet", (0.58, 0.82, 0.42), (x, 0.47, 0.22), M["panel_t"], 0.008)
+        box("Cabinet", (0.58, 0.82, 0.42), (x, 0.47, 0.22), M["matte"], 0.008)
         box("CabHandle", (0.3, 0.02, 0.02), (x, 0.8, 0.44), M["steel"])
         box("CabSeam", (0.01, 0.8, 0.005), (x + 0.29, 0.47, 0.43), M["black"])
     box("CabKick", (3.6, 0.06, 0.4), (15.4, 0.03, 0.2), M["black"])
     box("CabKickLight", (3.56, 0.01, 0.01), (15.4, 0.062, 0.43), M["nt"])
-    box("Worktop", (3.62, 0.04, 0.46), (15.4, 0.9, 0.23), M["black"], 0.006)
+    box("Worktop", (3.62, 0.04, 0.46), (15.4, 0.9, 0.23), M["graphite"], 0.006)
     box("Sink", (0.4, 0.012, 0.3), (14.2, 0.921, 0.22), M["steel"])
     cable("Faucet", [(14.2, 0.92, 0.05), (14.2, 1.15, 0.05), (14.2, 1.2, 0.15), (14.2, 1.08, 0.22)], 0.012, M["chrome"])
     rng = random.Random(5)
@@ -1042,14 +1047,14 @@ def room_pietro():
         x = 14.6 + i * 0.28 + rng.uniform(-0.05, 0.05)
         r, hh = rng.uniform(0.03, 0.06), rng.uniform(0.1, 0.24)
         cyl("Flask", r, hh, (x, 0.92 + hh / 2, 0.2 + rng.uniform(-0.08, 0.08)), M["glass"], verts=12)
-        cyl("FlaskLiquid", r * 0.85, hh * 0.5, (x, 0.92 + hh * 0.25, 0.2), M["liquid" if i % 3 else "lcd"], verts=10)
+        cyl("FlaskLiquid", r * 0.85, hh * 0.5, (x, 0.92 + hh * 0.25, 0.2), M["liquid" if i % 3 else "ochre"], verts=10)
     box("Centrifuge", (0.4, 0.22, 0.34), (16.6, 1.03, 0.2), M["white"], 0.03)
     cyl("CentrifugeLid", 0.12, 0.02, (16.6, 1.15, 0.2), M["dglass"], verts=16)
-    box("CentLed", (0.08, 0.02, 0.005), (16.6, 1.0, 0.372), M["nt"])
+    box("CentLed", (0.08, 0.02, 0.005), (16.6, 1.0, 0.372), M["led_c"])
     for x in (13.9, 15.1, 16.3):  # backsplash outlets and gas taps
         box("Outlet", (0.12, 0.08, 0.02), (x, 1.15, 0.01), M["graphite"])
-        box("OutletLed", (0.02, 0.01, 0.004), (x + 0.04, 1.17, 0.022), M["nt"])
-    # overhead: big duct, coolant pipe, cable tray, strip lights
+        box("OutletLed", (0.02, 0.01, 0.004), (x + 0.04, 1.17, 0.022), M["led_c"])
+    # overhead: big duct, coolant pipe, conduit, pendant rings and light housings
     cyl("Duct", 0.16, 12.0, (15.4, 3.02, 0.2), M["dsteel"], axis="x", verts=20)
     for i in range(9):
         x = 9.8 + i * 1.45
@@ -1077,7 +1082,7 @@ def room_pietro():
     cctv((21.3, 2.6, 0.0), -40)
     # divider to the core with the stair portal
     low_wall(dd["x"], 0.0, 9.0, "panel_t", [(dd["z"], dd["width"])], "nt")
-    portal("Stair", dd["x"], dd["z"], dd["width"], 2.5, "dsteel", "nc", "POZIOM -3", "POZIOM -3", "nc")
+    portal("Stair", dd["x"], dd["z"], dd["width"], 2.5, "dsteel", "nc", "POZIOM -3", "POZIOM -3")
     pipe_side = dd["x"] + 0.28  # the Jadro face of the divider: low coolant pipes
     for za, zb in ((0.1, dd["z"] - dd["width"] / 2 - 0.2), (dd["z"] + dd["width"] / 2 + 0.2, 8.9)):
         cyl("LowPipe", 0.05, zb - za, (pipe_side, 0.82, (za + zb) / 2), M["pipe"], axis="z", verts=12)
@@ -1093,7 +1098,7 @@ def room_jadro():
     off = (x0, 0, 0)
     floor_slab(x0, x1, z1, "floor_jadro", 0.5, off)
     cx, cz = 26.3, 3.6
-    # floor: diamond-plate ring around the core with hazard tape, walkways with glowing inset strips, trench covers
+    # floor: diamond-plate ring around the core with hazard tape, walkways with trim strips, trench covers
     cyl("CoreDeck", 2.0, 0.006, (cx, 0.003, cz), M["black"], verts=48)
     uvw(cyl("CoreDiamond", 1.95, 0.008, (cx, 0.004, cz), M["diamond"], verts=48), 0.5, off)
     for i in range(40):
@@ -1107,7 +1112,7 @@ def room_jadro():
             box("WalkGlow", (xb - xa, 0.01, 0.02), ((xa + xb) / 2, 0.005, z), M["nc"])
     uvw(box("Trench", (1.4, 0.008, 0.36), (28.95, 0.004, 2.8), M["diamond"]), 0.5, off)
     for z in (3.4, 4.2):
-        uvw(box("Trench", (1.9, 0.008, 0.36), (24.1, 0.004, z), M["diamond"]), 0.5, off)
+        uvw(box("Trench", (1.9, 0.006, 0.36), (24.1, 0.003, z), M["diamond"]), 0.5, off)  # 1 mm under the core deck it runs into
         for x in (23.3, 24.1, 24.9):
             cyl("TrenchBolt", 0.012, 0.004, (x, 0.008, z + 0.15), M["steel"], verts=6)
     dd = doors["wyjscie"]
@@ -1149,11 +1154,11 @@ def room_jadro():
                 box("FanBlade", (0.04, 0.22, 0.006), (xc, y, 0.432), M["black"], rot=(0, 0, k * 72))
         box("CoolerScreen", (0.3, 0.1, 0.006), (xc, 1.8, 0.425), M["display"])
         for k in range(3):
-            box("CoolerLed", (0.02, 0.02, 0.006), (xc - 0.3 + k * 0.05, 1.8, 0.427), M["ledr" if k == 0 else "nc"])
+            box("CoolerLed", (0.02, 0.02, 0.006), (xc - 0.3 + k * 0.05, 1.8, 0.427), M["ledr" if k == 0 else "led_c"])
         tbox("CoolerHaz", (0.84, 0.1, 0.44), (xc, 0.1, 0.21), "hazard", 0.4)
         text("CoolerText", "CHŁODZENIE", (xc, 0.3, 0.428), 0.06, M["nw"])
         box("Beacon", (0.12, 0.05, 0.12), (xc + 0.25, 1.925, 0.2), M["graphite"])
-        cyl("BeaconDome", 0.05, 0.08, (xc + 0.25, 1.99, 0.2), M["nr"], verts=12)
+        cyl("BeaconDome", 0.05, 0.08, (xc + 0.25, 1.99, 0.2), M["red"], verts=12)
         cable("CoolerPipe", [(xc - 0.2, 1.9, 0.2), (xc - 0.2, 2.4, 0.2), (xc - 0.2, 2.62, 0.18), (xc - 0.2, 2.9, 0.18)],
               0.05, M["pipe"], res=6, sides=2)
     for x in (25.66, 26.94):  # glass coolant tubes either side of the eye
@@ -1168,7 +1173,7 @@ def room_jadro():
     cyl("EyeBack", 0.46, 0.03, (cx, 2.0, 0.03), M["black"], axis="z", verts=40)
     torus("EyeIris", 0.34, 0.016, (cx, 2.0, 0.06), M["nc"], axis="z", seg=40, mseg=6)
     torus("EyeIris2", 0.21, 0.022, (cx, 2.0, 0.065), M["nc"], axis="z", seg=32, mseg=6)
-    cyl("EyePupil", 0.09, 0.02, (cx, 2.0, 0.07), M["nw"], axis="z", verts=24)
+    cyl("EyePupil", 0.09, 0.02, (cx, 2.0, 0.07), M["led_c"], axis="z", verts=24)
     for k in range(4):
         a = math.radians(45 + k * 90)
         box("EyeBracket", (0.2, 0.05, 0.05), (cx + math.cos(a) * 0.58, 2.0 + math.sin(a) * 0.58, 0.05), M["dsteel"],
@@ -1204,7 +1209,7 @@ def room_jadro():
     for za, zb in ((-0.2, dd["z"] - dd["width"] / 2), (dd["z"] + dd["width"] / 2, z1 + 0.2)):
         box("EastCap", (0.24, 0.05, zb - za), (dd["x"] + 0.1, LOW + 0.025, (za + zb) / 2), M["graphite"])
         box("EastNeon", (0.03, 0.012, zb - za - 0.04), (dd["x"] + 0.1, LOW + 0.056, (za + zb) / 2), M["nc"])
-    portal("Exit", dd["x"] + 0.1, dd["z"], dd["width"], 2.4, "dsteel", "ng", "WYJŚCIE", "WYJŚCIE", "ng")
+    portal("Exit", dd["x"] + 0.1, dd["z"], dd["width"], 2.4, "dsteel", "nc", "WYJŚCIE", "WYJŚCIE", "ng")
     box("ExitSign", (0.06, 0.25, 0.6), (dd["x"] + 0.1, 2.95, dd["z"]), M["ng"])
     south_curb(x0, x1, z1, "dsteel", "nc")
 
@@ -1215,37 +1220,37 @@ ROOMS = {"hol": room_hol, "pietro": room_pietro, "jadro": room_jadro}
 # ---------- props (origin at the floor, centre of the footprint, facing +z) ----------
 
 def desk():
-    """Reception counter: black stone slab, curved ends, fluted fascia, neon edges, clutter."""
-    box("Body", (2.1, 0.92, 0.82), (0, 0.47, -0.02), M["black"], 0.01)
+    """Reception counter: beige body, light wood top, curved ends, fluted fascia, brass edges, clutter."""
+    box("Body", (2.1, 0.92, 0.82), (0, 0.47, -0.02), M["beige"], 0.01)
     for s in (-1, 1):
-        cyl("End", 0.41, 0.92, (s * 1.05, 0.47, -0.02), M["black"], verts=32)
-        cyl("TopEnd", 0.45, 0.05, (s * 1.05, 0.985, 0), M["black"], verts=32)
-        for k in range(9):  # neon edge strips following the curved ends
+        cyl("End", 0.41, 0.92, (s * 1.05, 0.47, -0.02), M["beige"], verts=32)
+        cyl("TopEnd", 0.45, 0.05, (s * 1.05, 0.984, 0), M["wood_l"], verts=32)  # 1 mm under Top, never coplanar
+        for k in range(9):  # trim strips following the curved ends
             phi = math.radians(-90 + k * 22.5) if s > 0 else math.radians(90 + k * 22.5)
             box("EndNeon", (0.012, 0.012, 0.165), (s * 1.05 + math.cos(phi) * 0.415, 0.94, -0.02 + math.sin(phi) * 0.415),
                 M["ny"], rot=(0, -math.degrees(phi), 0))
     box("Kick", (2.9, 0.08, 0.7), (0, 0.04, -0.04), M["graphite"])
     box("KickLight", (2.8, 0.012, 0.012), (0, 0.075, 0.33), M["ny"])
     for i in range(19):
-        box("Flute", (0.05, 0.74, 0.03), (-0.99 + i * 0.11, 0.5, 0.39), M["graphite"], 0.01)
+        box("Flute", (0.05, 0.74, 0.03), (-0.99 + i * 0.11, 0.5, 0.39), M["wood_l"], 0.01)
     box("FrontNeon", (2.1, 0.012, 0.012), (0, 0.93, 0.405), M["ny"])
     box("EmblemPlate", (0.6, 0.6, 0.02), (0, 0.52, 0.41), M["black"], 0.008)
-    z_letter("Emblem", 0, 0.52, 0.424, 0.4, M["ny"], depth=0.015)
-    box("Top", (2.1, 0.05, 0.9), (0, 0.985, 0), M["black"])
-    box("TopNeon", (2.1, 0.012, 0.012), (0, 0.955, 0.444), M["nc"])
+    z_letter("Emblem", 0, 0.52, 0.424, 0.4, M["yellow"], depth=0.015)
+    box("Top", (2.1, 0.05, 0.9), (0, 0.985, 0), M["wood_l"])
+    box("TopNeon", (2.1, 0.012, 0.012), (0, 0.955, 0.444), M["ny"])
     box("Keyboard", (0.44, 0.018, 0.15), (-0.8, 1.019, 0.12), M["graphite"], 0.004)
     box("Keys", (0.4, 0.006, 0.11), (-0.8, 1.03, 0.12), M["dsteel"])
     box("Mouse", (0.06, 0.02, 0.1), (-0.48, 1.02, 0.13), M["graphite"], 0.008)
     cyl("Cup", 0.04, 0.1, (0.15, 1.06, -0.12), M["white"], verts=16)
-    cyl("CupBand", 0.041, 0.02, (0.15, 1.07, -0.12), M["yellow"], verts=16)
+    cyl("CupBand", 0.041, 0.02, (0.15, 1.07, -0.12), M["ochre"], verts=16)
     for i, (x, z, a) in enumerate(((-0.2, 0.0, 8), (-0.18, 0.02, -5), (1.0, -0.15, 20))):
         box("Paper", (0.21, 0.003, 0.297), (x, 1.012 + i * 0.003, z), M["white"], rot=(0, a, 0))
     cyl("PenCup", 0.035, 0.1, (0.45, 1.06, -0.25), M["graphite"], verts=12)
     for i in range(3):
-        cyl("Pen", 0.005, 0.14, (0.44 + 0.01 * i, 1.1, -0.26 + 0.01 * i), M["yellow" if i == 0 else "black"], verts=6)
+        cyl("Pen", 0.005, 0.14, (0.44 + 0.01 * i, 1.1, -0.26 + 0.01 * i), M["ochre" if i == 0 else "black"], verts=6)
     cyl("BellBase", 0.05, 0.015, (1.15, 1.017, 0.25), M["graphite"], verts=16)
     ball("Bell", 0.045, (1.15, 1.03, 0.25), M["brass"], scale=(1, 0.8, 1))
-    # a warm desk lamp for the receptionist
+    # a brass desk lamp for the receptionist
     cyl("LampFoot", 0.07, 0.02, (-1.25, 1.02, -0.25), M["brass"], verts=16)
     cable("LampArm", [(-1.25, 1.02, -0.25), (-1.25, 1.35, -0.25), (-1.15, 1.42, -0.15)], 0.01, M["brass"], res=4)
     cyl("LampShade", 0.09, 0.08, (-1.12, 1.4, -0.12), M["brass"], verts=16, r2=0.04)
@@ -1261,14 +1266,14 @@ def monitor():
     box("Housing", (0.48, 0.28, 0.04), (0, 0.38, -0.035), M["graphite"], 0.01)
     box("Frame", (0.62, 0.4, 0.035), (0, 0.38, 0), M["black"], 0.006)
     box("Screen", (0.57, 0.35, 0.005), (0, 0.38, 0.022), M["screen"])
-    box("Power", (0.012, 0.006, 0.004), (0.27, 0.19, 0.019), M["nc"])
+    box("Power", (0.012, 0.006, 0.004), (0.27, 0.19, 0.019), M["led_c"])
     cable("MonCable", [(0.05, 0.3, -0.06), (0.06, 0.12, -0.09), (0.12, 0.0, -0.12)], 0.006, M["rubber"])
 
 
 def phone_dock():
     box("Dock", (0.15, 0.03, 0.13), (0, 0.015, 0), M["graphite"], 0.008)
     box("Cradle", (0.11, 0.09, 0.02), (0, 0.07, -0.01), M["graphite"], 0.005, rot=(-12, 0, 0))
-    box("DockLed", (0.06, 0.004, 0.004), (0, 0.02, 0.066), M["nc"])
+    box("DockLed", (0.06, 0.004, 0.004), (0, 0.02, 0.066), M["led_c"])
     box("Phone", (0.09, 0.17, 0.012), (0, 0.13, 0.02), M["black"], 0.004, rot=(-12, 0, 0))
     box("Screen", (0.08, 0.15, 0.002), (0, 0.13, 0.028), M["screen"], rot=(-12, 0, 0))
     cable("DockCable", [(0, 0.01, -0.06), (0.02, 0.005, -0.12), (0.08, 0.005, -0.16)], 0.004, M["rubber"])
@@ -1283,7 +1288,7 @@ def wall_screen(w=2.4, h=1.4, halo="ny"):
     box("Speaker", (w * 0.5, 0.05, 0.05), (0, -h / 2 - 0.09, 0.0), M["graphite"], 0.01)
     for i in range(12):
         box("Grille", (0.012, 0.03, 0.004), (-w * 0.22 + i * w * 0.04, -h / 2 - 0.09, 0.026), M["dsteel"])
-    z_letter("Logo", w / 2 - 0.12, -h / 2 + 0.025, 0.04, 0.035, M["ny"], depth=0.004)
+    z_letter("Logo", w / 2 - 0.12, -h / 2 + 0.025, 0.04, 0.035, M["yellow"], depth=0.004)
     for x in (-w / 3, w / 3):
         box("Mount", (0.3, 0.4, 0.02), (x, 0, -0.11), M["dsteel"])
         box("Arm", (0.06, 0.06, 0.07), (x, 0, -0.075), M["dsteel"])
@@ -1295,7 +1300,7 @@ def z_logo():
     box("Plate", (1.1, 1.3, 0.04), (0, 0, -0.005), M["black"], 0.012)
     for x, y, sx, sy in ((0, 0.6, 0.98, 0.02), (0, -0.6, 0.98, 0.02), (-0.5, 0, 0.02, 1.18), (0.5, 0, 0.02, 1.18)):
         box("Rim", (sx, sy, 0.01), (x, y, 0.018), M["brass"])
-    z_letter("Z", 0, 0.08, 0.04, 0.8, M["ny"])
+    z_letter("Z", 0, 0.08, 0.04, 0.8, M["yellow"])
     text("Name", "KORPORACJA", (0, -0.44, 0.02), 0.085, M["nw"])
     for x in (-0.47, 0.47):
         for y in (-0.57, 0.57):
@@ -1324,14 +1329,14 @@ def locker():
     for r in range(4):
         for c in range(3):
             box("Key", (0.026, 0.022, 0.006), (0.27 + c * 0.03, 1.18 - r * 0.03, 0.272), M["steel"])
-    box("KeypadLight", (0.09, 0.015, 0.005), (0.3, 1.225, 0.272), M["ny"])
+    box("KeypadLight", (0.09, 0.015, 0.005), (0.3, 1.225, 0.272), M["led_y"])
     box("Sticker", (0.12, 0.06, 0.002), (0.3, 0.98, 0.251), M["yellow"])
     text("StickerText", "KOD", (0.3, 0.98, 0.2525), 0.03, M["black"], depth=0.001)
     text("Label", "OCHRONA", (-0.22, 1.62, 0.255), 0.07, M["yellow"], depth=0.004)
 
 
 def sofa():
-    """Two-seat leather sofa with a side table and a warm lamp, all inside the 2.2 x 0.9 footprint."""
+    """Two-seat leather sofa with a side table and a lamp, all inside the 2.2 x 0.9 footprint."""
     sx = -0.2  # sofa centre; the side table takes the right end
     for x in (sx - 0.7, sx + 0.7):
         for z in (-0.33, 0.33):
@@ -1346,7 +1351,7 @@ def sofa():
         box("BackCushion", (0.72, 0.42, 0.15), (x, 0.68, -0.25), M["leather_w"], 0.06, rot=(-10, 0, 0))
         for bx in (-0.2, 0, 0.2):
             ball("Tuft", 0.014, (x + bx, 0.7, -0.17), M["fabric_d"], 1)
-    box("Pillow", (0.4, 0.36, 0.12), (sx - 0.45, 0.6, -0.1), M["yellow"], 0.05, rot=(-15, 0, 12))
+    box("Pillow", (0.4, 0.36, 0.12), (sx - 0.45, 0.6, -0.1), M["ochre"], 0.05, rot=(-15, 0, 12))
     box("Throw", (0.5, 0.02, 0.62), (sx + 0.35, 0.46, 0.08), M["fabric"], 0.008, rot=(0, 0, -3))
     tx = 0.88
     cyl("TableTop", 0.2, 0.03, (tx, 0.55, 0.05), M["wood"], verts=24, bevel=0.005)
@@ -1355,7 +1360,7 @@ def sofa():
     cyl("LampBase", 0.06, 0.04, (tx + 0.05, 0.585, -0.05), M["brass"], verts=16)
     cyl("LampStem", 0.008, 0.3, (tx + 0.05, 0.75, -0.05), M["brass"], verts=6)
     cyl("LampShade", 0.13, 0.17, (tx + 0.05, 0.95, -0.05), M["warm"], verts=20, r2=0.09)
-    for i, c in enumerate(("leather_w", "graphite", "yellow")):
+    for i, c in enumerate(("leather_w", "graphite", "ochre")):
         box("Book", (0.16, 0.03, 0.22), (tx - 0.06, 0.58 + i * 0.03, 0.12), M[c], 0.004, rot=(0, 10 + i * 12, 0))
     cyl("Mug", 0.035, 0.08, (tx + 0.1, 0.605, 0.16), M["white"], verts=12)
 
@@ -1388,12 +1393,12 @@ def turnstile():
         box("CabTop", (0.2, 0.04, 1.32), (x, 0.98, 0), M["black"], 0.01)
         box("CabLight", (0.012, 0.012, 1.26), (x - s * 0.095, 0.97, 0), M["ny"])
         box("Inner", (0.006, 0.5, 1.1), (x - s * 0.092, 0.6, 0), M["black"])
-        box("OuterBand", (0.004, 0.05, 1.2), (x + s * 0.092, 0.78, 0), M["yellow"])
+        box("OuterBand", (0.004, 0.05, 1.2), (x + s * 0.092, 0.78, 0), M["ochre"])
         for e in (-1, 1):
             box("EndCap", (0.18, 0.9, 0.012), (x, 0.47, e * 0.656), M["graphite"])
-            box("Arrow", (0.05, 0.05, 0.004), (x, 0.82, e * 0.664), M["nc"] if e > 0 else M["ledr"], rot=(0, 0, 45))
+            box("Arrow", (0.05, 0.05, 0.004), (x, 0.82, e * 0.664), M["led_c"] if e > 0 else M["ledr"], rot=(0, 0, 45))
     box("Reader", (0.14, 0.03, 0.18), (0.42, 1.015, -0.35), M["black"], 0.006)
-    box("ReaderGlow", (0.1, 0.004, 0.12), (0.42, 1.032, -0.35), M["nc"])
+    box("ReaderGlow", (0.1, 0.004, 0.12), (0.42, 1.032, -0.35), M["led_c"])
     box("FloorPlate", (1.04, 0.006, 1.4), (0, 0.003, 0), M["graphite"])
     for name, s in (("FlapL", -1), ("FlapR", 1)):
         f = join([box(name + "Glass", (0.3, 0.5, 0.02), (s * 0.17, 0.8, 0), M["glass"]),
@@ -1413,7 +1418,7 @@ def phone_wall():
     box("Halo", (3.1, 1.8, 0.01), (0, 1.45, -0.075), M["nt"])
     box("Back", (3.06, 1.76, 0.04), (0, 1.45, -0.05), M["graphite"])
     box("Panel", (3.0, 1.7, 0.08), (0, 1.45, -0.01), M["panel"], 0.02)
-    box("Header", (3.0, 0.16, 0.06), (0, 2.38, -0.01), M["yellow"], 0.01)
+    box("Header", (3.0, 0.16, 0.06), (0, 2.38, -0.01), M["ochre"], 0.01)
     text("HeaderText", "Z-PHONE  /  ŚCIANA POWIADOMIEŃ", (-1.42, 2.38, 0.022), 0.085, M["black"], align="LEFT")
     for i in range(6):
         col, row = i % 3, i // 3
@@ -1423,7 +1428,7 @@ def phone_wall():
         torus("Rfid", 0.05, 0.006, (x, y + 0.02, 0.062), M["dsteel"], axis="z", seg=16, mseg=4)
         box("Ledge", (0.28, 0.03, 0.05), (x, y - 0.2, 0.07), M["dsteel"])
         text("App", apps[i], (x, y + 0.29, 0.032), 0.04, M["paint_w"])
-        box(f"SlotLight{i}", (0.3, 0.03, 0.01), (x, y - 0.3, 0.06), M["nc"])
+        box(f"SlotLight{i}", (0.3, 0.03, 0.01), (x, y - 0.3, 0.06), M["led_c"])
     box("ScreenFrame", (0.95, 0.65, 0.05), (1.0, 1.55, 0.05), M["black"], 0.008)
     box("Screen", (0.9, 0.6, 0.005), (1.0, 1.55, 0.078), M["screen"])
     text("ScreenLabel", "RAPORT", (1.0, 1.93, 0.032), 0.04, M["paint_w"])
@@ -1440,27 +1445,27 @@ def phone_wall():
 
 
 def lab_table():
-    box("Top", (1.8, 0.04, 0.8), (0, 0.9, 0), M["black"], 0.01)
+    box("Top", (1.8, 0.04, 0.8), (0, 0.9, 0), M["white"], 0.01)
     box("TopEdge", (1.8, 0.012, 0.012), (0, 0.876, 0.39), M["nt"])
-    box("Apron", (1.7, 0.08, 0.7), (0, 0.84, 0), M["panel_t"])
+    box("Apron", (1.7, 0.08, 0.7), (0, 0.84, 0), M["matte"])
     for x in (-0.84, 0.84):
         for z in (-0.34, 0.34):
             box("Leg", (0.05, 0.8, 0.05), (x, 0.4, z), M["steel"])
             box("Foot", (0.07, 0.02, 0.07), (x, 0.01, z), M["rubber"])
         box("Stretcher", (0.04, 0.04, 0.68), (x, 0.18, 0), M["steel"])
     box("Shelf", (1.66, 0.02, 0.66), (0, 0.2, 0), M["dsteel"])
-    for x, w, c in ((-0.5, 0.4, "yellow"), (0.05, 0.36, "white"), (0.55, 0.42, "graphite")):
+    for x, w, c in ((-0.5, 0.4, "ochre"), (0.05, 0.36, "white"), (0.55, 0.42, "graphite")):
         box("Crate", (w, 0.2, 0.3), (x, 0.31, -0.08), M[c], 0.01)
     box("CrateLabel", (0.12, 0.06, 0.002), (-0.5, 0.33, 0.071), M["black"])
     for i in range(6):
         x = -0.6 + i * 0.24
         box(f"Phone{i}", (0.09, 0.012, 0.17), (x, 0.932, 0.1), M["black"], 0.004)
         box(f"PhoneGlow{i}", (0.08, 0.002, 0.15), (x, 0.939, 0.1), M["display"])
-        box(f"PhoneIcon{i}", (0.03, 0.001, 0.03), (x, 0.9405, 0.08), M[("ny", "nc", "nm", "nt", "nw", "ny")[i]])
+        box(f"PhoneIcon{i}", (0.03, 0.001, 0.03), (x, 0.9405, 0.08), M[("led_y", "led_c", "led_w", "led_c", "led_w", "led_y")[i]])
         cable(f"PhoneCable{i}", [(x, 0.926, 0.19), (x * 0.7, 0.924, 0.26), (0.0, 0.924, 0.31)], 0.004, M["cable_w"])
     box("Hub", (0.3, 0.04, 0.08), (0, 0.94, 0.33), M["graphite"], 0.006)
     for k in range(6):
-        box("HubLed", (0.012, 0.006, 0.004), (-0.1 + k * 0.04, 0.95, 0.371), M["nt" if k % 2 else "ledr"])
+        box("HubLed", (0.012, 0.006, 0.004), (-0.1 + k * 0.04, 0.95, 0.371), M["led_c" if k % 2 else "ledr"])
     # microscope
     box("MicBase", (0.18, 0.03, 0.22), (-0.62, 0.935, -0.2), M["white"], 0.008)
     box("MicArm", (0.05, 0.28, 0.06), (-0.62, 1.07, -0.27), M["white"], 0.01, rot=(-10, 0, 0))
@@ -1472,7 +1477,7 @@ def lab_table():
     for k in range(5):
         cyl("Vial", 0.016, 0.14, (0.42 + k * 0.065, 1.0, -0.22), M["glass"], verts=10)
         cyl("VialLiquid", 0.013, 0.05 + 0.012 * k, (0.42 + k * 0.065, 0.955 + 0.006 * k, -0.22),
-            M["liquid" if k % 2 else "lcd"], verts=8)
+            M["liquid" if k % 2 else "ochre"], verts=8)
     cyl("Beaker", 0.05, 0.12, (0.15, 0.98, -0.25), M["glass"], verts=14)
     cyl("BeakerLiquid", 0.045, 0.05, (0.15, 0.945, -0.25), M["liquid"], verts=12)
     # tablet on a stand showing data
@@ -1489,9 +1494,9 @@ def car():
     box("Under", (1.7, 0.2, 2.3), (0, 0.3, 0), M["graphite"], 0.05)
     box("Shell", (1.72, 0.38, 2.5), (0, 0.6, 0), M["white"], 0.12, seg=3)
     box("Nose", (1.7, 0.2, 0.95), (0, 0.86, 0.75), M["white"], 0.09, rot=(7, 0, 0), seg=3)
-    box("Stripe", (0.32, 0.01, 0.94), (0, 0.965, 0.763), M["yellow"], rot=(7, 0, 0))
+    box("Stripe", (0.32, 0.01, 0.94), (0, 0.965, 0.763), M["ochre"], rot=(7, 0, 0))
     box("Tail", (1.7, 0.26, 0.6), (0, 0.9, -0.95), M["white"], 0.09, seg=3)
-    box("TailStripe", (0.32, 0.01, 0.6), (0, 1.035, -0.95), M["yellow"])
+    box("TailStripe", (0.32, 0.01, 0.6), (0, 1.035, -0.95), M["ochre"])
     for s in (-1, 1):
         box("Sill", (0.14, 0.18, 1.0), (s * 0.78, 0.88, -0.25), M["white"], 0.05)
         box("SideSkirt", (0.16, 0.16, 0.8), (s * 0.92, 0.42, 0), M["graphite"], 0.03)
@@ -1503,7 +1508,7 @@ def car():
             cyl("Tyre", 0.34, 0.24, (x, 0.34, z), M["rubber"], axis="x", verts=28, bevel=0.03)
             cyl("Rim", 0.24, 0.245, (x, 0.34, z), M["dsteel"], axis="x", verts=24)
             cyl("Disc", 0.16, 0.25, (x, 0.34, z), M["steel"], axis="x", verts=20)
-            torus("RimRing", 0.22, 0.012, (x + s * 0.12, 0.34, z), M["yellow"], axis="x", seg=24, mseg=4)
+            torus("RimRing", 0.22, 0.012, (x + s * 0.12, 0.34, z), M["ochre"], axis="x", seg=24, mseg=4)
             for k in range(5):
                 box("Spoke", (0.012, 0.4, 0.045), (x + s * 0.123, 0.34, z), M["steel"], rot=(k * 36, 0, 0))
             box("Fender", (0.26, 0.1, 0.84), (s * 0.96, 0.73, z), M["white"], 0.04)
@@ -1521,20 +1526,20 @@ def car():
         x = s * 0.4
         box("Seat", (0.5, 0.12, 0.5), (x, 0.86, -0.5), M["black"], 0.04)
         box("SeatBack", (0.5, 0.62, 0.12), (x, 1.15, -0.8), M["black"], 0.04, rot=(-12, 0, 0))
-        box("SeatStripe", (0.08, 0.55, 0.01), (x, 1.15, -0.736), M["yellow"], rot=(-12, 0, 0))
+        box("SeatStripe", (0.08, 0.55, 0.01), (x, 1.15, -0.736), M["ochre"], rot=(-12, 0, 0))
         box("Headrest", (0.3, 0.14, 0.1), (x, 1.53, -0.88), M["black"], 0.03)
-    box("Binder", (0.24, 0.05, 0.31), (0.4, 0.945, -0.48), M["yellow"], 0.005, rot=(0, 15, 0))
+    box("Binder", (0.24, 0.05, 0.31), (0.4, 0.945, -0.48), M["ochre"], 0.005, rot=(0, 15, 0))
     text("BinderText", "INSTRUKCJA", (0.4, 0.972, -0.48), 0.03, M["black"], flat=True, yaw=15, depth=0.002)
     box("Spoiler", (1.7, 0.035, 0.26), (0, 1.2, -1.1), M["black"], 0.01, rot=(-6, 0, 0))
     for x in (-0.6, 0.6):
         box("Strut", (0.04, 0.17, 0.08), (x, 1.1, -1.08), M["dsteel"])
-    f = join([box("HeadlightBar", (1.4, 0.04, 0.025), (0, 0.72, 1.242), M["nw"]),
-              box("HeadlightL", (0.28, 0.07, 0.02), (-0.6, 0.78, 1.225), M["nw"]),
-              box("HeadlightR", (0.28, 0.07, 0.02), (0.6, 0.78, 1.225), M["nw"])], "Headlights")
+    f = join([box("HeadlightBar", (1.4, 0.04, 0.025), (0, 0.72, 1.242), M["led_w"]),
+              box("HeadlightL", (0.28, 0.07, 0.02), (-0.6, 0.78, 1.225), M["led_w"]),
+              box("HeadlightR", (0.28, 0.07, 0.02), (0.6, 0.78, 1.225), M["led_w"])], "Headlights")
     f.name = "Headlights"
-    box("TailLight", (1.5, 0.035, 0.02), (0, 0.88, -1.255), M["nc"])
+    box("TailLight", (1.5, 0.035, 0.02), (0, 0.88, -1.255), M["red"])
     box("Grille", (0.9, 0.12, 0.02), (0, 0.52, 1.245), M["black"])
-    z_letter("Badge", 0, 0.55, 1.262, 0.12, M["ny"], depth=0.01)
+    z_letter("Badge", 0, 0.55, 1.262, 0.12, M["yellow"], depth=0.01)
 
 
 def shelf():
@@ -1548,16 +1553,16 @@ def shelf():
     for s in range(4):
         y = 0.3 + s * 0.48
         box("Shelf", (2.44, 0.03, 0.48), (0, y, -0.01), M["steel"])
-        box("Rail", (2.44, 0.04, 0.01), (0, y - 0.01, 0.235), M["yellow"])
+        box("Rail", (2.44, 0.04, 0.01), (0, y - 0.01, 0.235), M["ochre"])
         x = -1.12
         while x < 1.08:
             kind = (s + int((x + 2) * 3)) % 3 if s < 3 else 0
-            col = rng.choice(("white", "white", "yellow", "black"))
+            col = rng.choice(("white", "white", "ochre", "black"))
             if s == 0 or kind == 0:  # boxes
                 w, h = rng.uniform(0.14, 0.22), rng.uniform(0.18, 0.32)
                 box("Product", (w, h, 0.2), (x + w / 2, y + 0.015 + h / 2, 0.0), M[col], 0.006)
                 box("ProductBand", (w + 0.002, h * 0.2, 0.202), (x + w / 2, y + 0.015 + h * 0.6, 0.0),
-                    M["yellow" if col != "yellow" else "black"])
+                    M["ochre" if col != "ochre" else "black"])
                 box("QR", (0.03, 0.03, 0.002), (x + w / 2, y + 0.015 + h * 0.3, 0.102), M["black"])
                 x += w + 0.02
             elif kind == 1:  # cans
@@ -1568,27 +1573,27 @@ def shelf():
             else:  # bottles
                 cyl("Bottle", 0.035, 0.18, (x + 0.035, y + 0.105, 0.0), M[col], verts=10)
                 cyl("Neck", 0.015, 0.06, (x + 0.035, y + 0.225, 0.0), M[col], verts=8)
-                cyl("Cap", 0.017, 0.02, (x + 0.035, y + 0.265, 0.0), M["yellow" if col != "yellow" else "black"], verts=8)
+                cyl("Cap", 0.017, 0.02, (x + 0.035, y + 0.265, 0.0), M["ochre" if col != "ochre" else "black"], verts=8)
                 x += 0.085
         for k in range(6):
             box("Tag", (0.07, 0.025, 0.003), (-1.0 + k * 0.4, y - 0.01, 0.242), M["white"])
     box("Header", (2.6, 0.26, 0.05), (0, 2.2, 0.0), M["black"], 0.01)
-    z_letter("HeaderZ", -1.05, 2.2, 0.03, 0.16, M["ny"], depth=0.01)
-    text("HeaderText", "Z-MART", (-0.2, 2.2, 0.03), 0.15, M["ny"])
+    z_letter("HeaderZ", -1.05, 2.2, 0.03, 0.16, M["yellow"], depth=0.01)
+    text("HeaderText", "Z-MART", (-0.2, 2.2, 0.03), 0.15, M["yellow"])
     text("HeaderSub", "ABONAMENT AKTYWNY", (0.85, 2.2, 0.03), 0.045, M["nw"])
 
 
 def checkout():
     box("Counter", (1.26, 0.8, 0.62), (0, 0.42, 0.01), M["white"], 0.02)
     box("Kick", (1.22, 0.06, 0.58), (0, 0.03, 0.01), M["graphite"])
-    box("Band", (1.262, 0.06, 0.622), (0, 0.66, 0.01), M["yellow"])
+    box("Band", (1.262, 0.06, 0.622), (0, 0.66, 0.01), M["ochre"])
     box("KickLight", (1.2, 0.01, 0.01), (0, 0.062, 0.32), M["ny"])
     box("Top", (1.3, 0.04, 0.68), (0, 0.85, 0.0), M["black"], 0.008)
     box("ScannerGlass", (0.3, 0.01, 0.3), (-0.3, 0.875, 0.02), M["glass"])
-    box("ScannerLine", (0.26, 0.004, 0.01), (-0.3, 0.882, 0.02), M["nc"])
+    box("ScannerLine", (0.26, 0.004, 0.01), (-0.3, 0.882, 0.02), M["led_c"])
     box("ScanTower", (0.34, 0.24, 0.06), (-0.3, 0.99, -0.2), M["graphite"], 0.01)
     box("ScanWindow", (0.26, 0.14, 0.004), (-0.3, 0.98, -0.169), M["dglass"])
-    box("ScanTowerLine", (0.22, 0.004, 0.004), (-0.3, 0.98, -0.166), M["nc"])
+    box("ScanTowerLine", (0.22, 0.004, 0.004), (-0.3, 0.98, -0.166), M["led_c"])
     box("Printer", (0.22, 0.14, 0.22), (0.35, 0.94, -0.15), M["graphite"], 0.01)
     box("Paper", (0.08, 0.002, 0.18), (0.35, 1.012, -0.02), M["white"], rot=(-10, 0, 0))
     box("Terminal", (0.09, 0.03, 0.16), (0.05, 0.9, 0.18), M["black"], 0.005, rot=(-15, 0, 0))
@@ -1597,9 +1602,9 @@ def checkout():
     box("ScreenFrame", (0.32, 0.22, 0.03), (0.35, 1.15, -0.2), M["black"], rot=(-15, 0, 0))
     box("Screen", (0.29, 0.19, 0.004), (0.35, 1.15, -0.183), M["screen"], rot=(-15, 0, 0))
     cyl("LanePole", 0.02, 1.0, (-0.55, 1.37, -0.28), M["dsteel"], verts=8)
-    box("LaneSign", (0.18, 0.18, 0.05), (-0.55, 1.95, -0.28), M["ny"])
+    box("LaneSign", (0.18, 0.18, 0.05), (-0.55, 1.95, -0.28), M["yellow"])
     text("LaneText", "1", (-0.55, 1.95, -0.25), 0.12, M["black"])
-    box("Basket", (0.3, 0.12, 0.22), (-0.42, 0.93, 0.17), M["yellow"], 0.01)
+    box("Basket", (0.3, 0.12, 0.22), (-0.42, 0.93, 0.17), M["ochre"], 0.01)
     box("BasketInside", (0.27, 0.01, 0.19), (-0.42, 0.98, 0.17), M["graphite"])
 
 
@@ -1610,10 +1615,10 @@ def kiosk():
         box("EdgeLight", (0.012, 1.55, 0.012), (x, 0.92, 0.146), M["ny"])
     box("Bezel", (0.44, 0.74, 0.004), (0, 1.25, 0.151), M["graphite"])
     box("Screen", (0.4, 0.68, 0.005), (0, 1.25, 0.1545), M["screen"])
-    z_letter("TopZ", 0, 1.68, 0.155, 0.1, M["ny"], depth=0.01)
+    z_letter("TopZ", 0, 1.68, 0.155, 0.1, M["yellow"], depth=0.01)
     text("Brand", "Z-MART", (0, 0.84, 0.152), 0.05, M["nw"])
     box("CardSlot", (0.12, 0.02, 0.01), (0, 0.74, 0.152), M["graphite"])
-    box("CardLed", (0.08, 0.004, 0.004), (0, 0.755, 0.156), M["nc"])
+    box("CardLed", (0.08, 0.004, 0.004), (0, 0.755, 0.156), M["led_c"])
     box("Receipt", (0.1, 0.008, 0.01), (0, 0.66, 0.152), M["graphite"])
     for k in range(6):
         box("SpeakerSlot", (0.2, 0.008, 0.004), (0, 0.5 - k * 0.02, 0.151), M["graphite"])
@@ -1626,13 +1631,13 @@ def scanner():
     box("Groove", (0.08, 0.9, 0.005), (0, 0.6, 0.151), M["black"])
     box("Head", (0.38, 0.1, 0.36), (0, 1.23, 0.0), M["dsteel"], 0.02, rot=(25, 0, 0))
     box("Plate", (0.32, 0.03, 0.3), (0, 1.28, 0.02), M["black"], rot=(25, 0, 0))
-    parts = [box("RingE", (0.27, 0.006, 0.015), (0, 0, z), M["nc"]) for z in (-0.12, 0.12)]
-    parts += [box("RingE", (0.015, 0.006, 0.25), (x, 0, 0), M["nc"]) for x in (-0.13, 0.13)]
-    parts += [box("Palm", (0.1, 0.006, 0.008), (0, 0, z), M["nc"]) for z in (0.07, 0.0)]
-    parts += [box("Palm", (0.008, 0.006, 0.07), (x, 0, 0.035), M["nc"]) for x in (-0.05, 0.05)]
-    parts += [box("Finger", (0.008, 0.006, 0.07), (x, 0, -0.035 - (0.01 if x in (-0.012, 0.012) else 0)), M["nc"])
+    parts = [box("RingE", (0.27, 0.006, 0.015), (0, 0, z), M["led_c"]) for z in (-0.12, 0.12)]
+    parts += [box("RingE", (0.015, 0.006, 0.25), (x, 0, 0), M["led_c"]) for x in (-0.13, 0.13)]
+    parts += [box("Palm", (0.1, 0.006, 0.008), (0, 0, z), M["led_c"]) for z in (0.07, 0.0)]
+    parts += [box("Palm", (0.008, 0.006, 0.07), (x, 0, 0.035), M["led_c"]) for x in (-0.05, 0.05)]
+    parts += [box("Finger", (0.008, 0.006, 0.07), (x, 0, -0.035 - (0.01 if x in (-0.012, 0.012) else 0)), M["led_c"])
               for x in (-0.036, -0.012, 0.012, 0.036)]
-    parts.append(box("Thumb", (0.008, 0.006, 0.05), (-0.07, 0, 0.03), M["nc"], rot=(0, 35, 0)))
+    parts.append(box("Thumb", (0.008, 0.006, 0.05), (-0.07, 0, 0.03), M["led_c"], rot=(0, 35, 0)))
     ring = join(parts, "Ring")
     ring.rotation_euler = (math.radians(25), 0, 0)
     ring.location = bl(0, 1.297, 0.028)
@@ -1646,7 +1651,7 @@ def rack():
     for y in (0.06, 2.15):
         box("Rail", (0.68, 0.06, 0.04), (0, y, 0.47), M["graphite"])
     rng = random.Random(13)
-    leds = ["nc", "nc", "nc", "ny", "nw", "ledr", "nt"]
+    leds = ["led_c", "led_c", "led_c", "led_y", "led_w", "ledr", "led_c"]
     y = 0.1
     for hh in (0.09, 0.09, 0.18, 0.36, 0.09, 0.18, 0.09, 0.09, 0.27, 0.09, 0.18, 0.09):
         box("Unit", (0.6, hh - 0.01, 0.02), (0, y + hh / 2, 0.46), M["graphite"])
@@ -1665,7 +1670,7 @@ def rack():
             for k in range(3):
                 box("UnitLed", (0.012, 0.01, 0.004), (0.17 + k * 0.025, y + hh / 2, 0.472), M[rng.choice(leds)])
         y += hh + 0.006
-    box("Status", (0.5, 0.012, 0.004), (0, 2.08, 0.472), M["nc"])
+    box("Status", (0.5, 0.012, 0.004), (0, 2.08, 0.472), M["led_c"])
     box("TopVent", (0.6, 0.012, 0.86), (0, 2.205, -0.02), M["graphite"])
     for x in (-0.34, 0.34):
         for k in range(10):
@@ -1725,14 +1730,14 @@ def console():
     box("Panel", (1.15, 0.05, 0.5), (0, 0.85, 0.05), M["graphite"], rot=(20, 0, 0))
     box("Screen", (0.7, 0.003, 0.32), (-0.15, 0.885, 0.04), M["screen"], rot=(20, 0, 0))
     box("Keyboard", (0.5, 0.012, 0.1), (-0.15, 0.8154 + 0.006, 0.2184 + 0.002), M["black"], rot=(20, 0, 0))
-    cyl("Button", 0.08, 0.06, (0.4, 0.9, 0.08), M["ny"], verts=24)
+    cyl("Button", 0.08, 0.06, (0.4, 0.9, 0.08), M["yellow"], verts=24)
     torus("ButtonGuard", 0.1, 0.012, (0.4, 0.89, 0.08), M["steel"], seg=24, mseg=4)
     text("ButtonText", "AKCEPTUJĘ", (0.4, 0.823, 0.22), 0.035, M["nw"], flat=True, pitch=20, depth=0.003)
     for k in range(4):
-        box("PanelLed", (0.015, 0.006, 0.015), (0.25 + k * 0.05, 0.84, -0.1), M["ledr" if k == 0 else "nc"],
+        box("PanelLed", (0.015, 0.006, 0.015), (0.25 + k * 0.05, 0.84, -0.1), M["ledr" if k == 0 else "led_c"],
             rot=(20, 0, 0))
     cable("Mic", [(0.15, 0.86, -0.12), (0.12, 1.1, -0.1), (0.05, 1.15, 0.0)], 0.006, M["graphite"], res=6)
-    ball("MicTip", 0.015, (0.05, 1.15, 0.0), M["nc"], 1)
+    ball("MicTip", 0.015, (0.05, 1.15, 0.0), M["led_c"], 1)
     for k in range(4):
         cable("BackCable", [(-0.3 + k * 0.15, 0.3, -0.33), (-0.3 + k * 0.15, 0.08, -0.34), (-0.35 + k * 0.12, 0.01, -0.3)],
               0.015, M[("cable", "cable_c", "cable", "cable_y")[k]], res=4)
@@ -1750,7 +1755,7 @@ def service_cabinet():
     box("Inside", (1.22, 1.88, 0.01), (0, 1.0, -0.295), M["graphite"])
     for y in (0.6, 1.3):
         box("InnerShelf", (1.2, 0.02, 0.5), (0, y, -0.06), d)
-    box("Toolbox", (0.4, 0.18, 0.22), (-0.3, 0.71, -0.1), M["yellow"], 0.01)
+    box("Toolbox", (0.4, 0.18, 0.22), (-0.3, 0.71, -0.1), M["ochre"], 0.01)
     torus("CableCoil", 0.12, 0.03, (0.3, 0.65, -0.1), M["cable"], seg=20, mseg=6)
     for x in (-0.15, 0.15):  # the two keys hang inside
         box("KeyHook", (0.02, 0.05, 0.04), (x, 1.7, -0.27), M["steel"])
@@ -1816,7 +1821,7 @@ def emitter():
     for k in range(6):
         box("Fin", (0.2, 0.04, 0.008), (0, 1.12, -0.12 + k * 0.045), M["graphite"])
     cyl("Barrel", 0.055, 0.05, (0, 1.0, 0.165), M["dsteel"], axis="z", verts=16)
-    cyl("Lens", 0.045, 0.01, (0, 1.0, 0.193), M["nc"], axis="z", verts=16)
+    cyl("Lens", 0.045, 0.01, (0, 1.0, 0.193), M["led_c"], axis="z", verts=16)
     box("Sticker", (0.002, 0.04, 0.08), (0.111, 1.0, 0.0), M["yellow"])
     box("Led", (0.02, 0.012, 0.004), (0.06, 1.07, 0.141), M["ledr"])
     cable("PowerCable", [(0, 0.95, -0.16), (0.05, 0.6, -0.19), (0.12, 0.01, -0.18)], 0.01, M["cable"])
@@ -1925,7 +1930,7 @@ def arm(x, sleeve="jacket", pad="jacket", pad_size=1.0, glove="glove", device=Fa
             parts.append(box("PadStrap", (0.13, 0.025, 0.14), (x, 1.36, 0), M["webbing"]))
     if device:
         parts += [box("WristComp", (0.06, 0.05, 0.1), (x + s * 0.055, 0.95, 0.012), M["graphite"], 0.012),
-                  box("WristGlow", (0.004, 0.03, 0.065), (x + s * 0.086, 0.95, 0.012), M["nc"])]
+                  box("WristGlow", (0.004, 0.03, 0.065), (x + s * 0.086, 0.95, 0.012), M["led_c"])]
     if bracer:
         parts.append(box("Bracer", (0.125, 0.15, 0.135), (x, 0.97, 0.012), M["armor"], 0.03, seg=2))
     pivot(f"Arm{'R' if x > 0 else 'L'}", (x, 1.46, 0), *parts)
@@ -1965,7 +1970,7 @@ def npc():
     for x in (-0.1, 0.1):
         box("Strap", (0.05, 0.48, 0.014), (x, 1.24, 0.142), M["webbing"])
     box("ChestStrap", (0.3, 0.035, 0.014), (0, 1.33, 0.148), M["webbing"])
-    box("ChestLight", (0.04, 0.02, 0.01), (-0.1, 1.33, 0.155), M["nc"])
+    box("ChestLight", (0.04, 0.02, 0.01), (-0.1, 1.33, 0.155), M["led_c"])
     box("CollarBack", (0.3, 0.15, 0.06), (0, 1.54, -0.09), M["jacket"], 0.025, rot=(10, 0, 0))
     for s in (-1, 1):
         box("CollarSide", (0.06, 0.13, 0.17), (s * 0.13, 1.53, -0.01), M["jacket"], 0.025, rot=(0, 0, -s * 10))
@@ -1975,12 +1980,12 @@ def npc():
     box("PackFlap", (0.35, 0.14, 0.17), (0, 1.38, -0.215), M["canvas2"], 0.035)
     for x in (-0.1, 0.1):
         box("PackPocket", (0.12, 0.14, 0.05), (x, 1.08, -0.3), M["canvas2"], 0.02)
-    box("PackStripe", (0.35, 0.03, 0.01), (0, 1.25, -0.293), M["yellow"])
+    box("PackStripe", (0.35, 0.03, 0.01), (0, 1.25, -0.293), M["ochre"])
     cyl("Bedroll", 0.07, 0.4, (0, 1.47, -0.22), M["cloth"], axis="x", verts=12)
     for x in (-0.13, 0.13):
         cyl("BedrollTie", 0.073, 0.02, (x, 1.47, -0.22), M["leather"], axis="x", verts=12)
     cyl("Antenna", 0.007, 0.55, (0.13, 1.68, -0.27), M["dsteel"], verts=6)
-    ball("AntennaTip", 0.016, (0.13, 1.96, -0.27), M["nc"], 1)
+    ball("AntennaTip", 0.016, (0.13, 1.96, -0.27), M["led_c"], 1)
     arm(-0.3, device=True)
     arm(0.3)
     parts = head_base()
@@ -1994,7 +1999,7 @@ def npc():
 
 
 def npc2():
-    """Nomad 2: long coat, tall boots, magenta mohawk, a monocle visor and one heavy pauldron."""
+    """Nomad 2: long coat, tall boots, dyed mohawk, a monocle visor and one heavy pauldron."""
     leg(-0.11, boot_h=0.42, knee=False)
     leg(0.11, boot_h=0.42, knee=False)
     torso(width=0.42)
@@ -2039,7 +2044,7 @@ def npc3():
     for s in (-1, 1):
         box("VestSide", (0.05, 0.3, 0.2), (s * 0.225, 1.2, 0), M["armor"], 0.02)
     box("VestInsert", (0.24, 0.16, 0.01), (0, 1.32, 0.158), M["jacket"], 0.004)
-    box("VestStripe", (0.3, 0.025, 0.01), (0, 1.17, 0.158), M["yellow"])
+    box("VestStripe", (0.3, 0.025, 0.01), (0, 1.17, 0.158), M["ochre"])
     for x in (-0.12, 0.0, 0.12):
         box("VestPouch", (0.1, 0.1, 0.05), (x, 1.12, 0.165), M["webbing"], 0.02)
     box("NeckGuard", (0.34, 0.1, 0.28), (0, 1.5, -0.01), M["armor"], 0.045, seg=2)
@@ -2096,7 +2101,7 @@ def van():
         for x in (-1.65, 1.75):
             cyl("Tyre", 0.38, 0.26, (x, 0.38, s * 0.95), M["rubber"], axis="z", verts=24, bevel=0.03)
             cyl("Hub", 0.22, 0.27, (x, 0.38, s * 0.95), M["dsteel"], axis="z", verts=12)
-            cyl("HubCap", 0.08, 0.28, (x, 0.38, s * 0.95), M["yellow"], axis="z", verts=8)
+            cyl("HubCap", 0.08, 0.28, (x, 0.38, s * 0.95), M["ochre"], axis="z", verts=8)
             box("Arch", (0.95, 0.12, 0.12), (x, 0.82, s * 1.02), M["mud"], 0.03)
             box("Flap", (0.22, 0.3, 0.02), (x - 0.5, 0.32, s * 0.95), M["rubber"])
         text("Paint", "KRUK", (-1.0, 1.95, s * 1.04), 0.32, M["paint_w"], yaw=0 if s > 0 else 180, depth=0.004,
@@ -2110,9 +2115,9 @@ def van():
         cable("BullBar", [(2.52, 0.5, z), (2.6, 0.9, z), (2.55, 1.2, z)], 0.035, M["steel"], res=4)
     cable("BullBarTop", [(2.6, 0.9, -0.75), (2.6, 0.9, 0.75)], 0.035, M["steel"])
     box("Plate", (0.01, 0.12, 0.4), (2.6, 0.56, 0), M["paint_w"])
-    f = join([box("LampL", (0.04, 0.16, 0.26), (2.49, 1.05, -0.72), M["nw"]),
-              box("LampR", (0.04, 0.16, 0.26), (2.49, 1.05, 0.72), M["nw"]),
-              box("BarLamp", (0.04, 0.08, 0.9), (2.63, 0.96, 0), M["nw"])], "Headlights")
+    f = join([box("LampL", (0.04, 0.16, 0.26), (2.49, 1.05, -0.72), M["led_w"]),
+              box("LampR", (0.04, 0.16, 0.26), (2.49, 1.05, 0.72), M["led_w"]),
+              box("BarLamp", (0.04, 0.08, 0.9), (2.63, 0.96, 0), M["led_w"])], "Headlights")
     f.name = "Headlights"
     for z in (-0.85, 0.85):
         box("TailLight", (0.03, 0.3, 0.14), (-2.51, 1.0, z), M["tail"])
@@ -2125,7 +2130,7 @@ def van():
     for z in (-0.78, -0.42):
         box("LadderRail", (0.03, 1.6, 0.03), (-2.56, 1.5, z), M["steel"])
     cable("Exhaust", [(-2.0, 0.35, -0.7), (-2.55, 0.32, -0.7), (-2.62, 0.36, -0.7)], 0.04, M["rust"], res=4)
-    # roof rack with cargo, antennas, dish and the cyan light bar
+    # roof rack with cargo, antennas, dish and the (unlit) light bar
     for z in (-0.92, 0.92):
         box("RackRail", (3.8, 0.05, 0.05), (-0.6, 2.42, z), M["dsteel"])
         for x in (-2.4, -1.2, 0.0, 1.2):
@@ -2135,7 +2140,7 @@ def van():
     box("Crate", (0.7, 0.32, 0.55), (-1.9, 2.6, -0.45), M["olive"], 0.02)
     box("Crate", (0.55, 0.26, 0.45), (-1.85, 2.88, -0.45), M["olive2"], 0.02, rot=(0, 8, 0))
     for k in range(3):
-        box("Jerrycan", (0.18, 0.34, 0.3), (-0.95 + k * 0.22, 2.62, 0.55), M[("yellow", "van2", "yellow")[k]], 0.02)
+        box("Jerrycan", (0.18, 0.34, 0.3), (-0.95 + k * 0.22, 2.62, 0.55), M[("ochre", "van2", "ochre")[k]], 0.02)
     cyl("Tarp", 0.17, 1.3, (0.3, 2.6, -0.2), M["canvas"], axis="z", verts=12)
     cyl("RoofTyre", 0.34, 0.2, (-0.55, 2.55, -0.25), M["rubber"], verts=20)
     box("LightBarBase", (0.12, 0.08, 1.6), (1.15, 2.5, 0), M["black"])

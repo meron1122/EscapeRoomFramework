@@ -24,7 +24,6 @@ var props := {}
 var doors := {}
 var npcs: Array[Npc] = []
 var room_lights := {}
-var cones: Array[MeshInstance3D] = []
 var atmosphere: Atmosphere
 var reached := {"hol": true}
 var rng := RandomNumberGenerator.new()
@@ -40,6 +39,7 @@ var music_active := 0
 var music_on := true
 var track := ""
 var sfx: AudioStreamPlayer
+var markers := {}  # task id -> floor marks at its work spots, shown while the task is active
 var voice: AudioStreamPlayer  # the characters' spoken lines (engine mode, when the engine has a TTS voice)
 var voice_queue: Array[Dictionary] = []
 var voice_http: HTTPRequest
@@ -102,6 +102,7 @@ func _ready() -> void:
 	_build_lights()
 	_build_screens()
 	_build_team()
+	_build_markers()
 	_calm(self, {})
 	_build_audio()
 	_build_camera()
@@ -383,15 +384,15 @@ func _build_environment() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color("#040507")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("#173236")
-	env.ambient_light_energy = 0.75
+	env.ambient_light_color = Color("#2a333d")
+	env.ambient_light_energy = 1.0
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 0.95
 	env.glow_enabled = true
-	env.glow_intensity = 0.35
+	env.glow_intensity = 0.2
 	env.glow_strength = 1.0
 	env.glow_bloom = 0.0
-	env.glow_hdr_threshold = 1.4
+	env.glow_hdr_threshold = 1.6
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
 	# Depth fog only on the far plane: the rooms stay crisp, the city fades into the rain.
 	env.fog_enabled = false
@@ -400,8 +401,8 @@ func _build_environment() -> void:
 	env.fog_depth_begin = 90.0
 	env.fog_depth_end = 340.0
 	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.04
-	env.adjustment_saturation = 0.8
+	env.adjustment_contrast = 1.0
+	env.adjustment_saturation = 0.9
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -416,6 +417,39 @@ func _build_environment() -> void:
 	add_child(atmosphere)
 	atmosphere.build(fonts.display, env)
 	_build_post()
+
+
+func _build_markers() -> void:
+	## The work spots of an active puzzle get corner marks on the floor: the one place where colour says "here".
+	var sh := Shader.new()
+	sh.code = """
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
+uniform vec4 tint : source_color = vec4(0.0, 0.94, 1.0, 1.0);
+void fragment() {
+	vec2 d = abs(UV - 0.5) * 2.0;
+	float frame = smoothstep(0.84, 0.88, max(d.x, d.y)) * (1.0 - smoothstep(0.96, 1.0, max(d.x, d.y)));
+	float corners = step(0.5, min(d.x, d.y));
+	ALBEDO = tint.rgb;
+	ALPHA = frame * corners * (0.6 + 0.2 * sin(TIME * 2.4));
+}
+"""
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	for t in layout.tasks:
+		var list: Array = []
+		for spot in t.spots:
+			var m := MeshInstance3D.new()
+			var q := PlaneMesh.new()
+			q.size = Vector2(0.62, 0.62)
+			m.mesh = q
+			m.material_override = mat
+			m.position = Vector3(spot[0], 0.015, spot[1])
+			m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			m.visible = sim.tasks.has(t.id) and sim.tasks[t.id].state == "active"
+			add_child(m)
+			list.append(m)
+		markers[t.id] = list
 
 
 func _calm(node: Node, seen: Dictionary) -> void:
@@ -436,7 +470,7 @@ func _calm(node: Node, seen: Dictionary) -> void:
 
 
 func _build_post() -> void:
-	## Vignette, a touch of chromatic aberration at the edges, film grain and faint scanlines, under the HUD.
+	## A soft vignette and a light teal grade, under the HUD. Calm on purpose: the rooms carry the picture.
 	var layer := CanvasLayer.new()
 	layer.layer = 1
 	add_child(layer)
@@ -447,17 +481,13 @@ func _build_post() -> void:
 	sh.code = """
 shader_type canvas_item;
 uniform sampler2D screen_texture : hint_screen_texture, filter_linear;
-float rand(vec2 co) { return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453); }
 void fragment() {
 	vec2 uv = SCREEN_UV;
 	vec2 d = uv - 0.5;
 	float r = length(d);
-	vec2 off = d * r * 0.003;
-	vec3 col = vec3(texture(screen_texture, uv + off).r, texture(screen_texture, uv).g, texture(screen_texture, uv - off).b);
-	col = mix(col, col * vec3(0.82, 1.05, 1.0) + vec3(0.0, 0.012, 0.016), 0.6);  // teal grade, like the reference
-	col *= 1.0 - 0.55 * smoothstep(0.3, 0.82, r);
-	col += (rand(uv * 731.0 + fract(TIME)) - 0.5) * 0.015;
-	col *= 1.0 - 0.015 * (0.5 + 0.5 * sin(FRAGCOORD.y * 3.14159));
+	vec3 col = texture(screen_texture, uv).rgb;
+	col = mix(col, col * vec3(0.9, 1.02, 1.03), 0.5);
+	col *= 1.0 - 0.4 * smoothstep(0.35, 0.85, r);
 	COLOR = vec4(col, 1.0);
 }
 """
@@ -510,56 +540,22 @@ func _light(room: String, l: Light3D, pos: Vector3, color: Color, energy: float,
 		l.spot_range = reach
 		l.spot_angle = 40.0
 		l.rotation_degrees.x = -90
-		_cone(room, pos, color)
 	add_child(l)
 	room_lights.get_or_add(room, []).append(l)
-
-
-func _cone(room: String, pos: Vector3, color: Color) -> void:
-	## Fake volumetric light: an additive cone that fades towards the floor and at its silhouette.
-	var m := MeshInstance3D.new()
-	var c := CylinderMesh.new()
-	c.top_radius = 0.12
-	c.bottom_radius = pos.y * tan(deg_to_rad(36.0))
-	c.height = pos.y
-	c.radial_segments = 24
-	c.cap_top = false
-	c.cap_bottom = false
-	m.mesh = c
-	m.position = Vector3(pos.x, pos.y / 2.0, pos.z)
-	var sh := Shader.new()
-	sh.code = """
-shader_type spatial;
-render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled;
-uniform vec4 tint : source_color;
-uniform float strength = 0.05;
-void fragment() {
-	float edge = pow(abs(dot(NORMAL, VIEW)), 2.0);
-	ALBEDO = tint.rgb * strength * edge * pow(1.0 - UV.y, 1.4);
-}
-"""
-	var mat := ShaderMaterial.new()
-	mat.shader = sh
-	mat.set_shader_parameter("tint", color)
-	m.material_override = mat
-	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(m)
-	m.set_meta("room", room)
-	cones.append(m)
 
 
 func _build_lights() -> void:
 	var white := Color("#eef3ff")
 	for i in 3:
 		var p: Vector3 = [Vector3(2.2, 2.7, 2.6), Vector3(6.6, 2.7, 2.6), Vector3(4.5, 2.7, 5.6)][i]
-		_light("hol", OmniLight3D.new(), p, white, 0.75, 6.5, i < 2)
-	_light("hol", OmniLight3D.new(), Vector3(1.5, 2.2, 0.9), Color("#fcee0a"), 0.7, 3.5)
+		_light("hol", OmniLight3D.new(), p, white, 0.7, 6.5, i < 2)
+	_light("hol", OmniLight3D.new(), Vector3(1.5, 2.2, 0.9), Color("#ffd9a0"), 0.35, 3.5)
 	for p in [Vector3(11.7, 3.1, 1.7), Vector3(18.6, 3.3, 2.6), Vector3(14.0, 3.1, 6.6), Vector3(15.2, 3.1, 3.4)]:
 		_light("pietro", SpotLight3D.new(), p, white, 3.2, 6.0, true)
 	for p in [Vector3(10.6, 2.4, 7.6), Vector3(20.4, 2.4, 7.6), Vector3(15.4, 2.6, 1.3)]:
-		_light("pietro", OmniLight3D.new(), p, Color("#00f0ff"), 0.9, 6.0)
+		_light("pietro", OmniLight3D.new(), p, Color("#7fe6ee"), 0.35, 6.0)
 	for p in [Vector3(24.0, 2.6, 6.2), Vector3(29.0, 2.6, 6.2)]:
-		_light("jadro", OmniLight3D.new(), p, Color("#3a64ff"), 0.9, 7.0)
+		_light("jadro", OmniLight3D.new(), p, Color("#5a78c8"), 0.7, 7.0)
 	_light("jadro", OmniLight3D.new(), Vector3(26.3, 1.7, 3.6), Color("#00f0ff"), 2.0, 6.5, true)
 	for p in [Vector3(23.4, 3.0, 2.4), Vector3(29.2, 3.0, 2.4)]:
 		_light("jadro", SpotLight3D.new(), p, Color("#5f8bff"), 2.2, 5.0, true)
@@ -716,6 +712,8 @@ func _on_task(id: String, state: String) -> void:
 	if not hud._rows.has(id):
 		hud.add_task(id, sim.tasks[id].def.name, sim.tasks[id].def.room)
 	hud.set_task(id, state)
+	for m in markers.get(id, []):
+		m.visible = state == "active"
 	if state == "active":
 		for n in npcs:
 			if n.mode == "explore":
@@ -1027,9 +1025,7 @@ func _update_lights(delta: float) -> void:
 				c = Color("#ff1a1a")
 			l.light_energy = lerpf(l.light_energy, target, minf(1.0, delta * 4.0))
 			l.light_color = l.light_color.lerp(c, minf(1.0, delta * 4.0))
-	core_mat.emission_energy_multiplier = (5.0 + 1.8 * sin(_clock * 2.2)) if reached.has("jadro") else 1.5
-	for cone in cones:
-		cone.visible = reached.has(cone.get_meta("room")) and not red_alert
+	core_mat.emission_energy_multiplier = (2.6 + 0.9 * sin(_clock * 2.2)) if reached.has("jadro") else 1.0
 
 
 func _beams() -> void:

@@ -13,14 +13,15 @@ const CYAN := Color("#00f0ff")
 const BLACK := Color("#000000")
 const WHITE := Color("#ffffff")
 const GREY := Color("#cbcbcb")
+const MUTED := Color("#8fb3b8")  # labels and finished things; cyan is kept for what is active now
 const ROOMS := {"hol": "POKÓJ 1 · HOL", "pietro": "POKÓJ 2 · PIĘTRO NAWYKÓW", "jadro": "POKÓJ 3 · JĄDRO"}
 const STATES := {"locked": "LOCKED_", "active": "ACTIVE_", "solved": "SOLVED_"}
 
 
 class CutPanel extends PanelContainer:
 	## A panel with a 1px frame and the bottom-right corner cut, as in the brandbook.
-	var line := Color("#00f0ff")
-	var fill := Color(0, 0, 0, 0.78)
+	var line := Color(0.6, 0.72, 0.76, 0.35)
+	var fill := Color(0.03, 0.04, 0.05, 0.72)
 	var cut := 14.0
 
 	func _init() -> void:
@@ -69,7 +70,7 @@ func build(fonts_: Dictionary) -> void:
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(top)
 	top.add_child(_text("/// JADRO.SIM_", "mono", 14, CYAN))
-	_clock = _text("60:00", "display", 68, YELLOW)
+	_clock = _text("60:00", "display", 46, YELLOW)
 	top.add_child(_clock)
 	_stage = _text("", "text", 22, WHITE)
 	top.add_child(_stage)
@@ -86,7 +87,7 @@ func build(fonts_: Dictionary) -> void:
 		var box := VBoxContainer.new()
 		box.add_theme_constant_override("separation", 2)
 		panel.add_child(box)
-		box.add_child(_text(ROOMS[room], "display", 17, CYAN))
+		box.add_child(_text(ROOMS[room], "display", 17, MUTED))
 		_rooms[room] = box
 
 	var right := VBoxContainer.new()
@@ -99,7 +100,6 @@ func build(fonts_: Dictionary) -> void:
 	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(right)
 	var vp := CutPanel.new()
-	vp.line = YELLOW
 	right.add_child(vp)
 	_variant = VBoxContainer.new()
 	_variant.add_theme_constant_override("separation", 0)
@@ -108,7 +108,7 @@ func build(fonts_: Dictionary) -> void:
 	right.add_child(dp)
 	var dbox := VBoxContainer.new()
 	dp.add_child(dbox)
-	dbox.add_child(_text("/// AI.DIRECTOR_", "mono", 13, CYAN))
+	dbox.add_child(_text("/// AI.DIRECTOR_", "mono", 13, MUTED))
 	_director = _text("", "text", 19, WHITE)
 	_director.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_director.custom_minimum_size.x = 310
@@ -214,14 +214,14 @@ func add_task(id: String, name: String, room: String) -> void:
 func set_task(id: String, state: String) -> void:
 	var st: Label = _rows[id]
 	st.text = STATES[state]
-	st.add_theme_color_override("font_color", {"locked": GREY, "active": CYAN, "solved": YELLOW}[state])
+	st.add_theme_color_override("font_color", {"locked": Color(0.45, 0.48, 0.5), "active": CYAN, "solved": MUTED}[state])
 	(st.get_parent().get_child(0) as Label).add_theme_color_override("font_color", GREY if state == "locked" else WHITE)
 
 
 func set_variant(lines: Array[String]) -> void:
 	for c in _variant.get_children():
 		c.queue_free()
-	_variant.add_child(_text("/// WARIANT.GRY_", "mono", 13, YELLOW))
+	_variant.add_child(_text("/// WARIANT.GRY_", "mono", 13, MUTED))
 	for l in lines:
 		var lab := _text(l, "text", 17, WHITE)
 		lab.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -302,9 +302,10 @@ func _style_button(b: Button, lit: bool) -> void:
 		sb.skew = Vector2(0.18, 0)
 		sb.content_margin_left = 18
 		sb.content_margin_right = 18
-		if (lit and b.get_meta("solid", false)) or state == "pressed":
+		var on: bool = lit or state == "pressed"  # a toggled button shows as pressed
+		if on and b.get_meta("solid", false):
 			sb.bg_color = YELLOW
-		elif lit:
+		elif on:
 			sb.bg_color = Color(0.99, 0.93, 0.04, 0.12)
 			sb.set_border_width_all(1)
 			sb.border_color = YELLOW
@@ -322,7 +323,7 @@ func _style_button(b: Button, lit: bool) -> void:
 	var fc := (BLACK if b.get_meta("solid", false) else YELLOW) if lit else CYAN
 	for k in ["font_color", "font_hover_color", "font_focus_color"]:
 		b.add_theme_color_override(k, fc)
-	b.add_theme_color_override("font_pressed_color", BLACK)
+	b.add_theme_color_override("font_pressed_color", BLACK if b.get_meta("solid", false) else YELLOW)
 
 
 func _overlay(title: String, body: String, action: String) -> Control:
