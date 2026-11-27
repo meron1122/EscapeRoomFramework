@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="brand/shadowman.svg">
 <title>Shadowman — the AI game master for escape rooms</title>
-<meta name="description" content="Shadowman is an AI game master. It watches every player, and it decides what the room does next.">
+<meta name="description" content="Shadowman is an AI game master. He watches every player, and he decides what the room does next.">
 <style>
   @font-face { font-family: "Chakra Petch"; src: url("fonts/ChakraPetch-Bold.ttf"); font-weight: 700; font-display: swap; }
   @font-face { font-family: "Rajdhani"; src: url("fonts/Rajdhani-SemiBold.ttf"); font-weight: 600; font-display: swap; }
@@ -34,6 +35,8 @@
   section.on .line, section.on .sub, section.on .log { opacity: 1; transform: none; }
   .hint { color: var(--hint); }
   .name { font: 700 clamp(56px, 12vw, 180px)/.9 "Chakra Petch", sans-serif; letter-spacing: -.03em; color: var(--ink); }
+  .mark { width: clamp(120px, 18vw, 220px); height: auto; margin-bottom: 18px; opacity: 0; transition: opacity 2.4s ease .1s; }
+  section.on .mark { opacity: 1; }
   .name small { display: block; margin-top: 22px; font: 600 clamp(18px, 2vw, 26px)/1.3 "Rajdhani", sans-serif;
                 letter-spacing: .02em; color: var(--dim); }
 
@@ -70,53 +73,54 @@
 
   <section data-veil="" data-do="room:lobby">
     <p class="log" data-log></p>
-    <p class="line">Something is taking notes.</p>
+    <p class="line">Someone is taking notes.</p>
   </section>
 
   <section data-veil="" data-do="lamp:phone">
     <p class="log"><b>hint</b>  lamp over the ad screen · 9 s</p>
-    <p class="line">A light came on over the clue.<br><span class="hint">It didn't say a word.</span></p>
+    <p class="line">A light came on over the clue.<br><span class="hint">He didn't say a word.</span></p>
   </section>
 
   <section data-veil="" data-do="blackout">
     <p class="log"><b>twist</b>  blackout · team is 5 min ahead of plan</p>
-    <p class="line">They were ahead of schedule.<br>It noticed.</p>
+    <p class="line">They were ahead of schedule.<br>He noticed.</p>
   </section>
 
   <section data-veil="dark">
     <p class="log"><b>say</b>  ZETA → "You are doing so well. Statistically, you give up in minute seventeen."</p>
-    <p class="line">It has voices.<br>None of them is its own.</p>
+    <p class="line">He has voices.<br>None of them is his own.</p>
   </section>
 
   <section class="mid" data-veil="dark" id="name">
+    <img class="mark" src="brand/shadowman.svg" alt="" width="220" height="220">
     <p class="line name">Shadowman<small>The AI game master for escape rooms.</small></p>
   </section>
 
   <section data-veil="dark">
-    <p class="line">It runs the whole game, live.</p>
-    <p class="sub">You describe your room in plain words and wire the hardware to MQTT. Shadowman reads the brief, watches every player and decides what the room does next.</p>
+    <p class="line">He runs the whole game, live.</p>
+    <p class="sub">You describe your room in plain words and wire the hardware to MQTT. Shadowman reads the brief, watches every player and decides what the room does next. You never see him. You see what he does.</p>
     <div class="facts">
-      <div><h3>It watches</h3><p>Every sensor, every wrong attempt, where each player stands and how long they have been stuck.</p></div>
-      <div><h3>It helps quietly</h3><p>First a lamp over the clue. Then a nudge in a character's voice. A hand on the lock only as a last resort.</p></div>
-      <div><h3>It raises the stakes</h3><p>A team that is too fast gets a blackout, a patrol or a door that locks again.</p></div>
-      <div><h3>No two games alike</h3><p>Before the first clue is read, it redraws the puzzles for this team: solution and clue together.</p></div>
+      <div><h3>He watches</h3><p>Every sensor, every wrong attempt, where each player stands and how long they have been stuck.</p></div>
+      <div><h3>He helps quietly</h3><p>First a lamp over the clue. Then a nudge in a character's voice. A hand on the lock only as a last resort.</p></div>
+      <div><h3>He raises the stakes</h3><p>A team that is too fast gets a blackout, a patrol or a door that locks again.</p></div>
+      <div><h3>No two games alike</h3><p>Before the first clue is read, he redraws the puzzles for this team: solution and clue together.</p></div>
     </div>
-    <a class="cta" href="play/">Watch it run a game</a>
+    <a class="cta" href="play/">Watch him run a game</a>
   </section>
 
   <section class="mid" data-veil="dark" data-do="room:core">
     <p class="line">The exits are not Shadowman's.<br>Everything else is.</p>
-    <p class="sub">Doors, alarms and emergency systems live in a separate safety layer with its own audit log. The agent cannot reach it, and it never pretends it can.</p>
+    <p class="sub">Doors, alarms and emergency systems live in a separate safety layer with its own audit log. He cannot reach it, and he never pretends he can.</p>
   </section>
 
   <section class="mid" data-veil="black">
-    <p class="line">Your room.<br>Its game.</p>
+    <p class="line">Your room.<br>His game.</p>
     <a class="cta" href="https://github.com/meron1122/EscapeRoomFramework">See how it works</a>
   </section>
 </main>
 
 <footer>
-  Shadowman runs on a <a href="https://fly.io/sprites">Fly.io Sprite</a>; the model and the voices are reached through Sprites Connectors, so the agent never holds a key.
+  Shadowman runs on a <a href="https://fly.io/sprites">Fly.io Sprite</a>; the model and the voices are reached through Sprites Connectors, so he never holds a key.
   The room on this page is a simulation: it stands in for real hardware on the same MQTT bus.
 </footer>
 

@@ -1,6 +1,6 @@
 # EscapeRoomFramework
 
-**Shadowman** is the AI game master at the heart of it: it watches every player and decides what the room does next. The landing page in `site/` introduces it; see [deploy/README.md](deploy/README.md) for hosting.
+**Shadowman** is the AI game master at the heart of it: he watches every player and decides what the room does next. The landing page in `site/` introduces him; see [deploy/README.md](deploy/README.md) for hosting.
 
 A scenario engine for escape rooms. You describe a room in JSON: its inputs (sensors), outputs (locks, lights)
 and a graph of puzzles. The engine tracks the game's progress, stores every event in Postgres and drives the hardware.

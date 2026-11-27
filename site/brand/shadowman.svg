@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Shadowman">
+  <!-- A man's face, half in the light and half given to the dark. The lit half shows nothing.
+       The dark half keeps one eye open, and smiles. -->
+  <defs>
+    <clipPath id="lit"><rect x="0" y="0" width="256" height="512"/></clipPath>
+    <clipPath id="dark"><rect x="256" y="0" width="256" height="512"/></clipPath>
+    <path id="skull" d="M256 92 L206 98 L168 132 L150 196 L148 262 L160 318 L178 366 L206 414 L236 452 L256 460 L276 452 L306 414 L334 366 L352 318 L364 262 L362 196 L344 132 L306 98 Z"/>
+    <path id="hornL" d="M178 126 C150 104 128 70 126 22 C150 58 180 78 214 100 Z"/>
+    <path id="hornR" d="M334 126 C362 104 384 70 386 22 C362 58 332 78 298 100 Z"/>
+  </defs>
+  <g stroke-linejoin="miter" stroke-linecap="butt">
+    <use href="#hornL" fill="#d6d2c8" stroke="#08090b" stroke-width="9"/>
+    <use href="#hornR" fill="#08090b" stroke="#a80f1a" stroke-opacity=".4" stroke-width="3"/>
+    <use href="#skull" fill="#d6d2c8" stroke="#08090b" stroke-width="9"/>
+    <g clip-path="url(#dark)"><use href="#skull" fill="#08090b" stroke="#a80f1a" stroke-opacity=".4" stroke-width="3"/></g>
+
+    <g clip-path="url(#lit)" fill="#08090b">
+      <!-- hair, swept back, with a widow's peak -->
+      <path d="M256 92 L206 98 L168 132 L156 172 L196 138 L232 132 L256 168 Z"/>
+      <!-- brow ridge and the socket under it: no eye to read -->
+      <path d="M152 214 L196 214 L250 240 L250 254 L196 236 L154 232 Z"/>
+      <path d="M168 240 L198 242 L244 260 L236 280 L200 286 L174 270 Z"/>
+      <!-- hollow cheek -->
+      <path d="M152 286 L188 322 L198 372 L176 350 L160 318 Z"/>
+      <!-- nose in half shadow -->
+      <path d="M256 250 L246 262 L236 338 L256 350 Z"/>
+      <!-- a flat mouth -->
+      <path d="M200 388 L256 392 L256 400 L204 398 Z"/>
+      <!-- chin -->
+      <path d="M232 430 L256 426 L256 436 L238 442 Z"/>
+    </g>
+
+    <!-- the dark half: one eye, and a smile the other half does not share -->
+    <path d="M270 268 L344 240 L330 270 L296 284 Z" fill="#e01b28"/>
+    <path d="M300 262 L310 258 L306 280 L298 281 Z" fill="#08090b"/>
+    <path d="M256 396 L300 392 L338 360 L332 372 L302 402 L256 404 Z" fill="#a80f1a"/>
+  </g>
+</svg>
