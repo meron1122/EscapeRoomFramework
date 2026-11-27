@@ -61,6 +61,9 @@ so it always matches the room's real input topics.
 
    Note each connector's gateway URL: `https://api.sprites.dev/v1/gateway/<provider>/<connection_id>`.
 
+   The model is set in `env` as `GAMEMASTER_MODEL` (default `deepseek/deepseek-v4-flash`, about $0.09 per million
+   input tokens: a full sixty-minute game costs roughly ten cents). Any OpenRouter model with tool calling works.
+
 4. Build the bundle locally and send it over.
 
    ```bash

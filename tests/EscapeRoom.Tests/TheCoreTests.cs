@@ -85,4 +85,31 @@ public class TheCoreTests
     [InlineData("anthropic/claude-sonnet-5.5", "anthropic/claude-sonnet-5.5")]
     public void Model_names_map_to_OpenRouter(string model, string expected) =>
         Assert.Equal(expected, GameMaster.ForOpenRouter(model));
+
+    [Fact]
+    public void Chat_model_answers_are_read_and_malformed_calls_skipped()
+    {
+        var (thought, calls) = GameMaster.ParseChat("""
+            {"choices":[{"message":{"content":null,"tool_calls":[
+              {"function":{"name":"note","arguments":"{\"text\":\"Fox stalls at the locker.\"}"}},
+              {"function":{"name":"cue","arguments":"{\"cue\":\"locker\"}"}},
+              {"function":{"name":"say","arguments":"not json"}},
+              {"function":{"name":"solve","arguments":"[1,2]"}}]}}]}
+            """);
+        Assert.Equal("Fox stalls at the locker.", thought);
+        var call = Assert.Single(calls);
+        Assert.Equal("cue", call.Name);
+        Assert.Equal("locker", call.Input.GetProperty("cue").GetString());
+        Assert.Empty(GameMaster.ParseChat("{}").Calls);
+    }
+
+    [Fact]
+    public void Chat_request_carries_the_model_the_prompt_and_the_tools()
+    {
+        var tools = new[] { new GameMaster.ToolSpec("cue", "A lamp.", new() { ["cue"] = JsonSerializer.SerializeToElement(new { type = "string" }) }, ["cue"]) };
+        var request = JsonSerializer.Deserialize<JsonElement>(GameMaster.ChatRequest("deepseek/deepseek-v4-flash", "SYSTEM", "INPUT", tools));
+        Assert.Equal("deepseek/deepseek-v4-flash", request.GetProperty("model").GetString());
+        Assert.Equal("SYSTEM", request.GetProperty("messages")[0].GetProperty("content").GetString());
+        Assert.Equal(["note", "cue"], request.GetProperty("tools").EnumerateArray().Select(x => x.GetProperty("function").GetProperty("name").GetString()));
+    }
 }

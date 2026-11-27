@@ -10,6 +10,8 @@ export Mqtt__Host=127.0.0.1
 if [ -n "${GAMEMASTER_GATEWAY:-}" ]; then
   export GameMaster__Provider=openrouter
   export GameMaster__BaseUrl="$GAMEMASTER_GATEWAY"
+  export GameMaster__Model="${GAMEMASTER_MODEL:-deepseek/deepseek-v4-flash}"
+  [ -z "${GAMEMASTER_CHAT_PATH:-}" ] || export GameMaster__ChatPath="$GAMEMASTER_CHAT_PATH"
 else
   export GameMaster__RulesOnly=true
 fi

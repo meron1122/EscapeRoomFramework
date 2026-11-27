@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
@@ -176,6 +177,11 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
     async Task Decide(AnthropicClient client, string room, string reason, JsonElement observation, CancellationToken ct)
     {
         var input = JsonSerializer.Serialize(new { reason, game = observation, yourRecentDecisions = memory.TakeLast(6) }, Engine.Json);
+        if (openRouter && !Model.StartsWith("anthropic/"))
+        {
+            await DecideChat(room, reason, input, observation, ct);
+            return;
+        }
         var response = await client.Beta.Messages.Create(new MessageCreateParams
         {
             Model = Model,
@@ -189,7 +195,10 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
             } },
             // Instructions and the room's playbook stay the same for a whole game, so they are cached.
             System = new List<BetaTextBlockParam> { new() { Text = Prompt }, new() { Text = playbook, CacheControl = new BetaCacheControlEphemeral() } },
-            Tools = Tools(def!),
+            Tools = [.. Tools(def!).Select(t => (BetaToolUnion)new BetaTool
+            {
+                Name = t.Name, Description = t.Description, InputSchema = new() { Properties = t.Properties, Required = t.Required },
+            })],
             Messages = [new BetaUserMessageParam { Content = input }],
         }, cancellationToken: ct);
         if (response.StopReason == "refusal")
@@ -206,17 +215,96 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
         await Report(room, thought, done, "model");
     }
 
-    /// <summary>The tools follow the room: its characters, variants and twists are the only valid choices.</summary>
-    static List<BetaToolUnion> Tools(Room room)
+    static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(60) };
+
+    /// <summary>
+    /// The same decision from a model that is not Claude (a cheap DeepSeek, say), through OpenRouter's chat completions.
+    /// Same prompt, same tools, same checks on what comes back.
+    /// </summary>
+    async Task DecideChat(string room, string reason, string input, JsonElement observation, CancellationToken ct)
     {
-        static JsonElement S(object o) => JsonSerializer.SerializeToElement(o);
-        static BetaTool Tool(string name, string description, Dictionary<string, JsonElement> properties, params string[] required) =>
-            new() { Name = name, Description = description, InputSchema = new() { Properties = properties, Required = required } };
+        var baseUrl = config["GameMaster:BaseUrl"] is { Length: > 0 } b ? b.TrimEnd('/') : "https://openrouter.ai/api";
+        // ChatPath is for gateways whose base already ends in /v1 (then it is "/chat/completions").
+        using var request = new HttpRequestMessage(HttpMethod.Post, baseUrl + (config["GameMaster:ChatPath"] ?? "/v1/chat/completions"))
+        {
+            Content = new StringContent(ChatRequest(Model, Prompt + "\n\n" + playbook, input, Tools(def!)), Encoding.UTF8, "application/json"),
+        };
+        // On a Sprite the Connector adds the key; elsewhere it comes from the environment.
+        if (Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") is { Length: > 0 } key) request.Headers.Authorization = new("Bearer", key);
+        using var response = await Http.SendAsync(request, ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+        if ((int)response.StatusCode is 401 or 403)
+            throw new InvalidOperationException($"model credentials rejected (HTTP {(int)response.StatusCode})");
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"model call failed: HTTP {(int)response.StatusCode} {body[..Math.Min(300, body.Length)]}");
+        var (thought, calls) = ParseChat(body);
+        var done = new List<string>();
+        foreach (var (name, args) in calls.Take(4)) done.Add(await Act(room, name, args, observation));
+        await Report(room, thought.Length > 300 ? thought[..300] : thought, done, "model");
+    }
+
+    // Function-calling models often answer with calls only, so the operator's note is a tool of its own for them.
+    static readonly ToolSpec Note = new("note",
+        "Your one-line log note for the operator: what you see and what the room will do about it. Call it first, every time.",
+        new() { ["text"] = S(new { type = "string" }) }, ["text"]);
+
+    public static string ChatRequest(string model, string system, string input, IEnumerable<ToolSpec> tools) => JsonSerializer.Serialize(new
+    {
+        model,
+        max_tokens = 2000,
+        messages = new object[] { new { role = "system", content = system }, new { role = "user", content = input } },
+        tools = tools.Prepend(Note).Select(t => new
+        {
+            type = "function",
+            function = new { name = t.Name, description = t.Description, parameters = new { type = "object", properties = t.Properties, required = t.Required } },
+        }),
+        tool_choice = "auto",
+    });
+
+    /// <summary>Reads a chat completion: the note and the tool calls. A model's output is untrusted, so anything malformed is skipped.</summary>
+    public static (string Thought, List<(string Name, JsonElement Input)> Calls) ParseChat(string body)
+    {
+        var calls = new List<(string, JsonElement)>();
+        var thought = "";
+        using var doc = JsonDocument.Parse(body);
+        if (!doc.RootElement.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() == 0
+            || !choices[0].TryGetProperty("message", out var message)) return (thought, calls);
+        if (message.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.String) thought = content.GetString()!.Trim();
+        if (!message.TryGetProperty("tool_calls", out var list) || list.ValueKind != JsonValueKind.Array) return (thought, calls);
+        foreach (var call in list.EnumerateArray())
+        {
+            if (!call.TryGetProperty("function", out var f) || !f.TryGetProperty("name", out var n) || n.ValueKind != JsonValueKind.String) continue;
+            JsonElement args;
+            try
+            {
+                args = JsonSerializer.Deserialize<JsonElement>(f.TryGetProperty("arguments", out var a) && a.ValueKind == JsonValueKind.String ? a.GetString()! : "{}");
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+            if (args.ValueKind != JsonValueKind.Object) continue;
+            if (n.GetString() != "note") calls.Add((n.GetString()!, args));
+            else if (args.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String) thought = t.GetString()!.Trim();
+        }
+        return (thought, calls);
+    }
+
+    /// <summary>A tool the model may call, in a form both API styles can be built from.</summary>
+    public record ToolSpec(string Name, string Description, Dictionary<string, JsonElement> Properties, string[] Required);
+
+    static JsonElement S(object o) => JsonSerializer.SerializeToElement(o);
+
+    /// <summary>The tools follow the room: its characters, variants and twists are the only valid choices.</summary>
+    static List<ToolSpec> Tools(Room room)
+    {
+        static ToolSpec Tool(string name, string description, Dictionary<string, JsonElement> properties, params string[] required) =>
+            new(name, description, properties, required);
         var text = S(new { type = "string", description = "What the character says, in the room's language, under 20 words." });
         var to = S(new { type = "string", description = "Optional: the name of the player this is addressed to." });
         var puzzle = S(new { type = "string", description = "Puzzle id from the observation." });
         var why = S(new { type = "string" });
-        List<BetaToolUnion> tools =
+        List<ToolSpec> tools =
         [
             Tool("solve", "Mark a puzzle solved, explained in the story. Last resort for a team that is truly stuck.",
                 new() { ["puzzle"] = puzzle, ["why"] = why }, "puzzle", "why"),
