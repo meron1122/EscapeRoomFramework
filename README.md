@@ -1,8 +1,8 @@
 # Shadowman
 
-**The AI game master for escape rooms.** You never see him. You see what he does.
+**The AI game master for physical escape rooms.** You never see him. You see what he does.
 
-Shadowman runs a whole escape room live. He reads the venue's brief, watches every sensor and every player, and
+Shadowman runs a real, physical escape room live: its locks, lamps, screens and speakers, over MQTT. He reads the venue's brief, watches every sensor and every player, and
 decides what the room does next: a lamp over a clue, a line in a character's voice, a blackout for a team that is too
 fast, a puzzle redrawn before anyone has seen it. The players never learn he exists. The exits are not his: doors and
 alarms live in a separate safety layer that he cannot reach.

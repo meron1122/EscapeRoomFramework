@@ -28,6 +28,7 @@ const HINTS := {
 }
 
 var taunts := 0
+var force_detonation := false  # recordings need the loud ending every time
 var layout: Dictionary
 var rng := RandomNumberGenerator.new()
 var t := 0.0
@@ -151,7 +152,7 @@ func solve(id: String, by: String) -> void:
 		"arming":
 			say("ZETA", "Take the rods out, and each of you gets a lifetime premium subscription.")
 		"choice":
-			_finish("detonation" if rng.randf() < 0.85 else "deal")
+			_finish("detonation" if force_detonation or rng.randf() < 0.85 else "deal")
 			return
 	_refresh()
 	var room: String = tk.def.room

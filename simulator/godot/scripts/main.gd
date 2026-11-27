@@ -55,6 +55,8 @@ var finale_at := -1.0  # real-time start of the detonation finale: countdown, es
 var blasted := false
 var shake := 0.0
 var _stage_cb: JavaScriptObject  # kept alive: the page calls it to direct the scene
+var _quit_after_end := 0.0
+var _linger := ""
 var film := false  # film mode: no panels, the camera is directed by the game
 var focus_until := 0.0
 var focus_at := Vector3.ZERO
@@ -129,9 +131,26 @@ func _ready() -> void:
 			_set_film(true)
 		elif arg == "--stage":
 			_set_stage()
+		elif arg.begins_with("--do="):
+			# Recording hook: `--do=lamp:phone@11` runs a stage command 11 s in, as the landing page would.
+			var what := arg.get_slice("=", 1)
+			get_tree().create_timer(float(what.get_slice("@", 1))).timeout.connect(func(): _on_stage_command([what.get_slice("@", 0)]))
+		elif arg.begins_with("--quit-at="):
+			get_tree().create_timer(float(arg.get_slice("=", 1))).timeout.connect(func():
+				print("MARK quit frame %d" % Engine.get_process_frames())
+				get_tree().quit())
+		elif arg.begins_with("--frames="):
+			_record(arg.get_slice("=", 1))
+		elif arg.begins_with("--linger="):
+			_linger = arg.get_slice("=", 1)  # recording: play this room at stage speed for a while, e.g. core:10
+		elif arg == "--detonation":
+			sim.force_detonation = true
+		elif arg.begins_with("--quit-after-end="):
+			_quit_after_end = float(arg.get_slice("=", 1))
 		elif arg.begins_with("--shot="):
 			_shoot(arg.get_slice("=", 1))
 	if OS.has_feature("web"):
+		Engine.max_fps = 30  # a laptop screen at 60 or 120 Hz would otherwise redraw the room two to four times as often
 		# ?film=40 starts straight into film mode at that speed: a whole game in about 90 seconds, ready to record.
 		# ?stage=1 turns the simulator into a silent backdrop: no overlay at all, and the page that embeds it
 		# directs the scene through window.shadowman("lamp:phone" | "blackout" | "room:core" | "speed:6" | "sound:on").
@@ -958,6 +977,18 @@ func _on_door(id: String, open: bool) -> void:
 		reached[NEXT_ROOM[id]] = true
 
 
+func _record(dir: String) -> void:
+	## Recording hook: saves every frame as a JPEG (use with --fixed-fps). It forces the draw itself, because
+	## macOS stops drawing a window that is covered or off screen, and a recording must not depend on that.
+	DirAccess.make_dir_recursive_absolute(dir)
+	var i := 0
+	while true:
+		await get_tree().process_frame
+		RenderingServer.force_draw(false)
+		get_viewport().get_texture().get_image().save_jpg("%s/%05d.jpg" % [dir, i], 0.92)
+		i += 1
+
+
 func _set_stage() -> void:
 	## The room as a backdrop: no overlay at all, a slow game, silent until told otherwise.
 	_set_film(true)
@@ -970,6 +1001,8 @@ func _set_stage() -> void:
 func _on_stage_command(args: Array) -> void:
 	var cmd := str(args[0]) if not args.is_empty() else ""
 	var value := cmd.get_slice(":", 1)
+	if not OS.has_feature("web"):
+		print("MARK do %s frame %d" % [cmd, Engine.get_process_frames()])
 	match cmd.get_slice(":", 0):
 		"lamp":
 			_hint_lamp(value, true)
@@ -1001,6 +1034,11 @@ func _set_film(on: bool) -> void:
 
 
 func _on_stage(room: String) -> void:
+	print("MARK stage %s frame %d" % [room, Engine.get_process_frames()])
+	if _linger.get_slice(":", 0) == room:
+		var fast := speed
+		speed = 5.0
+		get_tree().create_timer(float(_linger.get_slice(":", 1))).timeout.connect(func(): speed = fast)
 	if sim.running:
 		_play(room)
 		if film:  # a new room opens with a wide shot of it
@@ -1016,6 +1054,11 @@ func _on_twist(kind: String, _seconds: float) -> void:
 
 
 func _on_finished(kind: String) -> void:
+	print("MARK ending %s frame %d" % [kind, Engine.get_process_frames()])
+	if _quit_after_end > 0.0:
+		get_tree().create_timer(_quit_after_end).timeout.connect(func():
+			print("MARK quit frame %d" % Engine.get_process_frames())
+			get_tree().quit())
 	red_alert = kind == "detonation"
 	if kind == "detonation":
 		alarm.play()

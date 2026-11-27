@@ -13,7 +13,7 @@ rm -rf "$OUT" && mkdir -p "$OUT/deploy" "$OUT/room"
 dotnet publish src/EscapeRoom -c Release -r linux-x64 --self-contained true -o "$OUT/engine" --nologo -v q
 (cd simulator/godot && godot --headless --path . --export-release "Web" ../web/index.html >/dev/null 2>&1)
 # The landing page is the site's front door; the simulator lives under /play/.
-mkdir -p "$OUT/web" && cp site/index.html "$OUT/web/" && cp -R site/fonts site/brand "$OUT/web/"
+mkdir -p "$OUT/web" && cp site/index.html "$OUT/web/" && cp -R site/fonts site/brand site/video site/audio "$OUT/web/"
 cp -R simulator/web "$OUT/web/play"
 
 cp "$ROOM_JSON" "$OUT/room/room.json"
