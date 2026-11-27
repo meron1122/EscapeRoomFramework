@@ -1,3 +1,5 @@
+[![Shadowman, the AI game master for physical escape rooms](docs/wiki/images/hero.jpg)](https://shadowman-enp4.sprites.app/)
+
 # Shadowman
 
 **The AI game master for physical escape rooms.** You never see him. You see what he does.
@@ -8,6 +10,10 @@ Shadowman runs a real, physical escape room live: its locks, lamps, screens and 
 decides what the room does next: a lamp over a clue, a line in a character's voice, a blackout for a team that is too
 fast, a puzzle redrawn before anyone has seen it. The players never learn he exists. The exits are not his: doors and
 alarms live in a separate safety layer that he cannot reach.
+
+[![A game in play: the room, the team, and his panel](docs/wiki/images/game-hud.jpg)](https://shadowman-enp4.sprites.app/play/)
+
+*The simulated room during a live game. Top right is him: what woke him, his note, his last moves. The pink lamp is his.*
 
 | In this repository | |
 |---|---|
