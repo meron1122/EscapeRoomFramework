@@ -358,6 +358,7 @@ func _on_engine_message(topic: String, payload: String) -> void:
 		"escaperoom/%s/hint" % ROOM_ID:
 			var id: String = Sim.ENGINE_TO_TASK.get(str(d.get("puzzle", "")), str(d.get("puzzle", "")))
 			sim.boosts[id] = sim.t + 150.0
+			sim.hints_used += 1  # his hints count for the end screen, as the stand-in's do offline
 			hud.banner("SHADOWMAN · HINT", "A hint for “%s”" % _task_name(id), Hud.PINK)
 		"escaperoom/%s/twist" % ROOM_ID:
 			var secs := float(d.get("seconds", 0))
@@ -386,7 +387,7 @@ func _on_engine_message(topic: String, payload: String) -> void:
 				return
 			var brain := str(d.get("model", "")).get_slice("/", 1) if d.get("mode", "") == "model" else "rules only, no model"
 			var took := " · %.1f s" % (_clock - _thinking_at) if _thinking_at >= 0.0 else ""
-			hud.set_status("WATCHING · %s\nlast look: %s%s" % [brain, why, took])
+			hud.set_status("WATCHING · %s\nlast thought: %s%s" % [brain if brain.begins_with("rules") else "model " + brain, why, took.replace(" · ", " · took ")])
 			hud.set_mood("watching")
 			gm_text = str(d.get("thought", ""))
 			# Lamps, lines and twists show up when the room carries them out; the rest is only in his report.
@@ -394,7 +395,7 @@ func _on_engine_message(topic: String, payload: String) -> void:
 				var act := str(a)
 				if act.begins_with("variant: "):
 					var n := act.count(";") + 1
-					_his_move("SHADOWMAN · NEW ANSWERS", "He redraws %d puzzles for this team" % n, "new answers for %d puzzles" % n)
+					_his_move("SHADOWMAN · NEW ANSWERS", "He changes the answers of %d puzzles for this team" % n, "new answers for %d puzzles" % n)
 				elif act.begins_with("solved for the players: "):
 					var solved_id: String = Sim.ENGINE_TO_TASK.get(act.get_slice(": ", 1), act.get_slice(": ", 1))
 					_his_move("SHADOWMAN · STEPS IN", "He solves %s for them" % _task_name(solved_id), "solved %s for them" % _task_name(solved_id))
@@ -452,6 +453,9 @@ func _tags() -> void:
 		for n in npcs:
 			items.append({"at": cam.unproject_position(n.position + Vector3(0, 2.25, 0)), "color": n.color, "progress": -1.0,
 				"text": n.display_name.to_upper()})
+		if zeta_at.has(sim.stage):  # and whose face that is
+			items.append({"at": cam.unproject_position(zeta_at[sim.stage] + Vector3(0, 1.2, 0)), "color": Hud.CYAN, "progress": -1.0,
+				"text": "ZETA · THE BUILDING'S VOICE"})
 	if not film and sim.running and sim.ending == "":
 		for id in sim.tasks:
 			var tk: Dictionary = sim.tasks[id]
@@ -1031,6 +1035,8 @@ func _zeta_world() -> Texture2D:
 	vp.add_child(bust)
 	zeta_head = bust.find_child("Head", true, false)
 	zeta_halo = bust.find_child("Halo", true, false)
+	if zeta_halo and zeta_head:
+		zeta_halo.reparent(zeta_head)  # the ring nods with her; left on the body it would cut through her brow
 	# A face made of light: bright where the surface turns away from the eye, dim where it faces it, in scanlines.
 	var sh := Shader.new()
 	sh.code = """
@@ -1571,7 +1577,7 @@ func _finale(delta: float) -> void:
 func _summary() -> String:
 	var titles := {"detonation": "DETONATION", "deal": "DEAL WITH ZETA", "time": "TIME'S UP"}
 	var twists := ", ".join(PackedStringArray(sim.twists_used)) if not sim.twists_used.is_empty() else "none"
-	return "Ending: %s\nGame time: %02d:%02d of 60:00\nRaven's hints: %d\nTwists: %s\nVariant: gesture %s, %s on duty, %s" % [
+	return "Ending: %s\nGame time: %02d:%02d of 60:00\nHints: %d\nTwists: %s\nThis team's answers: phone gesture %s · guard on duty %s · service code %s" % [
 		titles[sim.ending], int(sim.t) / 60, int(sim.t) % 60, sim.hints_used, twists, sim.variant.gesture, sim.variant.duty, sim.variant.code]
 
 
@@ -1771,7 +1777,7 @@ func _director_text() -> String:
 		lines.append("Behind the plan: %d:%02d" % [int(gap) / 60, int(gap) % 60])
 	else:
 		lines.append("Left in the room's plan: %d:%02d" % [int(-gap) / 60, int(-gap) % 60])
-	lines.append("Raven's hints: %d (level %d)" % [sim.hints_used, sim.hint_level])
+	lines.append("Hints: %d (level %d)" % [sim.hints_used, sim.hint_level])
 	lines.append("Team pace: ×%.1f" % sim.rate_scale())
 	lines.append("Twists: %s" % (", ".join(PackedStringArray(sim.twists_used)) if not sim.twists_used.is_empty() else "none"))
 	return "\n".join(PackedStringArray(lines))

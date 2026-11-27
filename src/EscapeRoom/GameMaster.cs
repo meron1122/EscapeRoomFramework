@@ -32,7 +32,7 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
           in the third person, naming players (who stalls, who is close, what the room will do about it). No "I",
           no greetings, no explanations, no brackets or labels, never a list of solutions or codes. One or two
           sentences, at most 25 words. The operator reads these notes live. Then call 0-3 tools.
-          A note is never a character's line and never a plan to speak ("ZETA should react"): the players hear
+          A note is never a character's line and never a plan to speak ("the host should react"): the players hear
           nothing you only write down. When a character should say something, call `say` or `hint` in this turn.
           Doing nothing is right when the team is flowing; don't act just to act.
         - At the start of a game ("reason": "started") the variants for this team are already drawn (see

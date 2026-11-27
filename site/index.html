@@ -71,7 +71,8 @@
   @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.06); } }
   #gate p { margin: 0; font: 700 clamp(22px, 3.2vw, 36px)/1.2 "Chakra Petch", sans-serif; }
   #gate .what { max-width: 30em; font: 600 19px/1.5 "Rajdhani", sans-serif; color: #b3bac0; }
-  #gate small { color: var(--dim); font: 13px/1.6 "JetBrains Mono", monospace; max-width: 36em; }
+  #gate small { color: var(--dim); font: 13px/1.6 "JetBrains Mono", monospace; max-width: 44em; }
+  #gate small a { color: var(--accent); margin-left: .6em; white-space: nowrap; }
   .choices { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
 
   /* Where the visitor is in the story, and how much is left. */
@@ -99,7 +100,8 @@
   .line { max-width: 22em; margin: 0; font: 700 clamp(28px, 4.4vw, 60px)/1.12 "Chakra Petch", sans-serif;
           letter-spacing: -.01em; text-wrap: balance; opacity: 0; }
   .sub { max-width: 34em; margin: 18px 0 0; color: #b3bac0; opacity: 0; transition: opacity 1.4s ease 1s; }
-  .log { font: 14px/1.7 "JetBrains Mono", monospace; color: var(--dim); margin: 0 0 20px; opacity: 0;
+  .log { font: 14px/1.7 "JetBrains Mono", monospace; color: #a9b2b9; margin: 0 0 20px; max-width: 52em; opacity: 0;
+         text-shadow: 0 1px 2px #000, 0 0 14px #000, 0 0 28px #000;
          transition: opacity 1.2s ease .1s; white-space: pre-line; min-height: 1.7em; }
   .log b { color: var(--ink); font-weight: 400; }
   section.on .sub, section.on .log, section.on .act { opacity: 1; }
@@ -211,11 +213,13 @@
     <path d="M346 270 L358 264 L354 292 L344 292 Z" fill="#07080a"/>
   </svg>
   <p>He is expecting you.</p>
-  <div class="what">A two-minute story about a night in an escape room, and about the one who really runs it. You scroll; the room answers.</div>
+  <div class="what">A three-minute story about a night in an escape room, and about the one who really runs it. You scroll; the room answers.</div>
   <div class="choices">
     <button class="cta" type="button" data-enter="sound">Enter with sound</button>
     <button class="cta quiet" type="button" data-enter="silence">Enter in silence</button>
   </div>
+  <small>Shadowman is an AI game master for physical escape rooms. He watches the players and runs the locks, the lights and the voices.
+    <a href="#name" data-skip>Skip the story and meet him</a></small>
   <small>Nothing you do here leaves your browser.</small>
 </div>
 
@@ -235,17 +239,18 @@
 
   <section data-act="I · The story" data-next="Tonight you go in" data-name="The unlogged" data-veil="" data-clip="outside" data-bpm="46">
     <p class="line">You live outside it.<br>A Nomad. One of the unlogged.</p>
-    <p class="sub">No Z-ID, an old van without a network, and one stolen thing in the back: an atomic charge without its ignition rods.</p>
+    <p class="sub">No Z-ID, an old van without a network, and one stolen thing in the back: a charge big enough to switch a city off.</p>
   </section>
 
   <section data-act="I · The story" data-next="What stands in the way" data-name="Inside the tower" data-veil="" data-clip="lobby" data-bpm="50">
     <p class="line">Tonight you and four friends are inside the tower.</p>
-    <p class="sub">Raven waits in the van, on the radio. Three floors down runs The Core: every algorithm Z owns, in one room.</p>
+    <p class="sub">Raven waits in the van, a voice on the radio. The tower has a voice too: ZETA, polite, everywhere. Three floors down runs The Core: every algorithm Z owns, in one room.</p>
   </section>
 
   <section data-act="I · The story" data-next="How the night ends" data-name="Sixty minutes" data-veil="" data-clip="lobby" data-bpm="54">
     <p class="line">Sixty minutes.<br>Three floors of locks.</p>
-    <p class="sub">A phone that opens with a gesture. A locker that wants the guard's shift. A gate, a lab, a firewall made of light. Then the charge.</p>
+    <p class="sub">A phone that opens with a gesture. A locker that wants the guard's shift. A car that will not brake without a subscription, a shop that knows what you will buy, a firewall made of light. Then the charge.</p>
+    <p class="sub">Somewhere on the way a lamp comes on over the thing you missed. Lucky. Later the whole tower goes dark, and Raven says: keep moving.</p>
   </section>
 
   <section class="mid blast" data-act="I · The story" data-next="Except none of it is real" data-name="The Core goes dark" data-veil="" data-clip="detonation" data-blast="8" data-bpm="132">
@@ -258,7 +263,7 @@
   <section data-act="II · The game" data-next="Who runs a game like this" data-name="It is a game" data-veil="dark" data-clip="lobby" data-bpm="56">
     <p class="act">Step out of the story for a second</p>
     <p class="line">It is a game, of course.<br>An escape room.</p>
-    <p class="sub">A real place you book for an evening. The tower is plywood and steel, the locks are real, the clock on the wall counts down from sixty, and five friends would rather not be beaten by a locker.</p>
+    <p class="sub">The kind of place you book for an evening: a tower of plywood and steel, real locks, a clock on the wall counting down from sixty, and five friends who would rather not be beaten by a locker.</p>
   </section>
 
   <section data-act="II · The game" data-next="Tonight is different" data-name="Behind the wall" data-veil="dark" data-clip="lobby" data-bpm="58">
@@ -279,18 +284,22 @@
   </section>
 
   <section data-act="III · The watcher" data-next="He did more" data-name="He didn't say a word" data-veil="" data-clip="lamp" data-bpm="70">
-    <p class="log"><b>cue</b>   lamp over the ad screen · 9 s</p>
+    <p class="log"><b>note</b>  "Rust and Mouse stalled 3.3 min on the phone, pressed 5 and 2 — not the U. Cue the ad neon."
+<b>cue</b>   a neon above the ad screen</p>
     <p class="line">A light came on over the clue.<br><span class="hint">He didn't say a word.</span></p>
   </section>
 
   <section data-act="III · The watcher" data-next="He spoke" data-name="He noticed" data-veil="" data-clip="blackout" data-bpm="80">
-    <p class="log"><b>twist</b> blackout · the team is five minutes ahead of plan</p>
+    <p class="log"><b>twist</b> blackout</p>
     <p class="line">You were ahead of schedule.<br>He noticed.</p>
   </section>
 
   <section data-act="III · The watcher" data-next="And you?" data-name="His voices" data-veil="dark" data-clip="blackout" data-bpm="90">
-    <p class="log"><b>say</b>   ZETA → "You are doing so well. Statistically, you give up in minute seventeen."</p>
+    <p class="log"><b>note</b>  "Fox and Rust at minute 15 keyed 2188 — 2-1-8-8, still wrong. Roster says Tomek 10–18 = 1018. Lobby 7 minutes behind plan."
+<b>say</b>   ZETA → "Is there a problem with the locker, guests? Security codes are simple."
+<b>say</b>   RAVEN → "Rust, one-two-three-five-seven. Now, before security notices."</p>
     <p class="line">Every voice in the room was his.<br>None of them was his own.</p>
+    <p class="sub">ZETA, the tower's polite machine. Raven, your friend on the radio. He spoke through both, and neither line existed before you walked in.</p>
   </section>
 
   <section data-act="III · The watcher" data-next="Meet him" data-name="Notes on you" data-veil="dark" data-clip="blackout" data-bpm="100">
@@ -312,14 +321,16 @@
 
   <!-- Act four: the product. Real rooms, real hardware. -->
   <section data-act="IV · The real thing" data-next="How he connects to a room" data-name="The room is real" data-veil="dark" data-clip="core" data-bpm="60" data-music="core">
-    <p class="act">What you just watched was a simulation</p>
+    <p class="act">The room was a simulation. He was not</p>
     <p class="line">He is built for the real thing.</p>
-    <p class="sub">Shadowman is software for people who own and build physical escape rooms. He takes the game master's chair: he sits in your venue's network, watches the team through your sensors and cameras, and runs the locks, the lights and the voices for the whole hour. You never see him. You see what he does.</p>
-    <a class="cta" href="play/" data-cta>Watch him run the simulated room</a>
+    <p class="sub">Shadowman is an AI agent for people who own and build physical escape rooms. He takes the game master's chair: he watches the team through your sensors and cameras, and runs the locks, the lights and the voices for the whole hour. The players never see him. They see what he does.</p>
+    <p class="bus">He runs as an AI agent on a Fly.io Sprite, a small machine in the cloud that sleeps when nobody plays. His model and his voices are reached through a Sprites Connector, so he carries no passwords of his own.</p>
+    <a class="cta" href="play/" data-cta>Let a team in. Then get in his way</a>
+    <p class="bus">Live, about six minutes: he is real, the room and its five players are simulated. Stall the team, rush it, feed it wrong answers, press its help button. Watch him change his plan.</p>
   </section>
 
-  <section data-act="IV · The real thing" data-next="What he does all night" data-name="Wire your room" data-veil="dark" data-clip="core" data-bpm="64" data-music="core">
-    <p class="line">Wire your room.<br>He does the rest.</p>
+  <section data-act="IV · The real thing" data-next="What he does all night" data-name="Write the room down" data-veil="dark" data-clip="core" data-bpm="64" data-music="core">
+    <p class="line">Write the room down.<br>He reads it and runs it.</p>
     <div class="wire">
       <div>
         <h3>He senses</h3>
@@ -341,7 +352,7 @@
         </ul>
       </div>
     </div>
-    <p class="bus">Tasmota · ESPHome · Zigbee2MQTT · RTSP cameras · anything that speaks MQTT. You describe the room in a plain document; he reads it and runs it. The simulated room above talks to him over the same bus as real devices: unplug it, plug in yours.</p>
+    <p class="bus">You describe the room in a plain document: its story, each puzzle, its answer, its clues. He was not written for this room; hand him another document and he runs another. Your locks, lamps and sensors stay; they only have to be on the venue's network. For whoever wired your room: Tasmota · ESPHome · Zigbee2MQTT · RTSP cameras · anything that speaks MQTT. The simulated room talks to him exactly as real locks and lamps would: take it away, connect yours.</p>
   </section>
 
   <section data-act="IV · The real thing" data-next="What he cannot touch" data-name="What he does" data-veil="dark" data-clip="core" data-bpm="68" data-music="core">
@@ -349,15 +360,15 @@
     <div class="facts">
       <div><h3>He watches</h3><p>Every sensor, every wrong attempt, where each player stands and how long they have been stuck.</p></div>
       <div><h3>He helps quietly</h3><p>First a lamp over the clue. Then a nudge in a character's voice. A hand on the lock only as a last resort.</p></div>
-      <div><h3>He raises the stakes</h3><p>A team that is too fast gets a blackout, a patrol or a door that locks again.</p></div>
-      <div><h3>No two games alike</h3><p>Before the first clue is read, he redraws the puzzles for this team: solution and clue together.</p></div>
-      <div><h3>You read his notes</h3><p>Every decision arrives with one cold line of why. Your operator watches him think.</p></div>
+      <div><h3>He raises the stakes</h3><p>A team that is too fast gets a twist you allowed: a blackout, a patrol (nobody may move until it passes), a door between floors that locks again. Never the way out.</p></div>
+      <div><h3>He rewrites the answers</h3><p>Before the first clue is read, he changes the answers for this team and the clues with them: a new gesture on the phone, a new guard on the roster, a new code on the screen. What you printed on a wall stays as you printed it.</p></div>
+      <div><h3>You read his notes</h3><p>Every decision arrives with one cold line of why. Nobody has to sit behind the wall; anyone on your staff can read what he is thinking.</p></div>
     </div>
   </section>
 
   <section class="mid" data-act="IV · The real thing" data-next="One last thing" data-name="The exits are not his" data-veil="dark" data-clip="core" data-bpm="72" data-music="core">
     <p class="line">The exits are not his.<br>Everything else is.</p>
-    <p class="sub">In a real building some things must never depend on an AI. Doors, alarms and emergency systems live in a separate safety layer with its own audit log. He cannot reach it, and he never pretends he can.</p>
+    <p class="sub">In a real building some things must never depend on an AI. The way out, the alarms and the emergency systems live in a separate safety layer that keeps its own record of every change. He cannot reach it, and he never pretends he can.</p>
   </section>
 
   <section class="mid last" data-act="IV · The real thing" data-name="His game" data-veil="black" data-bpm="44">
@@ -368,15 +379,15 @@
     <p class="line">Your room.<br>His game.</p>
     <p class="sub">Shadowman, the AI game master for physical escape rooms.</p>
     <div class="row">
-      <a class="cta" href="play/" data-cta>Watch him run the simulated room</a>
+      <a class="cta" href="play/" data-cta>Let a team in. Then get in his way</a>
       <a class="cta quiet" href="https://github.com/meron1122/EscapeRoomFramework">See how he is built</a>
     </div>
   </section>
 </main>
 
 <footer>
-  Shadowman runs on a <a href="https://fly.io/sprites">Fly.io Sprite</a>. The model and the voices are reached through Sprites Connectors, so he never holds a key.
-  The room on this page is a recording of a simulation that stands in for real hardware on the same MQTT bus. Nothing you did here left your browser.
+  Shadowman runs on a <a href="https://fly.io/sprites">Fly.io Sprite</a>. The model and the voices are reached through Sprites Connectors, so he holds no passwords.
+  The clips on this page are recordings of a simulated room that stands in for real hardware on the same MQTT bus; the game behind the button is live. The notes and the spoken lines quoted above are his own, from logs of simulated games. Nothing you did here left your browser.
 </footer>
 
 <script>
@@ -503,8 +514,10 @@
   document.querySelectorAll("[data-cta]").forEach(a => a.addEventListener("pointerenter", () => note("you are thinking about it.")));
 
   // The notes he keeps on the players, typed out one by one.
-  const playerNotes = ["00:41  Fox stopped reading the screen.", "01:12  Rust and Thunder are at the phone. Mouse is guessing.",
-    "02:03  Spark has not moved for ninety seconds.", "02:40  Nobody has looked at the ad yet."];
+  const playerNotes = ["Rust and Mouse circle the planter; Spark traces the ad's L on the phone. No pressure yet",
+    "Search done. Rust and Thunder press random keys at the phone. Fox idle.",
+    "The phone drawer opens; Spark and Mouse study the roster on the monitor. Fox wanders near the planter.",
+    "Seven minutes, five Nomads still circling the desk. Phone untouched, planter ignored. Room waits."];
   let shown = 0;
   setInterval(() => { const el = $("[data-log]"); if (el.closest("section").classList.contains("on") && shown < playerNotes.length) el.textContent = playerNotes.slice(0, ++shown).join("\n"); }, 2200);
 
@@ -665,6 +678,12 @@
   sections.forEach(s => seen.observe(s));
 
   // ---------- the gate ----------
+  // For those who came for the product, not the story: in, in silence, and straight to his name.
+  $("[data-skip]").addEventListener("click", e => {
+    e.preventDefault();
+    $('[data-enter="silence"]').click();
+    setTimeout(() => $("#name").scrollIntoView(), 60);
+  });
   document.querySelectorAll("[data-enter]").forEach(b => b.addEventListener("click", () => {
     entered = true; t0 = performance.now();
     $("#gate").classList.add("gone");

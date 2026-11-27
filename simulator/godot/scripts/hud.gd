@@ -21,8 +21,8 @@ const MUTED := Color("#8fb3b8")  # labels and finished things; cyan is kept for 
 const INTRO := [  # the game may be opened on its own, without the landing page: it tells its story first
 	["/// THE STORY_", "THE CITY BELONGS TO Z.", "Z Corporation does not rule by force. It rules by subscription: the phone, the car, the food.\nTonight five Nomads walk into its tower to switch off The Core. They have sixty minutes."],
 	["/// THE CREW_", "FIVE NOMADS.", ""],  # the page with the cast, see CAST
-	["/// THE ROOM_", "IT IS AN ESCAPE ROOM.", "Three rooms, eleven puzzles, real locks, lamps, screens and sensors.\nHere the room and its five players are simulated, so a whole night fits into a few minutes."],
-	["/// THE GAME MASTER_", "NOBODY SITS BEHIND THE WALL.", "Shadowman runs the night. He reads every sensor, decides who needs help and when,\nspeaks through the room's voices, lights a lamp, throws a twist. He is an AI agent."],
+	["/// THE ROOM_", "IT IS AN ESCAPE ROOM.", "Three floors, eleven puzzles, real locks, lamps, screens and sensors.\nHere the room and its five players are simulated, so a whole night fits into a few minutes."],
+	["/// THE GAME MASTER_", "NOBODY SITS BEHIND THE WALL.", "Shadowman runs the night. He reads every sensor, decides who needs help and when,\nspeaks through the room's voices, lights a lamp, throws a twist.\nHe is an AI agent, live on a Fly.io Sprite; his model and his voices reach him through a Sprites Connector."],
 ]
 const CAST_PAGE := 1
 const CAST := [  # name, scene, a line about them, colour (the one their ring has in the room)
@@ -32,7 +32,8 @@ const CAST := [  # name, scene, a line about them, colour (the one their ring ha
 	["THUNDER", "CYBER RAVER", "The loud one.\nCarries what is heavy.", "#b06bff"],
 	["FOX", "SKATER", "The youngest.\nFastest hands in the Zone.", "#9dff5c"],
 ]
-const ROOMS := {"lobby": "ROOM 1 · LOBBY", "habit": "ROOM 2 · HABIT FLOOR", "core": "ROOM 3 · THE CORE"}
+# One escape room, three floors: "room" is the whole game, as its owner says it.
+const ROOMS := {"lobby": "FLOOR 1 · LOBBY", "habit": "FLOOR 2 · HABIT FLOOR", "core": "FLOOR 3 · THE CORE"}
 const STATES := {"locked": "LOCKED_", "active": "ACTIVE_", "solved": "SOLVED_"}
 
 
@@ -291,16 +292,16 @@ func build(fonts_: Dictionary) -> void:
 	meddle.anchor_left = 0.5
 	meddle.anchor_right = 0.5
 	meddle.anchor_top = 0.0
-	meddle.offset_left = -330
-	meddle.offset_right = 330
+	meddle.offset_left = -380
+	meddle.offset_right = 380
 	meddle.offset_top = 16
 	meddle.alignment = BoxContainer.ALIGNMENT_CENTER
 	meddle.add_theme_constant_override("separation", 10)
 	root.add_child(meddle)
-	var tag := _text("MESS WITH THEM", "mono", 14, WHITE)
+	var tag := _text("TEST HIM", "mono", 14, WHITE)  # the buttons act on the team; what is tested is him
 	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	meddle.add_child(tag)
-	for item in [["stall", "STALL THEM"], ["rush", "RUSH THEM"], ["wrong", "WRONG ANSWER"], ["help", "ASK FOR HELP"]]:
+	for item in [["stall", "STALL THE TEAM"], ["rush", "RUSH THE TEAM"], ["wrong", "WRONG ANSWER"], ["help", "ASK FOR HELP"]]:
 		var b := _button(item[1], false)
 		b.add_theme_font_size_override("font_size", 16)
 		b.custom_minimum_size = Vector2(0, 36)
@@ -364,17 +365,17 @@ func build(fonts_: Dictionary) -> void:
 	ng.pressed.connect(func(): new_game_requested.emit())
 	controls.add_child(ng)
 
-	var hint := _text("LMB / RMB: pan   ·   wheel: zoom   ·   1 2 3: rooms   ·   F: follow team   ·   V: answers   ·   H: hide panels", "mono", 12, GREY)
+	var hint := _text("drag: move   ·   wheel: zoom   ·   1 2 3: floors   ·   F: follow the team   ·   V: this game's answers   ·   H: hide panels   ·   space: pause", "mono", 12, GREY)
 	hint.anchor_top = 1.0
 	hint.anchor_bottom = 1.0
 	hint.anchor_left = 1.0
 	hint.anchor_right = 1.0
-	hint.offset_left = -760
+	hint.offset_left = -900
 	hint.offset_top = -100
 	root.add_child(hint)
 
-	_start = _overlay("THE CORE", "A simulated escape room standing in for real hardware. Five players, sixty minutes, three rooms.", "LET THEM IN", [
-		[CYAN, "The five figures are simulated players. Cyan marks the puzzle they are on."],
+	_start = _overlay("THE CORE", "A simulated escape room standing in for real hardware. Five players, sixty minutes, three floors.\nThe game master is real, and live.", "LET THEM IN", [
+		[CYAN, "The five figures are simulated players, standing in for a venue's guests. Cyan marks the puzzle they are on."],
 		[PINK, "Shadowman is the AI game master. He watches the room and answers with lamps, voices and twists. Pink is him."],
 		[WHITE, "The buttons at the top are yours: stall the team, rush it, break things. Nobody tells him. He has to notice."]])
 	_start.get_meta("button").pressed.connect(func(): _start.visible = false; start_requested.emit())

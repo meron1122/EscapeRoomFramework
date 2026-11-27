@@ -35,7 +35,7 @@ cd simulator/godot && godot --headless --path . --import && godot --headless --p
 python3 -m http.server 8060 --bind 127.0.0.1 --directory simulator/web
 ```
 
-Then `http://localhost:8060`. Controls: LMB/RMB pans, the wheel zooms, 1/2/3 jump to the rooms, F follows the team,
+Then `http://localhost:8060`. Controls: LMB/RMB pans, the wheel zooms, 1/2/3 jump to the floors, F follows the team,
 V shows this game's answers, H hides the panels, space pauses (PAUSE then covers the whole picture).
 
 The game opens with a few pages of story over slow shots of the tower (it may be opened without the landing page),
@@ -74,12 +74,12 @@ and one low, dark note that belongs only to Shadowman's moves. All of them share
 
 ## Messing with the team
 
-The bar at the top of the demo lets a visitor interfere, so they can watch Shadowman react:
+The TEST HIM bar at the top of the demo lets a visitor interfere, so they can watch Shadowman react:
 
 | Button | What happens in the room | What he can see |
 |---|---|---|
-| STALL THEM | nobody makes progress for five game minutes | players stuck at their spots, no inputs |
-| RUSH THEM | everything is solved four times faster for six minutes | a team running ahead of plan |
+| STALL THE TEAM | nobody makes progress for five game minutes | players stuck at their spots, no inputs |
+| RUSH THE TEAM | everything is solved four times faster for six minutes | a team running ahead of plan |
 | WRONG ANSWER | a player enters three wrong answers | the wrong values on the sensors |
 | ASK FOR HELP | the team presses the room's help button | a `help` event; it always gets a hint |
 
