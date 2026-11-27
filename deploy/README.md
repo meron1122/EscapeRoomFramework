@@ -36,8 +36,10 @@ so it always matches the room's real input topics.
 1. Install the CLI and log in.
 
    ```bash
-   curl https://sprites.dev/install.sh | bash
+   brew install --cask sprites
    ```
+
+   (Without Homebrew: `curl https://sprites.dev/install.sh | bash`.)
 
    ```bash
    sprite login
