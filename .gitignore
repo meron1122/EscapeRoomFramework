@@ -490,3 +490,6 @@ simulator/web/
 # deployment bundle
 deploy/bundle/
 deploy/bundle.tgz
+
+# local preview link to the simulator build
+site/play

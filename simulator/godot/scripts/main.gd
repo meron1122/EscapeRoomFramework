@@ -54,6 +54,7 @@ var red_alert := false
 var finale_at := -1.0  # real-time start of the detonation finale: countdown, escape, wide shot, blast
 var blasted := false
 var shake := 0.0
+var _stage_cb: JavaScriptObject  # kept alive: the page calls it to direct the scene
 var film := false  # film mode: no panels, the camera is directed by the game
 var focus_until := 0.0
 var focus_at := Vector3.ZERO
@@ -130,6 +131,16 @@ func _ready() -> void:
 			_shoot(arg.get_slice("=", 1))
 	if OS.has_feature("web"):
 		# ?film=40 starts straight into film mode at that speed: a whole game in about 90 seconds, ready to record.
+		# ?stage=1 turns the simulator into a silent backdrop: no overlay at all, and the page that embeds it
+		# directs the scene through window.shadowman("lamp:phone" | "blackout" | "room:core" | "speed:6" | "sound:on").
+		if str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('stage') || ''")) != "":
+			_set_film(true)
+			hud.visible = false
+			started_once = true
+			speed = 5.0
+			music_on = false  # browsers allow sound only after a click; the page turns it on then
+			_stage_cb = JavaScriptBridge.create_callback(_on_stage_command)
+			JavaScriptBridge.get_interface("window").shadowman = _stage_cb
 		var q := str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('film') || ''"))
 		if q != "":
 			_set_film(true)
@@ -947,6 +958,28 @@ func _on_door(id: String, open: bool) -> void:
 	create_tween().tween_property(leaf, "position:z", z, 1.2).set_trans(Tween.TRANS_SINE)
 	if open and NEXT_ROOM.has(id):
 		reached[NEXT_ROOM[id]] = true
+
+
+func _on_stage_command(args: Array) -> void:
+	var cmd := str(args[0]) if not args.is_empty() else ""
+	var value := cmd.get_slice(":", 1)
+	match cmd.get_slice(":", 0):
+		"lamp":
+			_hint_lamp(value, true)
+			get_tree().create_timer(9.0).timeout.connect(func(): _hint_lamp(value, false))
+			if lamps.has(value) and not lamps[value].parts.is_empty():
+				_focus(lamps[value].parts[0].light.global_position * Vector3(1, 0, 1), 11.0, 7.0)
+		"blackout":
+			sim.dim_until = sim.t + 60.0
+		"room":
+			for r in layout.rooms:
+				if r.id == value:
+					_focus(Vector3(r.x + r.w / 2.0, 0, r.z + r.d / 2.0), 21.0, 8.0)
+		"speed":
+			speed = clampf(float(value), 1.0, 60.0)
+		"sound":
+			music_on = value == "on"
+			_fade_music()
 
 
 func _set_film(on: bool) -> void:

@@ -122,7 +122,7 @@ func build(fonts_: Dictionary) -> void:
 	right.add_child(dp)
 	var dbox := VBoxContainer.new()
 	dp.add_child(dbox)
-	dbox.add_child(_text("/// AI.DIRECTOR_", "mono", 13, MUTED))
+	dbox.add_child(_text("/// SHADOWMAN_", "mono", 13, MUTED))
 	_director = _text("", "text", 19, WHITE)
 	_director.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_director.custom_minimum_size.x = 310
