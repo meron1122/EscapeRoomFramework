@@ -31,13 +31,6 @@
           background: radial-gradient(ellipse at 50% 45%, rgba(3,4,5,.18), rgba(3,4,5,.88) 78%); }
   #veil.black { background: rgba(3,4,5,1); }
   #veil.dark { background: radial-gradient(ellipse at 50% 45%, rgba(3,4,5,.76), rgba(3,4,5,.97) 70%); }
-  #flash { position: fixed; inset: 0; pointer-events: none; background: #fff; opacity: 0; }
-  body.flash #flash { animation: flash 3.2s ease-out forwards; }
-  @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
-  #count { position: fixed; left: 0; right: 0; top: 16vh; text-align: center; pointer-events: none; opacity: 0;
-           font: 700 clamp(34px, 6vw, 84px)/1 "Chakra Petch", sans-serif; color: var(--accent); letter-spacing: .02em;
-           font-variant-numeric: tabular-nums; }
-  body.alarm #count { opacity: 1; }
 
   /* The gate: one eye in the dark, and a choice. */
   #gate { position: fixed; inset: 0; z-index: 10; display: grid; place-content: center; justify-items: center; gap: 26px;
@@ -137,8 +130,10 @@
   section > .cta { align-self: flex-start; }
   .row { display: flex; flex-wrap: wrap; gap: 14px; }
   #gate .cta { margin-top: 0; }
-  .final .line, .final .row, .final .sub { visibility: hidden; }
-  body.done .final .line, body.done .final .row, body.done .final .sub { visibility: visible; }
+  /* The ending is quiet: the dark, his eye again, and the two ways on. */
+  .last .eye { width: 96px; margin-bottom: 30px; opacity: 0; transition: opacity 2.4s ease .4s; }
+  .last .row { opacity: 0; transition: opacity 1.4s ease 2s; }
+  section.on.last .eye, section.on.last .row { opacity: 1; }
 
   #sound { position: fixed; right: 22px; top: 14px; z-index: 5; margin: 0; padding: 9px 14px; font-size: 12px;
            border-color: rgba(233,236,239,.35); color: var(--dim); }
@@ -162,6 +157,7 @@
     html { scroll-snap-type: none; }
     section.on .line { animation: none; }
     .eye, #next i { animation: none; }
+    .last .eye, .last .row { transition: none; }
     .sub, .log, .facts, .wire, .bus, #veil, .reveal img, .reveal svg, #stage video, #bar { transition: none; }
   }
 </style>
@@ -172,8 +168,6 @@
   <video muted playsinline preload="none"></video>
 </div>
 <div id="veil" class="black"></div>
-<div id="count" aria-hidden="true"></div>
-<div id="flash"></div>
 <audio id="music" loop preload="none"></audio>
 
 <div id="gate" role="dialog" aria-label="Enter">
@@ -319,12 +313,16 @@
     </div>
   </section>
 
-  <section class="mid" data-act="IV · The real thing" data-next="How the night ends" data-name="The exits are not his" data-veil="dark" data-clip="core" data-bpm="72" data-music="core">
+  <section class="mid" data-act="IV · The real thing" data-next="One last thing" data-name="The exits are not his" data-veil="dark" data-clip="core" data-bpm="72" data-music="core">
     <p class="line">The exits are not his.<br>Everything else is.</p>
     <p class="sub">In a real building some things must never depend on an AI. Doors, alarms and emergency systems live in a separate safety layer with its own audit log. He cannot reach it, and he never pretends he can.</p>
   </section>
 
-  <section class="mid final" data-act="IV · The real thing" data-name="His game" data-veil="" data-clip="finale" data-finale data-bpm="132" data-music="final">
+  <section class="mid last" data-act="IV · The real thing" data-name="His game" data-veil="black" data-bpm="44">
+    <svg class="eye" viewBox="306 236 96 70" aria-hidden="true">
+      <path d="M316 280 C340 276 366 264 392 246 C384 276 362 296 334 296 C324 294 318 288 316 280 Z" fill="#e01b28"/>
+      <path d="M346 270 L358 264 L354 292 L344 292 Z" fill="#07080a"/>
+    </svg>
     <p class="line">Your room.<br>His game.</p>
     <p class="sub">Shadowman, the AI game master for physical escape rooms.</p>
     <div class="row">
@@ -469,7 +467,7 @@
   setInterval(() => { const el = $("[data-log]"); if (el.closest("section").classList.contains("on") && shown < playerNotes.length) el.textContent = playerNotes.slice(0, ++shown).join("\n"); }, 2200);
 
   // ---------- scenes ----------
-  let current = -1, since = 0, fired = false, ticking = null;
+  let current = -1, since = 0;
   function show(i) {
     if (i === current || !entered) return;
     const s = sections[i], now = performance.now();
@@ -481,8 +479,6 @@
     }
     sections.forEach(x => x.classList.toggle("on", x === s));
     current = i; since = now;
-    const isFinale = "finale" in s.dataset;
-    if (fired && !isFinale) rewind();
     veil.className = s.dataset.veil || "";
     bpm = +s.dataset.bpm || 0;
     track = s.dataset.music || "";
@@ -491,10 +487,10 @@
     $("#where").innerHTML = "Act <b>" + s.dataset.act + "</b> &nbsp; " + String(i + 1).padStart(2, "0") + " / " + sections.length;
     $("#next").classList.toggle("gone", i === sections.length - 1);
     $("#next span").textContent = s.dataset.next || "Scroll";
-    if (isFinale) { if (!fired) finale(); }
-    else showClip(s.dataset.clip);
+    showClip(s.dataset.clip);
     rest(veil.className === "black");
     mix();
+    if (i === sections.length - 1) note("you stayed until the end. he noticed.");
   }
   const go = i => sections[Math.max(0, Math.min(sections.length - 1, i))].scrollIntoView({ behavior: calm ? "auto" : "smooth" });
   $("#next").addEventListener("click", () => go(current + 1));
@@ -503,31 +499,6 @@
     if ([" ", "ArrowDown", "PageDown"].includes(e.key)) { e.preventDefault(); go(current + 1); }
     if (["ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); go(current - 1); }
   });
-  // Sixty minutes end the way he decides: twelve seconds, a flash, and silence. The clip carries the room;
-  // the page counts along with it.
-  function finale() {
-    fired = true;
-    showClip("finale", true);
-    document.body.classList.add("alarm");
-    const v = videos[front], started = performance.now();
-    ticking = setInterval(() => {
-      const t = Math.max(v.currentTime || 0, saving || v.paused ? (performance.now() - started) / 1000 : 0);
-      const left = Math.ceil(12 - t);
-      $("#count").textContent = "DETONATION  00:" + String(Math.max(0, left)).padStart(2, "0");
-      if (left > 0) return;
-      clearInterval(ticking);
-      document.body.classList.remove("alarm");
-      document.body.classList.add("done");
-      if (!calm) document.body.classList.add("flash");
-      veil.className = "dark";
-      bpm = 0; track = ""; mix(true);
-    }, 100);
-  }
-  function rewind() {
-    fired = false;
-    clearInterval(ticking);
-    document.body.classList.remove("alarm", "done", "flash");
-  }
   const seen = new IntersectionObserver(es => es.forEach(e => e.isIntersecting && show(sections.indexOf(e.target))),
     { rootMargin: "-50% 0px -50% 0px" });  // the scene that crosses the middle of the screen is the scene
   sections.forEach(s => seen.observe(s));
