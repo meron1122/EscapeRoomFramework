@@ -32,6 +32,17 @@
   #veil.black { background: rgba(3,4,5,1); }
   #veil.dark { background: radial-gradient(ellipse at 50% 45%, rgba(3,4,5,.76), rgba(3,4,5,.97) 70%); }
 
+  /* The story's last twelve seconds: a countdown over the room, a flash, then the dark. */
+  #flash { position: fixed; inset: 0; pointer-events: none; background: #fff; opacity: 0; }
+  body.flash #flash { animation: flash 3s ease-out forwards; }
+  @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+  #count { position: fixed; left: 0; right: 0; top: 15vh; text-align: center; pointer-events: none; opacity: 0;
+           font: 700 clamp(34px, 6vw, 84px)/1 "Chakra Petch", sans-serif; color: var(--accent); letter-spacing: .02em;
+           font-variant-numeric: tabular-nums; transition: opacity .4s; }
+  body.alarm #count { opacity: 1; }
+  .blast .after, .blast.over .before { display: none; }
+  .blast.over .after { display: block; }
+
   /* The gate: one eye in the dark, and a choice. */
   #gate { position: fixed; inset: 0; z-index: 10; display: grid; place-content: center; justify-items: center; gap: 26px;
           padding: 24px; text-align: center; background: var(--bg); transition: opacity 1.4s ease, visibility 0s 1.4s; }
@@ -168,6 +179,8 @@
   <video muted playsinline preload="none"></video>
 </div>
 <div id="veil" class="black"></div>
+<div id="count" aria-hidden="true"></div>
+<div id="flash"></div>
 <audio id="music" loop preload="none"></audio>
 
 <div id="gate" role="dialog" aria-label="Enter">
@@ -208,9 +221,15 @@
     <p class="sub">Raven waits in the van, on the radio. Three floors down runs The Core: every algorithm Z owns, in one room.</p>
   </section>
 
-  <section data-act="I · The story" data-next="Except none of it is real" data-name="Sixty minutes" data-veil="" data-clip="lobby" data-bpm="54">
+  <section data-act="I · The story" data-next="How the night ends" data-name="Sixty minutes" data-veil="" data-clip="lobby" data-bpm="54">
     <p class="line">Sixty minutes.<br>Three floors of locks.</p>
     <p class="sub">A phone that opens with a gesture. A locker that wants the guard's shift. A gate, a lab, a firewall made of light. Then the charge.</p>
+  </section>
+
+  <section class="mid blast" data-act="I · The story" data-next="Except none of it is real" data-name="The Core goes dark" data-veil="" data-clip="detonation" data-blast="8" data-bpm="132">
+    <p class="line before">Minute fifty-two. The Core.<br>Two keys, turned together.</p>
+    <p class="line after">The Core goes dark.<br>You made it out.</p>
+    <p class="sub after">Raven is already driving. Behind you a whole city has just been logged out.</p>
   </section>
 
   <!-- Act two: what this really is. An escape room, and the chair behind its wall. -->
@@ -226,29 +245,30 @@
   </section>
 
   <section class="mid" data-act="II · The game" data-next="See what he sees" data-name="You think you are alone" data-veil="dark" data-clip="lobby" data-bpm="60">
-    <p class="line">Tonight nobody sits behind the wall.<br>You think you are alone.</p>
+    <p class="line">Tonight nobody sat behind that wall.<br>You think you are alone.</p>
     <p class="line wrong">You are wrong.</p>
   </section>
 
   <!-- Act three: him. -->
-  <section data-act="III · The watcher" data-next="Watch what he does" data-name="Someone is taking notes" data-veil="" data-clip="lobby" data-bpm="64">
+  <section data-act="III · The watcher" data-next="Watch what he did" data-name="Someone was taking notes" data-veil="" data-clip="lobby" data-bpm="64">
+    <p class="act">Play the night back</p>
     <p class="log" data-log></p>
-    <p class="line">Someone is taking notes.</p>
+    <p class="line">All night, someone was taking notes.</p>
   </section>
 
-  <section data-act="III · The watcher" data-next="He can do more" data-name="He doesn't say a word" data-veil="" data-clip="lamp" data-bpm="70">
+  <section data-act="III · The watcher" data-next="He did more" data-name="He didn't say a word" data-veil="" data-clip="lamp" data-bpm="70">
     <p class="log"><b>cue</b>   lamp over the ad screen · 9 s</p>
-    <p class="line">A light comes on over the clue.<br><span class="hint">He doesn't say a word.</span></p>
+    <p class="line">A light came on over the clue.<br><span class="hint">He didn't say a word.</span></p>
   </section>
 
-  <section data-act="III · The watcher" data-next="He can speak" data-name="He noticed" data-veil="" data-clip="blackout" data-bpm="80">
+  <section data-act="III · The watcher" data-next="He spoke" data-name="He noticed" data-veil="" data-clip="blackout" data-bpm="80">
     <p class="log"><b>twist</b> blackout · the team is five minutes ahead of plan</p>
     <p class="line">You were ahead of schedule.<br>He noticed.</p>
   </section>
 
   <section data-act="III · The watcher" data-next="And you?" data-name="His voices" data-veil="dark" data-clip="blackout" data-bpm="90">
     <p class="log"><b>say</b>   ZETA → "You are doing so well. Statistically, you give up in minute seventeen."</p>
-    <p class="line">Every voice in the room is his.<br>None of them is his own.</p>
+    <p class="line">Every voice in the room was his.<br>None of them was his own.</p>
   </section>
 
   <section data-act="III · The watcher" data-next="Meet him" data-name="Notes on you" data-veil="dark" data-clip="blackout" data-bpm="100">
@@ -487,10 +507,36 @@
     $("#where").innerHTML = "Act <b>" + s.dataset.act + "</b> &nbsp; " + String(i + 1).padStart(2, "0") + " / " + sections.length;
     $("#next").classList.toggle("gone", i === sections.length - 1);
     $("#next span").textContent = s.dataset.next || "Scroll";
-    showClip(s.dataset.clip);
+    disarm();
+    showClip(s.dataset.clip, "blast" in s.dataset);
+    if ("blast" in s.dataset) arm(s);
     rest(veil.className === "black");
     mix();
     if (i === sections.length - 1) note("you stayed until the end. he noticed.");
+  }
+  // The story ends the way the players chose: a countdown that follows the clip, a flash, and the dark.
+  let fuse = null;
+  function arm(s) {
+    const v = videos[front], at = +s.dataset.blast, started = performance.now();
+    s.classList.remove("over");
+    document.body.classList.add("alarm");
+    fuse = setInterval(() => {
+      const t = Math.max(v.currentTime || 0, saving || v.paused ? (performance.now() - started) / 1000 : 0);
+      const left = Math.ceil(at - t);
+      $("#count").textContent = "DETONATION  00:" + String(Math.max(0, left)).padStart(2, "0");
+      if (left > 0) return;
+      clearInterval(fuse);
+      document.body.classList.remove("alarm");
+      if (!calm) document.body.classList.add("flash");
+      s.classList.add("over");
+      veil.className = "dark";
+      bpm = 0; mix();
+    }, 100);
+  }
+  function disarm() {
+    clearInterval(fuse);
+    document.body.classList.remove("alarm", "flash");
+    sections.forEach(x => x.classList.remove("over"));
   }
   const go = i => sections[Math.max(0, Math.min(sections.length - 1, i))].scrollIntoView({ behavior: calm ? "auto" : "smooth" });
   $("#next").addEventListener("click", () => go(current + 1));
