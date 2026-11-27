@@ -341,7 +341,17 @@ func _van_pad() -> void:
 	var glow := OmniLight3D.new()
 	glow.position = Vector3(-5.2, 0.15, 6.7)
 	glow.light_color = Color("#9fd8e0")
-	glow.light_energy = 0.6
+	glow.light_energy = 1.4
+	# A work light over the pad: the van is where the story starts, so it has to read against the night.
+	var pad := SpotLight3D.new()
+	pad.position = Vector3(-5.2, 5.5, 6.7)
+	pad.rotation_degrees.x = -90
+	pad.light_color = Color("#ffe2b8")
+	pad.light_energy = 5.0
+	pad.spot_range = 9.0
+	pad.spot_angle = 38.0
+	pad.spot_angle_attenuation = 0.7
+	add_child(pad)
 	glow.omni_range = 4.0
 	add_child(glow)
 

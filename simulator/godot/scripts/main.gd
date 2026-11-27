@@ -57,6 +57,7 @@ var shake := 0.0
 var _stage_cb: JavaScriptObject  # kept alive: the page calls it to direct the scene
 var _quit_after_end := 0.0
 var _linger := ""
+var _dolly := {}  # a scripted camera move: from one framing to another over some seconds
 var film := false  # film mode: no panels, the camera is directed by the game
 var focus_until := 0.0
 var focus_at := Vector3.ZERO
@@ -1011,6 +1012,10 @@ func _on_stage_command(args: Array) -> void:
 				_focus(lamps[value].parts[0].light.global_position * Vector3(1, 0, 1), 11.0, 7.0)
 		"blackout":
 			sim.dim_until = sim.t + 60.0
+		"open":
+			# The opening shot: close on Raven's van outside, then a slow pull back that reveals the tower.
+			_dolly = {"t0": _clock, "dur": float(value) if value != "" else 12.0,
+				"a": Vector3(-5.4, 0, 7.0), "b": Vector3(4.4, 0, 4.6), "sa": 8.0, "sb": 27.0}
 		"finale":
 			if sim.ending == "":
 				sim._finish("detonation")
@@ -1345,6 +1350,16 @@ func _place_camera() -> void:
 
 
 func _update_camera(delta: float) -> void:
+	if not _dolly.is_empty():
+		var k := clampf((_clock - float(_dolly.t0)) / float(_dolly.dur), 0.0, 1.0)
+		var e := k * k * (3.0 - 2.0 * k)  # ease in and out
+		cam_target = (_dolly.a as Vector3).lerp(_dolly.b, e)
+		cam.size = lerpf(_dolly.sa, _dolly.sb, e)
+		_place_camera()
+		atmosphere.follow(cam_target)
+		if k >= 1.0:
+			_dolly = {}
+		return
 	var size := zoom
 	if _clock < focus_until:
 		cam_target = cam_target.lerp(focus_at + Vector3(0.6, 0, -1.4), minf(1.0, delta * 2.2))
