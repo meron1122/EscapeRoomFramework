@@ -2,6 +2,8 @@
 
 **The AI game master for physical escape rooms.** You never see him. You see what he does.
 
+**[The story](https://shadowman-enp4.sprites.app/)** · **[Watch him run a room, live](https://shadowman-enp4.sprites.app/play/)** · **[The wiki](https://github.com/meron1122/EscapeRoomFramework/wiki)**: the idea, the architecture and how each part works, with pictures.
+
 Shadowman runs a real, physical escape room live: its locks, lamps, screens and speakers, over MQTT. He reads the venue's brief, watches every sensor and every player, and
 decides what the room does next: a lamp over a clue, a line in a character's voice, a blackout for a team that is too
 fast, a puzzle redrawn before anyone has seen it. The players never learn he exists. The exits are not his: doors and
@@ -13,6 +15,7 @@ alarms live in a separate safety layer that he cannot reach.
 | [`examples/the-core.json`](examples/the-core.json), [`docs/scenario-the-core.md`](docs/scenario-the-core.md) | one complete room, "The Core": its definition and the brief he runs it from |
 | [`simulator`](simulator) | that room in the browser, standing in for real hardware on the same MQTT bus |
 | [`site`](site) | the landing page |
+| [`docs/wiki`](docs/wiki) | the wiki's pages and pictures; a workflow publishes them to the repository's wiki on every push |
 | [`deploy`](deploy) | everything to host it on one Fly.io Sprite, with the keys in Sprites Connectors |
 
 The rest of this document describes the engine underneath him.

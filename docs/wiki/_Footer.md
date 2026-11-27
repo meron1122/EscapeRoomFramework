@@ -1,0 +1,1 @@
+Shadowman · the AI game master for physical escape rooms · [the story](https://shadowman-enp4.sprites.app/) · [live](https://shadowman-enp4.sprites.app/play/) · This wiki is published from [`docs/wiki`](https://github.com/meron1122/EscapeRoomFramework/tree/main/docs/wiki) in the repository; edit it there.
