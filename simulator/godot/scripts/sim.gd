@@ -28,6 +28,8 @@ const HINTS := {
 }
 
 var taunts := 0
+var meddle := 1.0  # a visitor's hand on the team: 0 stalls them, 4 makes them fly
+var meddle_until := 0.0
 var force_detonation := false  # recordings need the loud ending every time
 var layout: Dictionary
 var rng := RandomNumberGenerator.new()
@@ -88,7 +90,7 @@ func clock() -> String:
 func rate_scale() -> float:
 	if t < freeze_until:
 		return 0.0
-	return team_pace * hint_factor * (0.7 if t < dim_until else 1.0)
+	return team_pace * hint_factor * (0.7 if t < dim_until else 1.0) * (meddle if t < meddle_until else 1.0)
 
 
 func tick(dt: float) -> void:

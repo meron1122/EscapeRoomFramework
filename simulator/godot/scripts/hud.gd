@@ -7,6 +7,7 @@ signal speed_requested(value: float)
 signal pause_toggled
 signal new_game_requested
 signal music_toggled(on: bool)
+signal meddled(what: String)  # a visitor interferes with the team: stall | rush | wrong | help
 
 const YELLOW := Color("#fcee0a")
 const CYAN := Color("#00f0ff")
@@ -151,6 +152,27 @@ func build(fonts_: Dictionary) -> void:
 	_log.add_theme_font_size_override("bold_font_size", 14)
 	lp.add_child(_log)
 
+	# The visitor's hand in the game: push the team around and watch what he does about it.
+	var meddle := HBoxContainer.new()
+	meddle.anchor_left = 0.5
+	meddle.anchor_right = 0.5
+	meddle.anchor_top = 0.0
+	meddle.offset_left = -330
+	meddle.offset_right = 330
+	meddle.offset_top = 16
+	meddle.alignment = BoxContainer.ALIGNMENT_CENTER
+	meddle.add_theme_constant_override("separation", 10)
+	root.add_child(meddle)
+	var tag := _text("MESS WITH THEM", "mono", 13, MUTED)
+	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	meddle.add_child(tag)
+	for item in [["stall", "STALL THEM"], ["rush", "RUSH THEM"], ["wrong", "WRONG ANSWER"], ["help", "ASK FOR HELP"]]:
+		var b := _button(item[1], false)
+		b.add_theme_font_size_override("font_size", 16)
+		b.custom_minimum_size = Vector2(0, 36)
+		b.pressed.connect(func(): meddled.emit(item[0]))
+		meddle.add_child(b)
+
 	var controls := HBoxContainer.new()
 	controls.anchor_left = 1.0
 	controls.anchor_right = 1.0
@@ -189,7 +211,7 @@ func build(fonts_: Dictionary) -> void:
 	hint.offset_top = -100
 	root.add_child(hint)
 
-	_start = _overlay("THE CORE", "A simulated room standing in for real hardware. Five Nomads, sixty minutes.\nThey think they are alone. Shadowman is already watching.", "LET THEM IN")
+	_start = _overlay("THE CORE", "A simulated room standing in for real hardware. Five Nomads, sixty minutes.\nShadowman is already watching. Stall them, rush them, break things: see what he does.", "LET THEM IN")
 	_start.get_meta("button").pressed.connect(func(): _start.visible = false; start_requested.emit())
 	root.add_child(_start)
 	_end = _overlay("THE END", "", "NEW GAME")
@@ -336,7 +358,7 @@ func set_team(npcs: Array) -> void:
 
 
 func add_log(speaker: String, text: String) -> void:
-	var c: String = {"RAVEN": "#fcee0a", "ZETA": "#00f0ff", "NOMADS": "#ffffff", "SYSTEM": "#cbcbcb"}.get(speaker, "#cbcbcb")
+	var c: String = {"RAVEN": "#fcee0a", "ZETA": "#00f0ff", "NOMADS": "#ffffff", "SYSTEM": "#cbcbcb", "YOU": "#ff4fa3"}.get(speaker, "#cbcbcb")
 	_log.append_text("[b][color=%s]%s>[/color][/b] [color=%s]%s[/color]\n" % [c, speaker, "#ffffff" if speaker != "SYSTEM" else "#cbcbcb", text])
 	if speaker in ["RAVEN", "ZETA"]:  # subtitles carry the two voices; the team's chatter stays above their heads
 		_subtitle.text = "[center][b][color=%s]%s[/color][/b]  %s[/center]" % [c, speaker, text]

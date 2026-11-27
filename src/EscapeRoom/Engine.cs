@@ -53,6 +53,7 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, IConfiguratio
         public readonly List<object> Recent = [];  // last events, for the game master agent
         // shortcut: in memory, so a resumed game may fire a twist again; persist it if engine restarts mid-game matter
         public readonly HashSet<string> Fired = [];  // twists used this game
+        public DateTimeOffset Asked;  // last help or look request, to ignore a hammered button
     }
 
     /// <summary>Raised after every logged event of a running game: (room, event type). The game master agent wakes on it.</summary>
@@ -454,6 +455,16 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, IConfiguratio
         {
             foreach (var s in running.Values.ToList())
             {
+                // The room's help button ("help"), or an operator asking the game master to look now ("look").
+                if (topic == $"escaperoom/{s.RoomId}/control" && Payload.Extract(payload, "command") is "help" or "look")
+                {
+                    var command = Payload.Extract(payload, "command")!;
+                    if (DateTimeOffset.UtcNow - s.Asked < TimeSpan.FromSeconds(4)) continue;  // one press, not a held button
+                    s.Asked = DateTimeOffset.UtcNow;
+                    if (command == "help") await Log(s, "help", new { });
+                    else Changed?.Invoke(s.RoomId, "look");
+                    continue;
+                }
                 if (topic == $"escaperoom/{s.RoomId}/players")
                 {
                     s.Players = JsonSerializer.Deserialize<JsonElement>(payload);

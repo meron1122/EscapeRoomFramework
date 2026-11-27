@@ -81,6 +81,8 @@ const TEAL := Color("#19f0c8")
 const YELLOW := Color("#fcee0a")
 
 var city_camera: Camera3D
+var lite := false  # set before build(): a smaller city, redrawn a few times a second instead of every frame
+var _tick := 0
 var _city: SubViewport
 var _cars: Array[Node3D] = []
 var _beams: Array[Node3D] = []
@@ -109,6 +111,10 @@ func follow(iso_target: Vector3) -> void:
 
 
 func _process(delta: float) -> void:
+	if lite:
+		_tick += 1
+		if _tick == 20 or (_tick > 20 and _tick % 5 == 0):
+			_city.render_target_update_mode = SubViewport.UPDATE_ONCE
 	for car in _cars:
 		car.position += car.get_meta("dir") * car.get_meta("speed") * delta
 		if car.position.length() > 1400.0:
@@ -127,7 +133,7 @@ func _process(delta: float) -> void:
 func _backdrop(main_env: Environment) -> void:
 	_city = SubViewport.new()
 	_city.own_world_3d = true
-	_city.size = Vector2i(960, 540)
+	_city.size = Vector2i(640, 360) if lite else Vector2i(960, 540)
 	_city.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(_city)
 	var env := Environment.new()
@@ -137,7 +143,7 @@ func _backdrop(main_env: Environment) -> void:
 	env.ambient_light_color = Color("#1b3a4a")
 	env.ambient_light_energy = 0.6
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.glow_enabled = true
+	env.glow_enabled = not lite
 	env.glow_intensity = 0.5
 	env.glow_bloom = 0.03
 	env.glow_hdr_threshold = 0.9

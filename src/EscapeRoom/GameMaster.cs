@@ -30,10 +30,13 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
         How to act:
         - First write one short note in the room's language, the way an unseen observer keeps a log: cold, exact,
           in the third person, naming players (who stalls, who is close, what the room will do about it). No "I",
-          no greetings, no explanations. The operator reads these notes live. Then call 0-3 tools.
+          no greetings, no explanations, no brackets or labels, never a list of solutions or codes. One or two
+          sentences, at most 25 words. The operator reads these notes live. Then call 0-3 tools.
           Doing nothing is right when the team is flowing; don't act just to act.
-        - At the start of a game ("reason": "started") reroll every variant, so this team gets its own game, and open
-          the game the way the brief describes.
+        - At the start of a game ("reason": "started") the variants for this team are already drawn (see
+          "alreadyDone"): open the game the way the brief describes.
+        - When "reason" is "help", the players pressed the room's help button: answer now with a hint for the puzzle
+          they are on, one level above the last hint they got for it.
         - Keep the pace the brief sets. Without one, spread the puzzles over the game length so it ends close to time.
         - Hint ladder when the team falls behind: about 3 minutes, a nudge (level 1); about 6, a hint that points at
           the clue (level 2); about 10 or clearly stuck, level 3 or `solve`. Start from the venue's prepared hints and
@@ -52,6 +55,7 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
     readonly List<string> memory = [];
     double lastSolveClock;
     int rulesHintLevel;
+    readonly List<string> forced = [];  // what the code did this turn before asking the model
     bool openRouter;
 
     // The room being played and what the game master was told about it at the start of the game.
@@ -69,7 +73,7 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
         var wake = Channel.CreateBounded<(string Room, string Type)>(new BoundedChannelOptions(16) { FullMode = BoundedChannelFullMode.DropOldest });
         engine.Changed += (r, type) =>
         {
-            if (type == "started" || (type == "solved" && r == room)) wake.Writer.TryWrite((r, type));
+            if (type == "started" || (type is "solved" or "help" or "look" && r == room)) wake.Writer.TryWrite((r, type));
         };
         while (!ct.IsCancellationRequested)
         {
@@ -89,8 +93,13 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
             }
             await Task.Delay(TimeSpan.FromSeconds(2), ct);  // let a burst of events settle into one decision
+            // Whatever else arrived meanwhile joins this decision; the strongest reason wins, so a help request
+            // or a new game is never lost behind a routine tick.
             while (wake.Reader.TryRead(out var more))
-                if (more.Type == "started") (reason, started) = (more.Type, more.Room);
+            {
+                if (more.Type == "started") started = more.Room;
+                if (Weight(more.Type) > Weight(reason)) reason = more.Type;
+            }
 
             // One game at a time: a newly started game takes over; otherwise stay with the current one.
             if (started is not null || room is null || def is null)
@@ -111,6 +120,14 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
             }
             var observation = JsonSerializer.SerializeToElement(seen, Engine.Json);
             speed = Math.Max(1.0, observation.GetProperty("speed").GetDouble());
+            // Two things never depend on a model's mood: a new team gets its own variants, and (in Finish) a help
+            // button gets an answer.
+            forced.Clear();
+            if (reason == "started" && def?.Variants is { Count: > 0 } variants)
+            {
+                forced.Add(await Act(room, "reroll", S(new { variants = variants.Keys }), observation));
+                if (await engine.Observe(room) is { } again) observation = JsonSerializer.SerializeToElement(again, Engine.Json);
+            }
             try
             {
                 if (client is null) await Rules(room, reason, observation);
@@ -129,6 +146,8 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
             }
         }
     }
+
+    static int Weight(string reason) => reason switch { "started" => 4, "help" => 3, "solved" => 2, "look" => 1, _ => 0 };
 
     /// <summary>What the model knows about the room for a whole game: the venue's brief, then the room's data.</summary>
     static string Playbook(Room room, string? brief) =>
@@ -176,7 +195,14 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
 
     async Task Decide(AnthropicClient client, string room, string reason, JsonElement observation, CancellationToken ct)
     {
-        var input = JsonSerializer.Serialize(new { reason, game = observation, yourRecentDecisions = memory.TakeLast(6) }, Engine.Json);
+        var input = JsonSerializer.Serialize(new
+        {
+            reason,
+            mustDo = reason == "help" ? "The players pressed the help button. Call hint now, for the puzzle they are on." : null,
+            alreadyDone = forced.Count > 0 ? forced : null,
+            game = observation,
+            yourRecentDecisions = memory.TakeLast(6),
+        }, Engine.Json);
         if (openRouter && !Model.StartsWith("anthropic/"))
         {
             await DecideChat(room, reason, input, observation, ct);
@@ -212,7 +238,7 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
         foreach (var block in response.Content)
             if (block.TryPickToolUse(out BetaToolUseBlock? use))
                 done.Add(await Act(room, use.Name, JsonSerializer.SerializeToElement(use.Input), observation));
-        await Report(room, thought, done, "model");
+        await Finish(room, reason, thought, done, "model", observation);
     }
 
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(60) };
@@ -240,7 +266,7 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
         var (thought, calls) = ParseChat(body);
         var done = new List<string>();
         foreach (var (name, args) in calls.Take(4)) done.Add(await Act(room, name, args, observation));
-        await Report(room, thought.Length > 300 ? thought[..300] : thought, done, "model");
+        await Finish(room, reason, thought.Length > 300 ? thought[..300] : thought, done, "model", observation);
     }
 
     // Function-calling models often answer with calls only, so the operator's note is a tool of its own for them.
@@ -413,8 +439,6 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
         string thought;
         if (reason == "started")
         {
-            if (def?.Variants is { Count: > 0 } variants)
-                done.Add(await Act(room, "reroll", JsonSerializer.SerializeToElement(new { variants = variants.Keys }), observation));
             thought = "A new team. The room is redrawn for them.";
         }
         else if (reason == "solved")
@@ -422,6 +446,10 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
             lastSolveClock = clock;
             rulesHintLevel = 0;
             thought = "They moved on.";
+        }
+        else if (reason == "help")
+        {
+            thought = "They asked for help. They get it.";  // Finish gives the hint
         }
         else
         {
@@ -447,7 +475,29 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
                 thought = "On pace. Watching.";
             }
         }
-        await Report(room, thought, done, "rules");
+        await Finish(room, reason, thought, done, "rules", observation);
+    }
+
+    /// <summary>Closes a decision: adds what the code did itself, and never leaves a help button unanswered.</summary>
+    async Task Finish(string room, string reason, string thought, List<string> done, string mode, JsonElement observation)
+    {
+        done.InsertRange(0, forced);
+        if (reason == "help" && !done.Any(d => d.StartsWith("hint ")) && await PreparedHint(room, observation) is { } hint) done.Add(hint);
+        await Report(room, thought, done, mode);
+    }
+
+    /// <summary>The venue's next prepared hint for a puzzle in play, spoken by the room's first character.</summary>
+    async Task<string?> PreparedHint(string room, JsonElement observation)
+    {
+        var active = observation.GetProperty("puzzles").EnumerateArray()
+            .Where(p => p.GetProperty("status").GetString() == "active").Select(p => p.GetProperty("id").GetString()!)
+            .Where(id => def is not null && AllPuzzles(def).FirstOrDefault(p => p.Id == id)?.Hints is { Length: > 0 }).ToList();
+        if (active.Count == 0 || def?.Characters?.FirstOrDefault() is not { } helper) return null;
+        var id = active[rng.Next(active.Count)];
+        var hints = AllPuzzles(def).First(p => p.Id == id).Hints!;
+        rulesHintLevel = Math.Min(rulesHintLevel + 1, 2);
+        var result = await Act(room, "hint", S(new { puzzle = id, level = rulesHintLevel, speaker = helper.Name, text = hints[Math.Min(rulesHintLevel, hints.Length) - 1] }), observation);
+        return result.StartsWith("hint ") ? result : null;
     }
 
     async Task Report(string room, string thought, List<string> done, string mode)

@@ -13,6 +13,7 @@ const GESTURES := {
 }
 
 var fonts: Dictionary
+var _frames := 0
 var parts := {}  # kind -> {name: Control}
 
 
@@ -28,6 +29,7 @@ func make(kind: String, px: Vector2i, sim: Sim) -> SubViewport:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	vp.add_child(root)
 	_fill(kind, root, px, sim)
+	parts[kind].vp = vp
 	return vp
 
 
@@ -37,9 +39,18 @@ func refresh(kind: String, sim: Sim) -> void:
 		return
 	var root: Control = parts[kind].root
 	var px: Vector2i = parts[kind].px
+	var vp: SubViewport = parts[kind].vp
 	for c in root.get_children():
 		c.queue_free()
 	_fill(kind, root, px, sim)
+	parts[kind].vp = vp
+	touch(kind)
+
+
+func touch(kind: String) -> void:
+	## A screen is drawn again only when its page changed; the rest of the time its picture just stays.
+	if parts.has(kind) and parts[kind].has("vp"):
+		(parts[kind].vp as SubViewport).render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
 func _fill(kind: String, root: Control, px: Vector2i, sim: Sim) -> void:
@@ -108,6 +119,7 @@ func _fill(kind: String, root: Control, px: Vector2i, sim: Sim) -> void:
 
 func solved(kind: String, fragment := -1) -> void:
 	var p: Dictionary = parts.get(kind, {})
+	touch.call_deferred(kind)
 	match kind:
 		"zphone":
 			p.state.text = "UNLOCKED"
@@ -126,12 +138,20 @@ func solved(kind: String, fragment := -1) -> void:
 
 
 func update(sim: Sim, zeta_line: String) -> void:
+	_frames += 1
+	if _frames == 30:  # the pages have settled: stop redrawing them every frame
+		for kind in parts:
+			touch(kind)
 	if parts.has("meter"):
 		var p: Dictionary = parts.meter
 		p.v = clampf(p.v + 0.0004, 0.0, 99.99)
-		p.value.text = "%.2f%%" % p.v
-	if parts.has("zeta") and zeta_line != "":
+		var shown := "%.2f%%" % p.v
+		if p.value.text != shown:
+			p.value.text = shown
+			touch("meter")
+	if parts.has("zeta") and zeta_line != "" and parts.zeta.line.text != zeta_line:
 		parts.zeta.line.text = zeta_line
+		touch("zeta")
 
 
 func _bg(root: Control, c: Color) -> void:

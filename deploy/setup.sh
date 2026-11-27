@@ -36,6 +36,10 @@ if [ ! -d "$PGDATA" ]; then
   "$PGBIN/pg_ctl" -D "$PGDATA" -w stop >/dev/null
 fi
 
+# A running service keeps its old process (and its old binary), and one that others depend on cannot be stopped.
+# So the ones a bundle can change are stopped first, dependants before what they need; svc() starts them again.
+for name in web engine mosquitto; do sprite-env services stop "$name" >/dev/null 2>&1 || true; done
+
 svc() {  # name, then sprite-env arguments; recreated so a new bundle takes effect
   local name="$1"; shift
   sprite-env services delete "$name" >/dev/null 2>&1 || true

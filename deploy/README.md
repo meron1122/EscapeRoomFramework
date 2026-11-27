@@ -115,6 +115,11 @@ bound them.
   game started from the browser was run by the engine on the Sprite.
 - From outside, `/rooms`, `/mcp`, `/safety` and unknown `/voice` names answer 404.
 
+- The model runs through the built-in OpenRouter Connector: `deepseek/deepseek-v4-flash` answers in two to five
+  seconds through the gateway, with no key on the Sprite.
+- The built-in ElevenLabs Connector refuses text to speech ("endpoint is not supported"): the voice needs a
+  **Custom API** Connector (`https://api.elevenlabs.io`, custom header `xi-api-key`, a key with Text to Speech access).
+
 ## Not verified yet
 
 - Whether the gateway overrides the placeholder `Authorization` header the Anthropic SDK sends (needs the Connectors).

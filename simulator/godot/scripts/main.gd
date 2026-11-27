@@ -55,6 +55,7 @@ var finale_at := -1.0  # real-time start of the detonation finale: countdown, es
 var blasted := false
 var shake := 0.0
 var _stage_cb: JavaScriptObject  # kept alive: the page calls it to direct the scene
+var lite := false
 var _quit_after_end := 0.0
 var _linger := ""
 var _dolly := {}  # a scripted camera move: from one framing to another over some seconds
@@ -76,6 +77,11 @@ var _next_chat := 6.0
 
 
 func _ready() -> void:
+	# A browser tab is a weak GPU with a short temper: the web build draws a lighter picture (no multisampling,
+	# shadows only where the team is, no screen-reading effects). `--lite` gives the same on the desktop.
+	lite = OS.has_feature("web") or "--lite" in OS.get_cmdline_user_args()
+	if lite:
+		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
 	layout = JSON.parse_string(FileAccess.get_file_as_string("res://layout.json"))
 	fonts = {"display": load("res://fonts/ChakraPetch-Bold.ttf"), "text": load("res://fonts/Rajdhani-SemiBold.ttf"),
 		"mono": load("res://fonts/JetBrainsMono[wght].ttf")}
@@ -107,6 +113,7 @@ func _ready() -> void:
 		if link and link.is_open:
 			link.publish("escaperoom/%s/control" % ROOM_ID, JSON.stringify({"speed": v})))
 	hud.pause_toggled.connect(func(): paused = not paused)
+	hud.meddled.connect(_on_meddle)
 	hud.new_game_requested.connect(func(): get_tree().reload_current_scene())
 	hud.music_toggled.connect(func(on): music_on = on; _fade_music())
 	hud.set_speed(speed)
@@ -140,6 +147,8 @@ func _ready() -> void:
 			get_tree().create_timer(float(arg.get_slice("=", 1))).timeout.connect(func():
 				print("MARK quit frame %d" % Engine.get_process_frames())
 				get_tree().quit())
+		elif arg.begins_with("--bench="):
+			_bench(int(arg.get_slice("=", 1)))
 		elif arg.begins_with("--frames="):
 			_record(arg.get_slice("=", 1))
 		elif arg.begins_with("--linger="):
@@ -406,6 +415,45 @@ func _value(w: Dictionary) -> String:
 	return "ON"
 
 
+func _on_meddle(what: String) -> void:
+	## The visitor interferes. Nothing here tells the game master what happened: he has to see it in the room,
+	## the way he would with real players. Only the help button speaks to him, as it does in a real room.
+	if not sim.running or sim.ending != "":
+		return
+	var working: Array = npcs.filter(func(n): return n.visible and n.task_id != "")
+	match what:
+		"stall":
+			sim.meddle = 0.0
+			sim.meddle_until = sim.t + 300.0
+			for n in working:
+				n.stuck = maxf(n.stuck, 150.0)  # they have been going in circles for a while
+				n.bark(["I don't get it.", "This makes no sense.", "We tried that.", "Wait, what?"][rng.randi() % 4], 3.0)
+				n.emote("shrug", 4.0)
+			_on_log("YOU", "The team is stuck. Nobody is getting anywhere.")
+		"rush":
+			sim.meddle = 4.0
+			sim.meddle_until = sim.t + 360.0
+			for n in working:
+				n.bark(["Got it!", "Faster!", "Next one!"][rng.randi() % 3], 2.0)
+			_on_log("YOU", "The team is on fire. Everything clicks.")
+		"wrong":
+			if working.is_empty() or not sim.engine_mode:
+				_on_log("YOU", "Nobody is at a lock right now." if working.is_empty() else "Wrong answers need the engine.")
+				return
+			var n: Npc = working[rng.randi() % working.size()]
+			for i in 3:
+				get_tree().create_timer(0.5 * i).timeout.connect(func(): _wrong_attempt(n))
+			_on_log("YOU", "%s keeps entering the wrong answer." % n.display_name)
+		"help":
+			_on_log("YOU", "The team presses the help button.")
+			for n in working:
+				n.emote("listen", 4.0)
+	if link and link.is_open:  # a real room has a help button; the rest only asks him to look now instead of in a while
+		link.publish("escaperoom/%s/control" % ROOM_ID, JSON.stringify({"command": "help" if what == "help" else "look"}))
+	elif what == "help":
+		sim.next_director = sim.t  # offline, the local stand-in answers the button
+
+
 func _wrong_attempt(n: Npc) -> void:
 	## People get it wrong before they get it right; the game master sees these attempts.
 	var engine_id: String = "detonation" if n.task_id == "choice" else n.task_id
@@ -455,7 +503,7 @@ func _build_environment() -> void:
 	env.ambient_light_energy = 0.75
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 0.95
-	env.glow_enabled = true
+	env.glow_enabled = not lite
 	env.glow_intensity = 0.2
 	env.glow_strength = 1.0
 	env.glow_bloom = 0.0
@@ -477,10 +525,11 @@ func _build_environment() -> void:
 	moon.rotation_degrees = Vector3(-58, -32, 0)
 	moon.light_color = Color("#9fb4ff")
 	moon.light_energy = 0.25
-	moon.shadow_enabled = true
+	moon.shadow_enabled = not lite
 	moon.directional_shadow_max_distance = 70.0
 	add_child(moon)
 	atmosphere = Atmosphere.new()
+	atmosphere.lite = lite
 	add_child(atmosphere)
 	atmosphere.build(fonts.display, env)
 	_build_post()
@@ -635,6 +684,24 @@ func _build_post() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 1
 	add_child(layer)
+	if lite:
+		# The same vignette as a plain gradient: nothing reads the screen back, so nothing is drawn twice.
+		var g := Gradient.new()
+		g.set_color(0, Color(0, 0, 0, 0))
+		g.set_color(1, Color(0, 0, 0, 0.5))
+		g.set_offset(0, 0.45)
+		var tex := GradientTexture2D.new()
+		tex.gradient = g
+		tex.fill = GradientTexture2D.FILL_RADIAL
+		tex.fill_from = Vector2(0.5, 0.5)
+		tex.fill_to = Vector2(1.1, 0.5)
+		var shade := TextureRect.new()
+		shade.texture = tex
+		shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+		shade.stretch_mode = TextureRect.STRETCH_SCALE
+		shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layer.add_child(shade)
+		return
 	var rect := ColorRect.new()
 	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -693,6 +760,7 @@ func _light(room: String, l: Light3D, pos: Vector3, color: Color, energy: float,
 	l.light_color = color
 	l.light_energy = energy
 	l.shadow_enabled = shadow
+	l.set_meta("shadow", shadow)
 	l.set_meta("base", energy)
 	l.set_meta("color", color)
 	if l is OmniLight3D:
@@ -978,6 +1046,20 @@ func _on_door(id: String, open: bool) -> void:
 		reached[NEXT_ROOM[id]] = true
 
 
+func _bench(frames: int) -> void:
+	## How long a frame takes to draw, measured by drawing and reading it back: `-- --autostart --bench=200 [--lite]`.
+	for i in 60:
+		await get_tree().process_frame
+	var started := Time.get_ticks_usec()
+	for i in frames:
+		await get_tree().process_frame
+		RenderingServer.force_draw(false)
+		get_viewport().get_texture().get_image()
+	print("BENCH %s %dx%d: %.1f ms per frame" % ["lite" if lite else "full", get_viewport().size.x, get_viewport().size.y,
+		(Time.get_ticks_usec() - started) / 1000.0 / frames])
+	get_tree().quit()
+
+
 func _record(dir: String) -> void:
 	## Recording hook: saves every frame as a JPEG (use with --fixed-fps). It forces the draw itself, because
 	## macOS stops drawing a window that is covered or off screen, and a recording must not depend on that.
@@ -1012,6 +1094,8 @@ func _on_stage_command(args: Array) -> void:
 				_focus(lamps[value].parts[0].light.global_position * Vector3(1, 0, 1), 11.0, 7.0)
 		"blackout":
 			sim.dim_until = sim.t + 60.0
+		"meddle":
+			_on_meddle(value)
 		"open":
 			# The opening shot: close on Raven's van outside, then a slow pull back that reveals the tower.
 			_dolly = {"t0": _clock, "dur": float(value) if value != "" else 12.0,
@@ -1297,6 +1381,10 @@ func _update_lights(delta: float) -> void:
 		if sim.t < sim.dim_until and room == sim.stage:
 			factor *= 0.2
 		for l: Light3D in room_lights[room]:
+			if lite:  # shadows only in the room the team is in, and never the six-sided kind
+				var casts: bool = l.get_meta("shadow") and room == sim.stage and l is SpotLight3D
+				if l.shadow_enabled != casts:
+					l.shadow_enabled = casts
 			var target: float = l.get_meta("base") * factor
 			var c: Color = l.get_meta("color")
 			if red_alert:

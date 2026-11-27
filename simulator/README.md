@@ -38,6 +38,20 @@ python3 -m http.server 8060 --bind 127.0.0.1 --directory simulator/web
 Then `http://localhost:8060`. Controls: LMB/RMB pans, the wheel zooms, 1/2/3 jump to the rooms, F follows the team,
 H hides the panels, space pauses.
 
+## Messing with the team
+
+The bar at the top of the demo lets a visitor interfere, so they can watch Shadowman react:
+
+| Button | What happens in the room | What he can see |
+|---|---|---|
+| STALL THEM | nobody makes progress for five game minutes | players stuck at their spots, no inputs |
+| RUSH THEM | everything is solved four times faster for six minutes | a team running ahead of plan |
+| WRONG ANSWER | a player enters three wrong answers | the wrong values on the sensors |
+| ASK FOR HELP | the team presses the room's help button | a `help` event; it always gets a hint |
+
+Nothing tells him what the visitor did: he has to read it from the room, as with real players. Only the help
+button speaks to him directly, as it does in a real room.
+
 ## With the engine and Shadowman (virtual hardware)
 
 When the MQTT broker is reachable, the simulator stops deciding the puzzles itself: it sends inputs (`sim/the-core/...`) like
