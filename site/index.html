@@ -46,12 +46,29 @@
   .eye { width: 120px; height: auto; transform-origin: 50% 55%; animation: blink 7s ease-in-out infinite; }
   @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.06); } }
   #gate p { margin: 0; font: 700 clamp(22px, 3.2vw, 36px)/1.2 "Chakra Petch", sans-serif; }
+  #gate .what { max-width: 30em; font: 600 19px/1.5 "Rajdhani", sans-serif; color: #b3bac0; }
   #gate small { color: var(--dim); font: 13px/1.6 "JetBrains Mono", monospace; max-width: 36em; }
   .choices { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
 
+  /* Where the visitor is in the story, and how much is left. */
+  #bar { position: fixed; left: 0; top: 0; z-index: 6; height: 2px; width: 0; background: var(--accent); transition: width .6s ease; }
+  #where { position: fixed; left: 22px; top: 20px; z-index: 5; font: 12px/1.4 "JetBrains Mono", monospace; letter-spacing: .14em;
+           text-transform: uppercase; color: var(--dim); pointer-events: none; }
+  #where b { color: var(--ink); font-weight: 400; }
+  /* The pull downwards: a line that keeps falling, and a word about what comes next. */
+  #next { position: fixed; left: 50%; bottom: 14px; z-index: 5; transform: translateX(-50%); display: grid; justify-items: center; gap: 8px;
+          padding: 8px 18px; border: 0; background: none; cursor: pointer; color: var(--ink);
+          font: 12px/1 "JetBrains Mono", monospace; letter-spacing: .18em; text-transform: uppercase; transition: opacity .8s; }
+  #next i { display: block; width: 1px; height: 38px; background: linear-gradient(var(--accent), var(--accent)) no-repeat 0 0 / 1px 14px;
+            animation: fall 1.6s ease-in infinite; }
+  @keyframes fall { 0% { background-position: 0 -14px; opacity: 0; } 30% { opacity: 1; } 100% { background-position: 0 38px; opacity: 0; } }
+  #next:hover, #next:focus-visible { color: var(--accent); outline: none; }
+  #next.nudge span { color: var(--accent); }
+  #next.gone { opacity: 0; pointer-events: none; }
+
   main { position: relative; }
   section { min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; justify-content: flex-end;
-            padding: 12vh clamp(20px, 7vw, 120px) 16vh; scroll-snap-align: start; }
+            padding: 12vh clamp(20px, 7vw, 120px) 18vh; scroll-snap-align: start; }
   section.mid { justify-content: center; }
   .act { margin: 0 0 18px; font: 13px/1 "JetBrains Mono", monospace; letter-spacing: .22em; text-transform: uppercase;
          color: var(--accent); opacity: 0; transition: opacity 1.2s ease; }
@@ -123,21 +140,19 @@
   .final .line, .final .row, .final .sub { visibility: hidden; }
   body.done .final .line, body.done .final .row, body.done .final .sub { visibility: visible; }
 
-  #sound { position: fixed; right: 22px; top: 18px; z-index: 5; margin: 0; padding: 9px 14px; font-size: 12px;
+  #sound { position: fixed; right: 22px; top: 14px; z-index: 5; margin: 0; padding: 9px 14px; font-size: 12px;
            border-color: rgba(233,236,239,.35); color: var(--dim); }
   /* What the page noticed about the visitor, in the corner the whole time. */
   #notes { position: fixed; right: 22px; bottom: 20px; z-index: 4; margin: 0; padding: 0; list-style: none; text-align: right;
            font: 12px/1.7 "JetBrains Mono", monospace; color: var(--dim); opacity: .7; pointer-events: none; }
   #notes span { margin-right: 10px; }
   #notes li:last-child { color: var(--ink); }
-  #scroll { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); font: 12px "JetBrains Mono", monospace;
-            color: var(--dim); letter-spacing: .2em; transition: opacity .8s; pointer-events: none; }
   footer { position: relative; padding: 40px clamp(20px, 7vw, 120px) 60px; color: var(--dim); font-size: 16px; background: var(--bg);
            scroll-snap-align: end; }
   footer a { color: var(--ink); }
   @media (max-width: 760px) {
     #notes { display: none; }
-    section { padding-bottom: 12vh; }
+    #where { font-size: 10px; max-width: 60vw; }
     .wire { grid-template-columns: 1fr; }
     .wire .out { text-align: left; }
     .wire .him { order: -1; justify-items: start; text-align: left; }
@@ -146,8 +161,8 @@
   @media (prefers-reduced-motion: reduce) {
     html { scroll-snap-type: none; }
     section.on .line { animation: none; }
-    .eye { animation: none; }
-    .sub, .log, .facts, .wire, .bus, #veil, .reveal img, .reveal svg, #stage video { transition: none; }
+    .eye, #next i { animation: none; }
+    .sub, .log, .facts, .wire, .bus, #veil, .reveal img, .reveal svg, #stage video, #bar { transition: none; }
   }
 </style>
 </head>
@@ -167,73 +182,88 @@
     <path d="M346 270 L358 264 L354 292 L344 292 Z" fill="#07080a"/>
   </svg>
   <p>He is expecting you.</p>
+  <div class="what">A two-minute story about a night in an escape room, and about the one who really runs it. You scroll; the room answers.</div>
   <div class="choices">
     <button class="cta" type="button" data-enter="sound">Enter with sound</button>
     <button class="cta quiet" type="button" data-enter="silence">Enter in silence</button>
   </div>
-  <small>A story about a room, and about who really runs it. Nothing you do here leaves your browser.</small>
+  <small>Nothing you do here leaves your browser.</small>
 </div>
 
+<div id="bar" aria-hidden="true"></div>
+<div id="where" aria-hidden="true"></div>
 <button id="sound" class="cta" type="button" aria-pressed="false">Sound: off</button>
 <ul id="notes" aria-hidden="true"></ul>
-<div id="scroll" aria-hidden="true">SCROLL</div>
+<button id="next" type="button" aria-label="Next scene"><span>Scroll</span><i></i></button>
 
 <main>
   <!-- Act one: the story, so the visitor is inside the room before anyone is watching it. -->
-  <section class="mid" data-name="The city belongs to Z" data-veil="black" data-bpm="44">
-    <p class="act">Tonight's room: The Core</p>
+  <section class="mid" data-act="I · The story" data-next="Scroll to begin" data-name="The city belongs to Z" data-veil="black" data-bpm="44">
+    <p class="act">Tonight's game: The Core</p>
     <p class="line">The city belongs to Z.</p>
     <p class="sub">Your phone, your car, your groceries work only while your subscription does. The city's old name expired with its licence.</p>
   </section>
 
-  <section data-name="The unlogged" data-veil="" data-clip="outside" data-bpm="46">
+  <section data-act="I · The story" data-next="Tonight you go in" data-name="The unlogged" data-veil="" data-clip="outside" data-bpm="46">
     <p class="line">You live outside it.<br>A Nomad. One of the unlogged.</p>
     <p class="sub">No Z-ID, an old van without a network, and one stolen thing in the back: an atomic charge without its ignition rods.</p>
   </section>
 
-  <section data-name="Inside the tower" data-veil="" data-clip="lobby" data-bpm="50">
+  <section data-act="I · The story" data-next="What stands in the way" data-name="Inside the tower" data-veil="" data-clip="lobby" data-bpm="50">
     <p class="line">Tonight you and four friends are inside the tower.</p>
     <p class="sub">Raven waits in the van, on the radio. Three floors down runs The Core: every algorithm Z owns, in one room.</p>
   </section>
 
-  <section data-name="Sixty minutes" data-veil="" data-clip="lobby" data-bpm="54">
+  <section data-act="I · The story" data-next="Except none of it is real" data-name="Sixty minutes" data-veil="" data-clip="lobby" data-bpm="54">
     <p class="line">Sixty minutes.<br>Three floors of locks.</p>
     <p class="sub">A phone that opens with a gesture. A locker that wants the guard's shift. A gate, a lab, a firewall made of light. Then the charge.</p>
   </section>
 
-  <section class="mid" data-name="You think you are alone" data-veil="dark" data-clip="lobby" data-bpm="58">
-    <p class="line">You think you are alone.</p>
+  <!-- Act two: what this really is. An escape room, and the chair behind its wall. -->
+  <section data-act="II · The game" data-next="Who runs a game like this" data-name="It is a game" data-veil="dark" data-clip="lobby" data-bpm="56">
+    <p class="act">Step out of the story for a second</p>
+    <p class="line">It is a game, of course.<br>An escape room.</p>
+    <p class="sub">A real place you book for an evening. The tower is plywood and steel, the locks are real, the clock on the wall counts down from sixty, and five friends would rather not be beaten by a locker.</p>
+  </section>
+
+  <section data-act="II · The game" data-next="Tonight is different" data-name="Behind the wall" data-veil="dark" data-clip="lobby" data-bpm="58">
+    <p class="line">Every escape room has someone behind the wall.</p>
+    <p class="sub">The game master. A person watching the cameras, counting the minutes, deciding when a team has struggled long enough to deserve a hint. One person, one room, every single game.</p>
+  </section>
+
+  <section class="mid" data-act="II · The game" data-next="See what he sees" data-name="You think you are alone" data-veil="dark" data-clip="lobby" data-bpm="60">
+    <p class="line">Tonight nobody sits behind the wall.<br>You think you are alone.</p>
     <p class="line wrong">You are wrong.</p>
   </section>
 
-  <!-- Act two: him. -->
-  <section data-name="Someone is taking notes" data-veil="" data-clip="lobby" data-bpm="62">
+  <!-- Act three: him. -->
+  <section data-act="III · The watcher" data-next="Watch what he does" data-name="Someone is taking notes" data-veil="" data-clip="lobby" data-bpm="64">
     <p class="log" data-log></p>
     <p class="line">Someone is taking notes.</p>
   </section>
 
-  <section data-name="He doesn't say a word" data-veil="" data-clip="lamp" data-bpm="68">
+  <section data-act="III · The watcher" data-next="He can do more" data-name="He doesn't say a word" data-veil="" data-clip="lamp" data-bpm="70">
     <p class="log"><b>cue</b>   lamp over the ad screen · 9 s</p>
     <p class="line">A light comes on over the clue.<br><span class="hint">He doesn't say a word.</span></p>
   </section>
 
-  <section data-name="He noticed" data-veil="" data-clip="blackout" data-bpm="78">
+  <section data-act="III · The watcher" data-next="He can speak" data-name="He noticed" data-veil="" data-clip="blackout" data-bpm="80">
     <p class="log"><b>twist</b> blackout · the team is five minutes ahead of plan</p>
     <p class="line">You were ahead of schedule.<br>He noticed.</p>
   </section>
 
-  <section data-name="His voices" data-veil="dark" data-clip="blackout" data-bpm="88">
+  <section data-act="III · The watcher" data-next="And you?" data-name="His voices" data-veil="dark" data-clip="blackout" data-bpm="90">
     <p class="log"><b>say</b>   ZETA → "You are doing so well. Statistically, you give up in minute seventeen."</p>
     <p class="line">Every voice in the room is his.<br>None of them is his own.</p>
   </section>
 
-  <section data-name="Notes on you" data-veil="dark" data-clip="blackout" data-bpm="100">
+  <section data-act="III · The watcher" data-next="Meet him" data-name="Notes on you" data-veil="dark" data-clip="blackout" data-bpm="100">
     <ul class="you" data-you></ul>
     <p class="line">He has been taking notes on you, too.</p>
     <p class="sub">This page only watched how you scroll. In a real room he has every sensor, every camera and every wrong answer.</p>
   </section>
 
-  <section class="mid" data-name="Shadowman" data-veil="black" data-bpm="0" id="name">
+  <section class="mid" data-act="III · The watcher" data-next="What he really is" data-name="Shadowman" data-veil="black" data-bpm="0" id="name">
     <div class="reveal">
       <img src="brand/shadowman.svg" alt="" width="500" height="500" loading="lazy">
       <svg viewBox="316 246 76 50" aria-hidden="true">
@@ -244,15 +274,15 @@
     <p class="line name">Shadowman<small>The AI game master for physical escape rooms.</small></p>
   </section>
 
-  <!-- Act three: the product. Real rooms, real hardware. -->
-  <section data-name="The room is real" data-veil="dark" data-clip="core" data-bpm="60" data-music="core">
+  <!-- Act four: the product. Real rooms, real hardware. -->
+  <section data-act="IV · The real thing" data-next="How he connects to a room" data-name="The room is real" data-veil="dark" data-clip="core" data-bpm="60" data-music="core">
     <p class="act">What you just watched was a simulation</p>
     <p class="line">He is built for the real thing.</p>
-    <p class="sub">Shadowman is software for physical escape rooms: real doors, real locks, real players. He sits in your venue's network and runs the game while the team is inside. You never see him. You see what he does.</p>
+    <p class="sub">Shadowman is software for people who own and build physical escape rooms. He takes the game master's chair: he sits in your venue's network, watches the team through your sensors and cameras, and runs the locks, the lights and the voices for the whole hour. You never see him. You see what he does.</p>
     <a class="cta" href="play/" data-cta>Watch him run the simulated room</a>
   </section>
 
-  <section data-name="Wire your room" data-veil="dark" data-clip="core" data-bpm="64" data-music="core">
+  <section data-act="IV · The real thing" data-next="What he does all night" data-name="Wire your room" data-veil="dark" data-clip="core" data-bpm="64" data-music="core">
     <p class="line">Wire your room.<br>He does the rest.</p>
     <div class="wire">
       <div>
@@ -278,8 +308,8 @@
     <p class="bus">Tasmota · ESPHome · Zigbee2MQTT · RTSP cameras · anything that speaks MQTT. You describe the room in a plain document; he reads it and runs it. The simulated room above talks to him over the same bus as real devices: unplug it, plug in yours.</p>
   </section>
 
-  <section data-name="What he does" data-veil="dark" data-clip="core" data-bpm="68" data-music="core">
-    <p class="line">One game master.<br>Every room. Every team.</p>
+  <section data-act="IV · The real thing" data-next="What he cannot touch" data-name="What he does" data-veil="dark" data-clip="core" data-bpm="68" data-music="core">
+    <p class="line">He never looks away.<br>He never plays the same game twice.</p>
     <div class="facts">
       <div><h3>He watches</h3><p>Every sensor, every wrong attempt, where each player stands and how long they have been stuck.</p></div>
       <div><h3>He helps quietly</h3><p>First a lamp over the clue. Then a nudge in a character's voice. A hand on the lock only as a last resort.</p></div>
@@ -289,12 +319,12 @@
     </div>
   </section>
 
-  <section class="mid" data-name="The exits are not his" data-veil="dark" data-clip="core" data-bpm="72" data-music="core">
+  <section class="mid" data-act="IV · The real thing" data-next="How the night ends" data-name="The exits are not his" data-veil="dark" data-clip="core" data-bpm="72" data-music="core">
     <p class="line">The exits are not his.<br>Everything else is.</p>
     <p class="sub">In a real building some things must never depend on an AI. Doors, alarms and emergency systems live in a separate safety layer with its own audit log. He cannot reach it, and he never pretends he can.</p>
   </section>
 
-  <section class="mid final" data-name="His game" data-veil="" data-clip="finale" data-finale data-bpm="132" data-music="final">
+  <section class="mid final" data-act="IV · The real thing" data-name="His game" data-veil="" data-clip="finale" data-finale data-bpm="132" data-music="final">
     <p class="line">Your room.<br>His game.</p>
     <p class="sub">Shadowman, the AI game master for physical escape rooms.</p>
     <div class="row">
@@ -336,36 +366,74 @@
   function rest(hidden) { const v = videos[front]; if (!v.src || saving) return; hidden ? v.pause() : (v.ended || v.play().catch(() => {})); }
   document.addEventListener("visibilitychange", () => rest(document.hidden || veil.className === "black"));
 
-  // ---------- sound: a heartbeat that speeds up with the scenes, then his music ----------
+  // ---------- sound: one mix ----------
+  // A drone and a heartbeat that speed up with the scenes, then his music. The levels are matched by measurement
+  // (heartbeat about -23 to -19 dBFS as it speeds up, music about -21 LUFS), everything passes one limiter, and
+  // nothing starts or stops without a fade.
   const music = $("#music");
-  let ac = null, master = null, soundOn = false, bpm = 0, track = "";
+  let ac = null, out = null, heart = null, drone = null, tune = null, soundOn = false, bpm = 0, track = "", playing = "";
+  function initSound() {
+    ac = new AudioContext();
+    const limit = ac.createDynamicsCompressor();
+    limit.threshold.value = -10; limit.knee.value = 8; limit.ratio.value = 12; limit.attack.value = 0.003; limit.release.value = 0.15;
+    out = ac.createGain(); out.gain.value = 0; out.connect(limit).connect(ac.destination);
+    heart = ac.createGain(); heart.gain.value = 0.8; heart.connect(out);
+    drone = ac.createGain(); drone.gain.value = 0;
+    const low = ac.createBiquadFilter(); low.type = "lowpass"; low.frequency.value = 170;
+    for (const f of [55, 55.7]) { const o = ac.createOscillator(); o.type = "sawtooth"; o.frequency.value = f; o.connect(low); o.start(); }
+    low.connect(drone).connect(out);
+    tune = ac.createGain(); tune.gain.value = 0;
+    ac.createMediaElementSource(music).connect(tune).connect(out);
+    beat();
+  }
+  const glide = (param, value, seconds) => param.setTargetAtTime(value, ac.currentTime, seconds / 3);
   function thump(t, f, g) {
-    const o = ac.createOscillator(), a = ac.createGain();
-    o.frequency.setValueAtTime(f, t);
-    o.frequency.exponentialRampToValueAtTime(f * 0.42, t + 0.17);
-    a.gain.setValueAtTime(0.0001, t);
-    a.gain.exponentialRampToValueAtTime(g, t + 0.012);
-    a.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
-    o.connect(a).connect(master);
-    o.start(t); o.stop(t + 0.3);
+    const voice = (type, freq, ratio, sweep, gain, decay) => {
+      const o = ac.createOscillator(), a = ac.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t);
+      o.frequency.exponentialRampToValueAtTime(freq * ratio, t + sweep);
+      a.gain.setValueAtTime(0.0001, t);
+      a.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+      a.gain.setTargetAtTime(0.0001, t + 0.01, decay);
+      o.connect(a).connect(heart);
+      o.start(t); o.stop(t + 0.5);
+    };
+    voice("sine", f, 0.4, 0.17, g, 0.075);                 // the body
+    voice("triangle", f * 2, 0.45, 0.12, g * 0.34, 0.05);  // an octave up, so small speakers carry it too
   }
   function beat() {
-    if (soundOn && bpm && ac.state === "running") { const t = ac.currentTime + 0.02; thump(t, 118, 0.9); thump(t + 0.2, 92, 0.55); }
+    if (soundOn && bpm && ac.state === "running") { const t = ac.currentTime + 0.02; thump(t, 150, 0.55); thump(t + 0.2, 118, 0.34); }
     setTimeout(beat, bpm ? 60000 / bpm : 300);
   }
   function setSound(on) {
     soundOn = on;
-    if (on && !ac) { ac = new AudioContext(); master = ac.createGain(); master.gain.value = 0.5; master.connect(ac.destination); beat(); }
-    if (ac) on ? ac.resume() : ac.suspend();
+    if (on && !ac) initSound();
+    if (ac) {
+      if (on) ac.resume();
+      glide(out.gain, on ? 1 : 0, on ? 1.5 : 0.3);
+      if (!on) { playing = ""; setTimeout(() => { if (!soundOn) music.pause(); }, 600); }
+    }
     $("#sound").setAttribute("aria-pressed", on);
     $("#sound").textContent = "Sound: " + (on ? "on" : "off");
-    applyMusic();
+    mix();
   }
-  function applyMusic() {
-    if (!soundOn || !track) { music.pause(); return; }
-    const src = "audio/" + track + ".mp3";
-    if (!music.src.endsWith(src)) { music.src = src; music.volume = 0.45; }
-    music.play().catch(() => {});
+  // What a scene sounds like: pulse and drone before the reveal, his music after it.
+  function mix(fast) {
+    if (!ac) return;
+    const want = soundOn ? track : "";
+    glide(heart.gain, track ? 0 : 0.8, 0.8);  // the music carries its own pulse
+    glide(drone.gain, track || !bpm ? 0 : 0.05 + 0.04 * Math.min(1, bpm / 100), 1.5);
+    if (!want) { glide(tune.gain, 0, fast ? 0.25 : 0.8); playing = ""; setTimeout(() => { if (!playing) music.pause(); }, 1000); return; }
+    if (playing === want) { glide(tune.gain, 0.6, 1.2); return; }
+    playing = want;
+    glide(tune.gain, 0, 0.3);
+    setTimeout(() => {
+      if (playing !== want) return;
+      music.src = "audio/" + want + ".mp3";
+      music.play().catch(() => {});
+      glide(tune.gain, 0.6, 1.5);
+    }, 400);
   }
   $("#sound").addEventListener("click", () => { setSound(!soundOn); note(soundOn ? "you wanted to hear him." : "you chose silence."); });
 
@@ -381,7 +449,11 @@
     $("[data-you]").replaceChildren(...log.slice(-9).map(row));
   }
   let idle = null, awayAt = 0, exitAt = 0;
-  function moved() { clearTimeout(idle); idle = setTimeout(() => note("you stopped moving."), 8000); }
+  function moved() {
+    clearTimeout(idle);
+    $("#next").classList.remove("nudge");
+    idle = setTimeout(() => { note("you stopped moving."); $("#next").classList.add("nudge"); }, 8000);
+  }
   ["scroll", "pointermove", "keydown", "touchstart"].forEach(e => addEventListener(e, moved, { passive: true }));
   document.addEventListener("mouseleave", e => { if (e.clientY <= 0 && performance.now() - exitAt > 15000) { exitAt = performance.now(); note("you reached for the exit."); } });
   document.addEventListener("visibilitychange", () => {
@@ -414,12 +486,23 @@
     veil.className = s.dataset.veil || "";
     bpm = +s.dataset.bpm || 0;
     track = s.dataset.music || "";
-    $("#scroll").style.opacity = i === 0 ? 1 : 0;
+    // where we are, how much is left, and what waits below
+    $("#bar").style.width = (100 * (i + 1) / sections.length) + "%";
+    $("#where").innerHTML = "Act <b>" + s.dataset.act + "</b> &nbsp; " + String(i + 1).padStart(2, "0") + " / " + sections.length;
+    $("#next").classList.toggle("gone", i === sections.length - 1);
+    $("#next span").textContent = s.dataset.next || "Scroll";
     if (isFinale) { if (!fired) finale(); }
     else showClip(s.dataset.clip);
     rest(veil.className === "black");
-    applyMusic();
+    mix();
   }
+  const go = i => sections[Math.max(0, Math.min(sections.length - 1, i))].scrollIntoView({ behavior: calm ? "auto" : "smooth" });
+  $("#next").addEventListener("click", () => go(current + 1));
+  addEventListener("keydown", e => {
+    if (!entered || (e.target.closest && e.target.closest("a, button, input"))) return;
+    if ([" ", "ArrowDown", "PageDown"].includes(e.key)) { e.preventDefault(); go(current + 1); }
+    if (["ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); go(current - 1); }
+  });
   // Sixty minutes end the way he decides: twelve seconds, a flash, and silence. The clip carries the room;
   // the page counts along with it.
   function finale() {
@@ -437,7 +520,7 @@
       document.body.classList.add("done");
       if (!calm) document.body.classList.add("flash");
       veil.className = "dark";
-      bpm = 0; track = ""; applyMusic();
+      bpm = 0; track = ""; mix(true);
     }, 100);
   }
   function rewind() {
