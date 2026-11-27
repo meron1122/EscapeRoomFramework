@@ -273,8 +273,7 @@ func _finish(kind: String) -> void:
 	ending = kind
 	match kind:
 		"detonacja":
-			say("KRUK", "Wiejcie!")
-			say("SYSTEM", "Jądro offline. Strefa się budzi.")
+			say("KRUK", "Odpalone! Wiejcie, macie dwanaście sekund!")
 		"uklad":
 			say("ZETA", "Witamy w rodzinie Z. Wasz abonament jest aktywny.")
 		"czas":

@@ -42,6 +42,14 @@ class CutPanel extends PanelContainer:
 
 
 var fonts: Dictionary
+var film := false
+var _root: Control
+var _film: Control
+var _film_clock: Label
+var _subtitle: RichTextLabel
+var _subtitle_until := 0
+var _countdown: Label
+var _flash: ColorRect
 var _clock: Label
 var _stage: Label
 var _rooms := {}  # room -> VBoxContainer
@@ -64,6 +72,7 @@ func build(fonts_: Dictionary) -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	# The whole overlay is drawn at 78%, so the rooms keep most of the picture.
+	_root = root
 	root.scale = Vector2(SCALE, SCALE)
 	var fit := func(): root.size = Vector2(get_viewport().get_visible_rect().size) / SCALE
 	get_viewport().size_changed.connect(fit)
@@ -188,6 +197,71 @@ func build(fonts_: Dictionary) -> void:
 	_end.get_meta("button").pressed.connect(func(): new_game_requested.emit())
 	_end.visible = false
 	root.add_child(_end)
+	_build_film()
+
+
+func _build_film() -> void:
+	## Film mode: no panels, only letterbox bars, a small clock, subtitles; plus the finale countdown and flash.
+	_film = Control.new()
+	_film.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_film.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_film.visible = false
+	add_child(_film)
+	for top in [true, false]:
+		var bar := ColorRect.new()
+		bar.color = Color.BLACK
+		bar.anchor_right = 1.0
+		bar.anchor_top = 0.0 if top else 0.9
+		bar.anchor_bottom = 0.1 if top else 1.0
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_film.add_child(bar)
+	_film_clock = _text("60:00", "display", 26, YELLOW)
+	_film_clock.anchor_top = 0.025
+	_film_clock.anchor_bottom = 0.025
+	_film_clock.offset_left = 28
+	_film.add_child(_film_clock)
+	_subtitle = RichTextLabel.new()
+	_subtitle.bbcode_enabled = true
+	_subtitle.fit_content = true
+	_subtitle.scroll_active = false
+	_subtitle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_subtitle.anchor_left = 0.15
+	_subtitle.anchor_right = 0.85
+	_subtitle.anchor_top = 0.915
+	_subtitle.anchor_bottom = 0.915
+	_subtitle.add_theme_font_override("normal_font", fonts.text)
+	_subtitle.add_theme_font_override("bold_font", fonts.mono)
+	_subtitle.add_theme_font_size_override("normal_font_size", 26)
+	_subtitle.add_theme_font_size_override("bold_font_size", 16)
+	_film.add_child(_subtitle)
+	# The countdown and the flash sit above everything, in both modes.
+	_countdown = _text("", "display", 64, YELLOW)
+	_countdown.anchor_left = 0.0
+	_countdown.anchor_right = 1.0
+	_countdown.anchor_top = 0.14
+	_countdown.anchor_bottom = 0.14
+	_countdown.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_child(_countdown)
+	_flash = ColorRect.new()
+	_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_flash.color = Color(1, 1, 1, 0)
+	add_child(_flash)
+
+
+func set_film(on: bool) -> void:
+	film = on
+	_film.visible = on
+	_root.visible = not on or _end.visible
+
+
+func set_countdown(text: String) -> void:
+	_countdown.text = text
+
+
+func flash() -> void:
+	_flash.color = Color(1, 1, 1, 1)
+	create_tween().tween_property(_flash, "color", Color(0.04, 0.02, 0.02, 0), 3.0).set_ease(Tween.EASE_OUT)
 
 
 func hide_start() -> void:
@@ -196,6 +270,7 @@ func hide_start() -> void:
 
 func set_clock(clock: String, room: String, plan_minutes: int, paused: bool) -> void:
 	_clock.text = clock
+	_film_clock.text = clock
 	_stage.text = "%s   ·   PLAN %d:00%s" % [ROOMS[room], plan_minutes, "   ·   PAUZA" if paused else ""]
 
 
@@ -263,6 +338,14 @@ func set_team(npcs: Array) -> void:
 func add_log(speaker: String, text: String) -> void:
 	var c: String = {"KRUK": "#fcee0a", "ZETA": "#00f0ff", "NOMADZI": "#ffffff", "SYSTEM": "#cbcbcb"}.get(speaker, "#cbcbcb")
 	_log.append_text("[b][color=%s]%s>[/color][/b] [color=%s]%s[/color]\n" % [c, speaker, "#ffffff" if speaker != "SYSTEM" else "#cbcbcb", text])
+	if speaker in ["KRUK", "ZETA"]:  # subtitles carry the two voices; the team's chatter stays above their heads
+		_subtitle.text = "[center][b][color=%s]%s[/color][/b]  %s[/center]" % [c, speaker, text]
+		_subtitle_until = Time.get_ticks_msec() + 5000
+
+
+func _process(_delta: float) -> void:
+	if _subtitle and _subtitle.text != "" and Time.get_ticks_msec() > _subtitle_until:
+		_subtitle.text = ""
 
 
 func clear_log() -> void:
@@ -272,6 +355,7 @@ func clear_log() -> void:
 func show_end(summary: String) -> void:
 	_end_text.text = summary
 	_end.visible = true
+	_root.visible = true
 
 
 func hide_end() -> void:

@@ -50,6 +50,14 @@ var bomb: Node3D
 var mats := {}
 var faces := {}
 var red_alert := false
+var finale_at := -1.0  # real-time start of the detonation finale: countdown, escape, wide shot, blast
+var blasted := false
+var shake := 0.0
+var film := false  # film mode: no panels, the camera is directed by the game
+var focus_until := 0.0
+var focus_at := Vector3.ZERO
+var focus_zoom := 10.0
+const COUNTDOWN := 12.0
 var end_shown_at := -1.0
 var _clock := 0.0
 var link: MqttLink
@@ -115,8 +123,17 @@ func _ready() -> void:
 			speed = float(arg.get_slice("=", 1))
 		elif arg.begins_with("--zoom="):
 			zoom = float(arg.get_slice("=", 1))
+		elif arg == "--film":
+			_set_film(true)
 		elif arg.begins_with("--shot="):
 			_shoot(arg.get_slice("=", 1))
+	if OS.has_feature("web"):
+		# ?film=40 starts straight into film mode at that speed: a whole game in about 90 seconds, ready to record.
+		var q := str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('film') || ''"))
+		if q != "":
+			_set_film(true)
+			started_once = true
+			speed = maxf(1.0, float(q))
 	_connect_engine()
 	if started_once:
 		hud.hide_start()
@@ -134,7 +151,13 @@ func _shoot(path: String) -> void:
 		await get_tree().process_frame
 	if at > 0.0:
 		speed = 1.0
-	await get_tree().create_timer(6.0).timeout
+	var wait := 6.0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--after-end="):  # seconds after the game's ending, for frames of the finale
+			while sim.ending == "":
+				await get_tree().process_frame
+			wait = float(arg.get_slice("=", 1))
+	await get_tree().create_timer(wait).timeout
 	get_viewport().get_texture().get_image().save_png(path)
 	for c in get_children():
 		if c is SubViewport:
@@ -147,6 +170,8 @@ func _start() -> void:
 	started_once = true
 	sim.running = true
 	_play(sim.stage)
+	if film:
+		cam.size = 34.0  # establishing shot: the whole floor, then a slow push in on the team
 	if link and link.is_open:
 		_engine_start()
 	else:
@@ -728,6 +753,9 @@ func _on_task(id: String, state: String) -> void:
 	hud.set_task(id, state)
 	for m in markers.get(id, []):
 		m.visible = state == "active"
+	if film and state == "solved" and sim.ending == "" and sim.tasks.has(id) and not sim.tasks[id].def.spots.is_empty():
+		var spot: Array = sim.tasks[id].def.spots[0]  # a solved puzzle gets a short close-up
+		_focus(Vector3(spot[0], 0, spot[1]), 9.5, 2.6)
 	if state == "active":
 		for n in npcs:
 			if n.mode == "explore":
@@ -823,9 +851,21 @@ func _on_door(id: String, open: bool) -> void:
 		reached[NEXT_ROOM[id]] = true
 
 
+func _set_film(on: bool) -> void:
+	film = on
+	hud.set_film(on)
+	if on:
+		follow = true
+		zoom = 15.0
+
+
 func _on_stage(room: String) -> void:
 	if sim.running:
 		_play(room)
+		if film:  # a new room opens with a wide shot of it
+			for r in layout.rooms:
+				if r.id == room:
+					_focus(Vector3(r.x + r.w / 2.0, 0, r.z + r.d / 2.0), 22.0, 3.5)
 
 
 func _on_twist(kind: String, _seconds: float) -> void:
@@ -849,7 +889,42 @@ func _on_finished(kind: String) -> void:
 		n.mode = "leave"
 		n.activity = "ucieka" if kind == "detonacja" else "wychodzi"
 		n.go(nav, Vector3(45.1, 0, 6.44 + rng.randf_range(-0.3, 0.3)), Vector3(46.2, 0, 6.44))
-	end_shown_at = _clock + 7.0
+	if kind == "detonacja":
+		finale_at = _clock
+		end_shown_at = _clock + COUNTDOWN + 5.0
+	else:
+		end_shown_at = _clock + 7.0
+		if kind == "uklad":
+			# The deal: no alarm. The core calms down and the camera holds on it.
+			_focus(props.jadro_wieza.position, 13.0, 7.0)
+
+
+func _focus(at: Vector3, size: float, seconds: float) -> void:
+	focus_at = at
+	focus_zoom = size
+	focus_until = _clock + seconds
+
+
+func _finale(delta: float) -> void:
+	if finale_at < 0.0:
+		return
+	var left := COUNTDOWN - (_clock - finale_at)
+	if left > 0.0:
+		hud.set_countdown("DETONACJA  00:%02d" % int(ceil(left)))
+		if left < COUNTDOWN - 5.0:  # the team is out of frame by now: pull back to see the whole core room
+			_focus(props.jadro_wieza.position + Vector3(0, 0, 1.5), 24.0, 1.0)
+	elif not blasted:
+		blasted = true
+		red_alert = false
+		alarm.stop()
+		hud.set_countdown("")
+		hud.flash()
+		_on_log("SYSTEM", "Jądro offline. Strefa się budzi.")
+		shake = 1.6
+		for i in 2:
+			create_tween().tween_property(music[i], "volume_db", -80.0, 0.4)
+		_focus(props.jadro_wieza.position + Vector3(0, 0, 1.5), 30.0, 6.0)
+	shake = maxf(0.0, shake - delta)
 
 
 func _summary() -> String:
@@ -893,6 +968,7 @@ func _process(delta: float) -> void:
 					if n.has_meta("next_try") and rng.randf() < 0.3:
 						_wrong_attempt(n)
 					n.set_meta("next_try", sim.t + rng.randf_range(40.0, 90.0))
+	_finale(delta)
 	_update_lights(delta)
 	_update_camera(delta)
 	if end_shown_at > 0.0 and _clock >= end_shown_at:
@@ -1037,9 +1113,16 @@ func _update_lights(delta: float) -> void:
 			if red_alert:
 				target = (0.6 + 2.2 * pulse)
 				c = Color("#ff1a1a")
+			if blasted:  # after the blast the building is dead: no power, only a dying ember
+				target = 0.05
+				c = Color("#ff7a3a")
 			l.light_energy = lerpf(l.light_energy, target, minf(1.0, delta * 4.0))
 			l.light_color = l.light_color.lerp(c, minf(1.0, delta * 4.0))
 	core_mat.emission_energy_multiplier = (2.6 + 0.9 * sin(_clock * 2.2)) if reached.has("jadro") else 1.0
+	if red_alert:
+		core_mat.emission_energy_multiplier = 3.0 + 4.0 * pulse
+	if blasted:
+		core_mat.emission_energy_multiplier = 0.0
 
 
 func _beams() -> void:
@@ -1078,7 +1161,11 @@ func _place_camera() -> void:
 
 
 func _update_camera(delta: float) -> void:
-	if follow:
+	var size := zoom
+	if _clock < focus_until:
+		cam_target = cam_target.lerp(focus_at + Vector3(0.6, 0, -1.4), minf(1.0, delta * 2.2))
+		size = focus_zoom
+	elif follow:
 		var center := Vector3.ZERO
 		var count := 0
 		for n in npcs:
@@ -1087,8 +1174,10 @@ func _update_camera(delta: float) -> void:
 				count += 1
 		if count > 0:
 			cam_target = cam_target.lerp(center / count + Vector3(0.6, 0, -2.6), minf(1.0, delta * 1.2))
-	cam.size = lerpf(cam.size, zoom, minf(1.0, delta * 6.0))
+	cam.size = lerpf(cam.size, size, minf(1.0, delta * (1.6 if film or finale_at >= 0.0 else 6.0)))
 	_place_camera()
+	if shake > 0.0:
+		cam.global_position += Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), 0) * 0.5 * shake
 	atmosphere.follow(cam_target)
 
 
@@ -1120,6 +1209,8 @@ func _unhandled_input(e: InputEvent) -> void:
 				follow = not follow
 			KEY_H:
 				hud.visible = not hud.visible
+			KEY_C:
+				_set_film(not film)
 			KEY_SPACE:
 				paused = not paused
 
