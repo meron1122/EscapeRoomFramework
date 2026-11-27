@@ -88,6 +88,8 @@ jeden naraz.
   Losowanie podmienia rozwiązanie i wskazówkę razem, tylko w bieżącej grze (zapisany pokój zostaje przy domyślnym).
 - `twists`: przygotowane zwroty akcji `{"about": "...", "then": [kroki], "adds": [zagadki], "blocks": [...], "after": [...]}`,
   raz na grę. `adds` dokłada zagadki, `blocks` każe im czekać na dodane, `after` mówi, co musi być już rozwiązane.
+- `cues`: wskazówki bez słów wbudowane w pokój (lampka, neon, dźwięk): `{"about": "...", "puzzle": "telefon", "then": [kroki]}`.
+  Mistrz gry może je odpalać wielokrotnie, zanim cokolwiek powie; z `puzzle` tylko gdy ta zagadka jest aktywna.
 - `hints` w zagadce: przygotowane podpowiedzi lokalu, od najdelikatniejszej. Bez modelu mistrz gry używa tylko ich.
 
 Wyjścia o nazwach `gm` (myśli mistrza gry) i `hint` (która zagadka dostała pomoc) są opcjonalne.
@@ -149,7 +151,7 @@ claude mcp add --transport http escaperoom http://localhost:5201/mcp
 | `start_game`, `stop_game`, `solve_puzzle` | przebieg gry |
 | `simulate_input` | wartość „jakby z czujnika”: test zagadki albo zastępstwo za zepsuty czujnik |
 | `trigger_output` | sterowanie wyjściem od ręki, także bez gry |
-| `get_brief`, `reroll_variant`, `fire_twist` | brief pokoju, losowanie wariantu i zwrot akcji w trwającej grze |
+| `get_brief`, `reroll_variant`, `fire_twist`, `fire_cue` | brief pokoju, losowanie wariantu, zwrot akcji i wskazówka świetlna w trwającej grze |
 
 Każda zmiana przechodzi tę samą walidację co `PUT`. Błędna zmiana jest odrzucana z listą powodów i nic się nie zapisuje.
 

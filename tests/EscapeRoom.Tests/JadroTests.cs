@@ -59,6 +59,7 @@ public class JadroTests
     public void Game_master_data_is_checked()
     {
         var room = Jadro();
+        Assert.Contains((room with { Cues = new() { ["c"] = new Cue("c", [new Step("nope", room.Start![0].Value)]) } }).Validate(), e => e.Contains("unknown output 'nope'"));
         Assert.Contains((room with { Characters = [new Character("X", "x", "nope")] }).Validate(), e => e.Contains("unknown output 'nope'"));
         Assert.Contains((room with { Variants = null, Twists = new() { ["t"] = new Twist("t", Blocks: ["nope"]) } }).Validate(), e => e.Contains("unknown puzzle 'nope'"));
         Assert.Contains((room with { Variants = new() { ["v"] = [room.Variants!["telefon"][0], new Variant(new() { ["nope"] = room.Puzzles[0].When! })] } }).Validate(),

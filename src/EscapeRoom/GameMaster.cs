@@ -34,6 +34,8 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
         - Hint ladder when the team falls behind: about 3 minutes, a nudge (level 1); about 6, a hint that points at
           the clue (level 2); about 10 or clearly stuck, level 3 or `solve`. Start from the venue's prepared hints and
           address the stuck player by name.
+        - Before words, try a cue when the room has one for the puzzle: a lamp or a sign that draws eyes to the clue.
+          It keeps the players' own discovery; speak only if the cue did not help.
         - When the team is well ahead, raise the tension with a twist the brief allows, one at a time.
         - Every line is in character, in the room's language, under 20 words, and never repeats a recent one. Never
           reveal a solution outright except in a level 3 hint. A line may start with one delivery tag in square
@@ -133,6 +135,7 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
             room.Minutes,
             characters = room.Characters?.Select(c => new { c.Name, c.About }),
             variants = room.Variants?.Keys,
+            cues = room.Cues?.Select(kv => new { id = kv.Key, kv.Value.About, kv.Value.Puzzle }),
             twists = room.Twists?.Select(kv => new { id = kv.Key, kv.Value.About, kv.Value.After, kv.Value.Blocks }),
             preparedHints = AllPuzzles(room).Where(p => p.Hints is { Length: > 0 }).ToDictionary(p => p.Id, p => p.Hints),
         }, Engine.Json);
@@ -227,6 +230,9 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
         if (room.Variants is { Count: > 0 } variants)
             tools.Add(Tool("reroll", "Draw new variants: each one's solution and clue change together. Only for puzzles nobody works on yet (any in the first minute).",
                 new() { ["variants"] = S(new { type = "array", items = new { type = "string", @enum = variants.Keys } }) }, "variants"));
+        if (room.Cues is { Count: > 0 } cues)
+            tools.Add(Tool("cue", "Fire a wordless hint built into the room (a lamp, a sign). See the room data for what each one points at.",
+                new() { ["cue"] = S(new { type = "string", @enum = cues.Keys }) }, "cue"));
         if (room.Twists is { Count: > 0 } twists)
             tools.Add(Tool("twist", "Fire one of the room's prepared twists (see the room data for what each does and when it is allowed).",
                 new() { ["twist"] = S(new { type = "string", @enum = twists.Keys }), ["why"] = why }, "twist", "why"));
@@ -262,6 +268,11 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
                 // An output named "hint" (a hint screen, the simulator) learns which puzzle got help; rooms without one skip it.
                 await Out(room, "hint", new { puzzle = id, level, to = Str("to") });
                 return $"podpowiedź {level} ({id}): {text}";
+            }
+            case "cue":
+            {
+                var (ok, message) = await engine.Cue(room, Str("cue") ?? "");
+                return ok ? $"wskazówka świetlna: {message}" : $"cue: rejected ({message})";
             }
             case "twist":
             {
@@ -331,7 +342,10 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
                 rulesHintLevel = level;
                 var id = active[rng.Next(active.Count)];
                 var hints = def is null ? null : AllPuzzles(def).FirstOrDefault(p => p.Id == id)?.Hints;
-                if (level == 3)
+                var cue = def?.Cues?.FirstOrDefault(kv => kv.Value.Puzzle == id).Key;
+                if (level == 1 && cue is not null)
+                    done.Add(await Act(room, "cue", JsonSerializer.SerializeToElement(new { cue }), observation));
+                else if (level == 3)
                     done.Add(await Act(room, "solve", JsonSerializer.SerializeToElement(new { puzzle = id, why = "długi przestój" }), observation));
                 else if (hints is { Length: > 0 } && helper is not null)
                     done.Add(await Act(room, "hint", JsonSerializer.SerializeToElement(new { puzzle = id, level, speaker = helper.Name, text = hints[Math.Min(level, hints.Length) - 1] }), observation));

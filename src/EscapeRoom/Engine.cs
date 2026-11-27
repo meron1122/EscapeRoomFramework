@@ -260,6 +260,26 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
         }
     }
 
+    /// <summary>Fires one of the room's cues (a hint lamp, a sign): its steps run in the running game.</summary>
+    public async Task<(bool Ok, string Message)> Cue(string roomId, string id)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            if (!running.TryGetValue(roomId, out var s)) return (false, "no game running");
+            if (s.Room.Cues?.GetValueOrDefault(id) is not { } cue) return (false, $"no cue '{id}'");
+            if (cue.Puzzle is { } p && (s.Room.Puzzles.FirstOrDefault(q => q.Id == p) is not { } puzzle || s.Game.Status(puzzle) != "active"))
+                return (false, $"'{p}' is not active");
+            await Log(s, "cue", new { cue = id });
+            _ = Run(s, cue.Then);
+            return (true, id);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     /// <summary>Switches a running game to a changed room; it keeps its progress. Call inside the gate.</summary>
     async Task<Session> Rewire(Session old, Room room)
     {

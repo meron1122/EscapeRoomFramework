@@ -50,6 +50,16 @@
     "voice":           { "topic": "escaperoom/jadro/voice" },
     "hint":            { "topic": "escaperoom/jadro/hint" },
     "twist":           { "topic": "escaperoom/jadro/twist" },
+    "lamp_przeszukanie": { "topic": "sim/jadro/lamp/przeszukanie" },
+    "lamp_telefon": { "topic": "sim/jadro/lamp/telefon" },
+    "lamp_szafka": { "topic": "sim/jadro/lamp/szafka" },
+    "lamp_bramka": { "topic": "sim/jadro/lamp/bramka" },
+    "lamp_sciana": { "topic": "sim/jadro/lamp/sciana" },
+    "lamp_zdrive": { "topic": "sim/jadro/lamp/zdrive" },
+    "lamp_zmart": { "topic": "sim/jadro/lamp/zmart" },
+    "lamp_skanery": { "topic": "sim/jadro/lamp/skanery" },
+    "lamp_firewall": { "topic": "sim/jadro/lamp/firewall" },
+    "lamp_uzbrojenie": { "topic": "sim/jadro/lamp/uzbrojenie" },
     "gm":              { "topic": "escaperoom/jadro/gm" }
   },
   "start": [
@@ -135,6 +145,28 @@
       "about": "Sztuczna inteligencja Korporacji Z, antagonistka. W holu uprzejma jak recepcja, na piętrze kpiąca, w Jądrze kusząca. Nigdy nie kłamie o zagadkach."
     }
   ],
+  "cues": {
+    "przeszukanie": { "puzzle": "przeszukanie", "about": "Lampka nad donicą z rośliną w holu.",
+      "then": [ { "output": "lamp_przeszukanie", "value": "ON" }, { "delay": 12000 }, { "output": "lamp_przeszukanie", "value": "OFF" } ] },
+    "telefon": { "puzzle": "telefon", "about": "Neon nad ekranem reklamy w holu: zwraca uwagę na rysowany gest.",
+      "then": [ { "output": "lamp_telefon", "value": "ON" }, { "delay": 12000 }, { "output": "lamp_telefon", "value": "OFF" } ] },
+    "szafka": { "puzzle": "szafka", "about": "Lampka nad monitorem z grafikiem ochrony.",
+      "then": [ { "output": "lamp_szafka", "value": "ON" }, { "delay": 12000 }, { "output": "lamp_szafka", "value": "OFF" } ] },
+    "bramka": { "puzzle": "bramka", "about": "Lampka przy czytniku bramki.",
+      "then": [ { "output": "lamp_bramka", "value": "ON" }, { "delay": 12000 }, { "output": "lamp_bramka", "value": "OFF" } ] },
+    "sciana": { "puzzle": "sciana", "about": "Neon nad ekranem raportu czasu ekranowego.",
+      "then": [ { "output": "lamp_sciana", "value": "ON" }, { "delay": 12000 }, { "output": "lamp_sciana", "value": "OFF" } ] },
+    "zdrive": { "puzzle": "zdrive", "about": "Lampka nad segregatorem z instrukcją serwisową w aucie.",
+      "then": [ { "output": "lamp_zdrive", "value": "ON" }, { "delay": 12000 }, { "output": "lamp_zdrive", "value": "OFF" } ] },
+    "zmart": { "puzzle": "zmart", "about": "Neon nad plakatami z regułami algorytmu przy kiosku.",
+      "then": [ { "output": "lamp_zmart", "value": "ON" }, { "delay": 12000 }, { "output": "lamp_zmart", "value": "OFF" } ] },
+    "skanery": { "puzzle": "skanery", "about": "Lampki nad dwoma właściwymi skanerami dłoni.",
+      "then": [ { "output": "lamp_skanery", "value": "ON" }, { "delay": 12000 }, { "output": "lamp_skanery", "value": "OFF" } ] },
+    "firewall": { "puzzle": "firewall", "about": "Lampka nad stojakiem z czujnikami.",
+      "then": [ { "output": "lamp_firewall", "value": "ON" }, { "delay": 12000 }, { "output": "lamp_firewall", "value": "OFF" } ] },
+    "uzbrojenie": { "puzzle": "uzbrojenie", "about": "Lampka nad konsolą ZETY z hasłem kolejności.",
+      "then": [ { "output": "lamp_uzbrojenie", "value": "ON" }, { "delay": 12000 }, { "output": "lamp_uzbrojenie", "value": "OFF" } ] }
+  },
   "twists": {
     "patrol": {
       "about": "ZETA ogłasza patrol na Piętrze Nawyków: przez 20 sekund nikt nie może się ruszyć.",

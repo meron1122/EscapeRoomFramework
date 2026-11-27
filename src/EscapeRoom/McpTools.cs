@@ -126,6 +126,11 @@ public class McpTools(Engine engine, Mqtt mqtt, Safety safety)
     public async Task<string> RerollVariant(string roomId, [Description("A key of the room's 'variants'")] string variant) =>
         await engine.Reroll(roomId, variant, Random.Shared) is var (ok, message) && ok ? message : throw new McpException(message);
 
+    [McpServerTool(Name = "fire_cue"), Description(
+        "Fire one of the room's cues in the running game: a wordless hint such as a lamp over the clue. Repeatable; moves real hardware.")]
+    public async Task<string> FireCue(string roomId, [Description("A key of the room's 'cues'")] string cue) =>
+        await engine.Cue(roomId, cue) is var (ok, message) && ok ? message : throw new McpException(message);
+
     [McpServerTool(Name = "fire_twist"), Description(
         "Fire one of the room's prepared twists in the running game, once per game and only when its 'after' puzzles are solved"
         + " and its 'blocks' puzzles are not. It runs its steps (moving real hardware) and may add puzzles.")]

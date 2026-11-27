@@ -39,6 +39,7 @@ var music_active := 0
 var music_on := true
 var track := ""
 var sfx: AudioStreamPlayer
+var lamps := {}  # puzzle id -> hint lamp the game master switches (engine output lamp_<id>)
 var markers := {}  # task id -> floor marks at its work spots, shown while the task is active
 var voice: AudioStreamPlayer  # the characters' spoken lines (engine mode, when the engine has a TTS voice)
 var voice_queue: Array[Dictionary] = []
@@ -197,7 +198,7 @@ func _connect_engine() -> void:
 	link.connected.connect(_on_engine_connected)
 	link.disconnected.connect(_on_engine_lost)
 	link.message.connect(_on_engine_message)
-	link.open(url, PackedStringArray(["escaperoom/%s/#" % ROOM_ID, "sim/%s/screen/#" % ROOM_ID, "sim/%s/fx/#" % ROOM_ID, "sim/%s/door/#" % ROOM_ID]))
+	link.open(url, PackedStringArray(["escaperoom/%s/#" % ROOM_ID, "sim/%s/screen/#" % ROOM_ID, "sim/%s/fx/#" % ROOM_ID, "sim/%s/door/#" % ROOM_ID, "sim/%s/lamp/#" % ROOM_ID]))
 	sim.submit.connect(_on_submit)
 
 
@@ -226,6 +227,9 @@ func _engine_start() -> void:
 
 func _on_engine_message(topic: String, payload: String) -> void:
 	var leaf := topic.get_slice("/", topic.get_slice_count("/") - 1)
+	if topic.begins_with("sim/%s/lamp/" % ROOM_ID):
+		_hint_lamp(topic.get_slice("/", 3), payload == "ON")
+		return
 	if topic.begins_with("sim/%s/door/" % ROOM_ID):
 		_on_door(leaf, payload.strip_edges() == "open")
 		return
@@ -451,6 +455,62 @@ func _build_environment() -> void:
 	add_child(atmosphere)
 	atmosphere.build(fonts.display, env)
 	_build_post()
+
+
+func _hint_lamp(id: String, on: bool) -> void:
+	## A hint lamp the game master controls: a bare bulb on a cord over the puzzle's place, warm against the cold room.
+	if not lamps.has(id):
+		if not sim.tasks.has(id) or sim.tasks[id].def.spots.is_empty():
+			return
+		var spot: Array = sim.tasks[id].def.spots[0]
+		var holder := Node3D.new()
+		holder.position = Vector3(spot[0], 0, spot[1])
+		add_child(holder)
+		var cord := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.008
+		cm.bottom_radius = 0.008
+		cm.height = 1.2
+		cord.mesh = cm
+		cord.position.y = 2.9
+		cord.material_override = _glow(Color("#15171a"), 0.0)
+		holder.add_child(cord)
+		var bulb := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = 0.07
+		sm.height = 0.16
+		bulb.mesh = sm
+		bulb.position.y = 2.25
+		var bm := StandardMaterial3D.new()
+		bm.albedo_color = Color("#3a3226")
+		bm.emission_enabled = true
+		bm.emission = Color("#ffc46b")
+		bm.emission_energy_multiplier = 0.0
+		bulb.material_override = bm
+		holder.add_child(bulb)
+		var light := OmniLight3D.new()
+		light.position.y = 2.1
+		light.light_color = Color("#ffc46b")
+		light.light_energy = 0.0
+		light.omni_range = 4.5
+		holder.add_child(light)
+		lamps[id] = {"mat": bm, "light": light, "tween": null}
+	var lamp: Dictionary = lamps[id]
+	if lamp.tween:
+		lamp.tween.kill()
+	var tw := create_tween()
+	lamp.tween = tw
+	if on:
+		# It flickers on like an old filament, then pulses gently so the eye is drawn to it.
+		for e in [1.0, 0.1, 1.0, 0.3, 1.0]:
+			tw.tween_property(lamp.light, "light_energy", 3.2 * e, 0.07)
+		tw.parallel().tween_property(lamp.mat, "emission_energy_multiplier", 4.0, 0.1)
+		for i in 60:  # the engine switches it off; the cap only stops a forgotten lamp from pulsing forever
+			tw.tween_property(lamp.light, "light_energy", 2.2, 0.7)
+			tw.tween_property(lamp.light, "light_energy", 3.2, 0.7)
+	else:
+		tw.tween_property(lamp.light, "light_energy", 0.0, 0.5)
+		tw.parallel().tween_property(lamp.mat, "emission_energy_multiplier", 0.0, 0.5)
 
 
 func _build_markers() -> void:

@@ -17,7 +17,8 @@ public record Room(
     int? Minutes = null,
     Character[]? Characters = null,
     Dictionary<string, Variant[]>? Variants = null,
-    Dictionary<string, Twist>? Twists = null)
+    Dictionary<string, Twist>? Twists = null,
+    Dictionary<string, Cue>? Cues = null)
 {
     public IEnumerable<string> Validate()
     {
@@ -82,6 +83,13 @@ public record Room(
             if (!names.Add(c.Name)) yield return $"character '{c.Name}': duplicate name";
             if (!Outputs.ContainsKey(c.Output)) yield return $"character '{c.Name}': unknown output '{c.Output}'";
             if (c.Screen is { } screen && !Outputs.ContainsKey(screen)) yield return $"character '{c.Name}': unknown screen '{screen}'";
+        }
+
+        foreach (var (id, cue) in Cues ?? [])
+        {
+            if (cue.Then.Length == 0) yield return $"cue '{id}': needs steps";
+            foreach (var e in CheckSteps(cue.Then)) yield return $"cue '{id}': {e}";
+            if (cue.Puzzle is { } p && Puzzles.All(q => q.Id != p)) yield return $"cue '{id}': unknown puzzle '{p}'";
         }
 
         // A variant may set a puzzle that only a twist brings into the game.
@@ -210,6 +218,12 @@ public record Character(string Name, string About, string Output, string? Voice 
 /// A reroll swaps solution and clue together, so the puzzle stays solvable.
 /// </summary>
 public record Variant(Dictionary<string, Condition> Solutions, Step[]? Clues = null, string? Summary = null);
+
+/// <summary>
+/// A wordless hint built into the room: a lamp, a sign or a sound that draws eyes to a clue. The game master may
+/// fire it any number of times; with <c>puzzle</c> set, only while that puzzle is active.
+/// </summary>
+public record Cue(string About, Step[] Then, string? Puzzle = null);
 
 /// <summary>
 /// A prepared twist the game master may fire once per game: its steps run, <c>adds</c> puzzles join the game and
