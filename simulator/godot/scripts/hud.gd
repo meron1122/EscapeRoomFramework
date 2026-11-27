@@ -189,7 +189,7 @@ func build(fonts_: Dictionary) -> void:
 	hint.offset_top = -100
 	root.add_child(hint)
 
-	_start = _overlay("THE CORE", "Five Nomads, three rooms, sixty minutes. Every game has a different variant,\nand the AI director matches hints and twists to the team's pace.", "START THE SIMULATION")
+	_start = _overlay("THE CORE", "Five Nomads, three rooms, sixty minutes.\nThey think they are alone. Shadowman is already watching.", "LET THEM IN")
 	_start.get_meta("button").pressed.connect(func(): _start.visible = false; start_requested.emit())
 	root.add_child(_start)
 	_end = _overlay("THE END", "", "NEW GAME")

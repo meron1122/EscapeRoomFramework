@@ -127,6 +127,8 @@ func _ready() -> void:
 			zoom = float(arg.get_slice("=", 1))
 		elif arg == "--film":
 			_set_film(true)
+		elif arg == "--stage":
+			_set_stage()
 		elif arg.begins_with("--shot="):
 			_shoot(arg.get_slice("=", 1))
 	if OS.has_feature("web"):
@@ -134,11 +136,7 @@ func _ready() -> void:
 		# ?stage=1 turns the simulator into a silent backdrop: no overlay at all, and the page that embeds it
 		# directs the scene through window.shadowman("lamp:phone" | "blackout" | "room:core" | "speed:6" | "sound:on").
 		if str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('stage') || ''")) != "":
-			_set_film(true)
-			hud.visible = false
-			started_once = true
-			speed = 5.0
-			music_on = false  # browsers allow sound only after a click; the page turns it on then
+			_set_stage()
 			_stage_cb = JavaScriptBridge.create_callback(_on_stage_command)
 			JavaScriptBridge.get_interface("window").shadowman = _stage_cb
 		var q := str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('film') || ''"))
@@ -202,7 +200,7 @@ func _connect_engine() -> void:
 			if (q !== null) return q;
 			return ['localhost', '127.0.0.1'].includes(location.hostname) ? 'ws://localhost:9001' : 'wss://' + location.host + '/mqtt'; })()"""))
 	if url == "" or url == "off":
-		hud.set_director("OFFLINE MODE\nSimulator without the engine: the director runs on local rules.")
+		hud.set_director("SHADOWMAN IS NOT HERE\nNo engine: the room runs on its own local rules.")
 		return
 	link = MqttLink.new()
 	add_child(link)
@@ -215,7 +213,7 @@ func _connect_engine() -> void:
 
 func _on_engine_connected() -> void:
 	sim.engine_mode = true
-	gm_text = "MODE: ENGINE + AI GAME MASTER\nWaiting for the game to start."
+	gm_text = "SHADOWMAN IS CONNECTED\nWaiting for the team."
 	if _pending_start:
 		_pending_start = false
 		_engine_start()
@@ -225,7 +223,7 @@ func _on_engine_lost() -> void:
 	if not sim.engine_mode:
 		link = null  # never connected: stay offline
 		_pending_start = false
-		hud.set_director("OFFLINE MODE\nNo connection to the engine: the director runs on local rules.")
+		hud.set_director("SHADOWMAN IS NOT HERE\nNo connection to the engine: the room runs on its own local rules.")
 	else:
 		gm_text = "CONNECTION TO THE ENGINE LOST"
 
@@ -287,7 +285,7 @@ func _on_engine_message(topic: String, payload: String) -> void:
 				sim.twists_used.append(str(d.get("kind", "")))
 		"escaperoom/%s/gm" % ROOM_ID:
 			var actions: Array = d.get("actions", [])
-			var mode := "MODEL " + str(d.get("model", "")) if d.get("mode", "") == "model" else "RULES (no model)"
+			var mode := "HIS NOTES · " + str(d.get("model", "")) if d.get("mode", "") == "model" else "HIS NOTES · rules only, no model"
 			gm_text = "%s\n%s%s" % [mode, str(d.get("thought", "")), ("\n› " + "\n› ".join(PackedStringArray(actions.map(func(a): return str(a))))) if not actions.is_empty() else ""]
 		"sim/%s/fx/scanners" % ROOM_ID:
 			sim.variant.scanners = d.get("active", []).map(func(x): return str(x))
@@ -960,6 +958,15 @@ func _on_door(id: String, open: bool) -> void:
 		reached[NEXT_ROOM[id]] = true
 
 
+func _set_stage() -> void:
+	## The room as a backdrop: no overlay at all, a slow game, silent until told otherwise.
+	_set_film(true)
+	hud.visible = false
+	started_once = true
+	speed = 5.0
+	music_on = false  # browsers allow sound only after a click; the page turns it on then
+
+
 func _on_stage_command(args: Array) -> void:
 	var cmd := str(args[0]) if not args.is_empty() else ""
 	var value := cmd.get_slice(":", 1)
@@ -971,6 +978,9 @@ func _on_stage_command(args: Array) -> void:
 				_focus(lamps[value].parts[0].light.global_position * Vector3(1, 0, 1), 11.0, 7.0)
 		"blackout":
 			sim.dim_until = sim.t + 60.0
+		"finale":
+			if sim.ending == "":
+				sim._finish("detonation")
 		"room":
 			for r in layout.rooms:
 				if r.id == value:

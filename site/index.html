@@ -5,98 +5,200 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="brand/shadowman-icon.svg">
 <title>Shadowman — the AI game master for escape rooms</title>
-<meta name="description" content="Shadowman is an AI game master. He watches every player, and he decides what the room does next.">
+<meta name="description" content="You never see him. You see what he does. Shadowman is an AI game master: he watches every player and decides what the room does next.">
+<meta name="theme-color" content="#030405">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Shadowman">
+<meta property="og:description" content="The AI game master for escape rooms. You never see him. You see what he does.">
+<meta property="og:image" content="brand/share.png">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   @font-face { font-family: "Chakra Petch"; src: url("fonts/ChakraPetch-Bold.ttf"); font-weight: 700; font-display: swap; }
   @font-face { font-family: "Rajdhani"; src: url("fonts/Rajdhani-SemiBold.ttf"); font-weight: 600; font-display: swap; }
   @font-face { font-family: "JetBrains Mono"; src: url("fonts/JetBrainsMono.ttf"); font-display: swap; }
-  :root { --ink: #e9ecef; --dim: #8b949c; --accent: #fcee0a; --hint: #ff4fa3; --bg: #030405; }
+  :root { --ink: #e9ecef; --dim: #8b949c; --accent: #fcee0a; --hint: #ff4fa3; --red: #e01b28; --bg: #030405; }
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; background: var(--bg); }
-  body { margin: 0; color: var(--ink); font: 600 20px/1.5 "Rajdhani", system-ui, sans-serif; }
+  html { background: var(--bg); scroll-snap-type: y proximity; }
+  body { margin: 0; color: var(--ink); font: 600 20px/1.5 "Rajdhani", system-ui, sans-serif; overflow-x: hidden; }
+  body.locked { overflow: hidden; }
 
   /* The room plays behind everything; the page only darkens it and writes over it. */
-  #room { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg); }
+  #room, #poster { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg); }
+  #poster { display: none; object-fit: cover; animation: drift 60s ease-in-out infinite alternate; }
+  body.poster #poster { display: block; }
+  body.poster #room { display: none; }
+  @keyframes drift { from { transform: scale(1.25) translate(4%, 2%); } to { transform: scale(1.5) translate(-9%, -5%); } }
   #veil { position: fixed; inset: 0; pointer-events: none; transition: background 1.6s ease;
-          background: radial-gradient(ellipse at 50% 45%, rgba(3,4,5,.25), rgba(3,4,5,.88) 75%); }
+          background: radial-gradient(ellipse at 50% 45%, rgba(3,4,5,.2), rgba(3,4,5,.9) 75%); }
   #veil.black { background: rgba(3,4,5,1); }
-  #veil.dark { background: radial-gradient(ellipse at 50% 45%, rgba(3,4,5,.72), rgba(3,4,5,.97) 70%); }
+  #veil.dark { background: radial-gradient(ellipse at 50% 45%, rgba(3,4,5,.74), rgba(3,4,5,.97) 70%); }
+  #alarm { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .6s;
+           background: radial-gradient(ellipse at 50% 50%, rgba(224,27,40,0) 35%, rgba(224,27,40,.34) 100%); }
+  body.alarm #alarm { opacity: 1; animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  #flash { position: fixed; inset: 0; pointer-events: none; background: #fff; opacity: 0; }
+  body.flash #flash { animation: flash 3.2s ease-out forwards; }
+  @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+  #count { position: fixed; left: 0; right: 0; top: 16vh; text-align: center; pointer-events: none; opacity: 0;
+           font: 700 clamp(34px, 6vw, 84px)/1 "Chakra Petch", sans-serif; color: var(--accent); letter-spacing: .02em;
+           font-variant-numeric: tabular-nums; }
+  body.alarm #count { opacity: 1; }
+
+  /* The gate: one eye in the dark, and a choice. */
+  #gate { position: fixed; inset: 0; z-index: 10; display: grid; place-content: center; justify-items: center; gap: 26px;
+          padding: 24px; text-align: center; background: var(--bg); transition: opacity 1.4s ease, visibility 0s 1.4s; }
+  #gate.gone { opacity: 0; visibility: hidden; }
+  .eye { width: 120px; height: auto; filter: drop-shadow(0 0 16px rgba(224,27,40,.75)); transform-origin: 50% 55%;
+         animation: blink 7s ease-in-out infinite; }
+  @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.06); } }
+  #gate p { margin: 0; font: 700 clamp(22px, 3.2vw, 36px)/1.2 "Chakra Petch", sans-serif; }
+  #gate small { color: var(--dim); font: 13px/1.6 "JetBrains Mono", monospace; max-width: 34em; }
+  .choices { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
 
   main { position: relative; }
-  section { min-height: 100vh; display: flex; flex-direction: column; justify-content: flex-end;
-            padding: 0 clamp(20px, 7vw, 120px) 16vh; }
+  section { min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; justify-content: flex-end;
+            padding: 12vh clamp(20px, 7vw, 120px) 16vh; scroll-snap-align: start; }
   section.mid { justify-content: center; }
-  .line { max-width: 22em; font: 700 clamp(28px, 4.4vw, 60px)/1.12 "Chakra Petch", sans-serif; letter-spacing: -.01em;
-          text-wrap: balance; opacity: 0; transform: translateY(14px); transition: opacity 1.4s ease .2s, transform 1.4s ease .2s; }
-  .sub { max-width: 34em; margin-top: 18px; color: var(--dim); opacity: 0; transition: opacity 1.4s ease .9s; }
-  .log { font: 14px/1.6 "JetBrains Mono", monospace; color: var(--dim); margin-bottom: 20px; opacity: 0;
-         transition: opacity 1.2s ease; white-space: pre-line; }
+  .line { max-width: 22em; margin: 0; font: 700 clamp(28px, 4.4vw, 60px)/1.12 "Chakra Petch", sans-serif;
+          letter-spacing: -.01em; text-wrap: balance; opacity: 0; }
+  .sub { max-width: 34em; margin: 18px 0 0; color: var(--dim); opacity: 0; transition: opacity 1.4s ease 1s; }
+  .log { font: 14px/1.7 "JetBrains Mono", monospace; color: var(--dim); margin: 0 0 20px; opacity: 0;
+         transition: opacity 1.2s ease .1s; white-space: pre-line; min-height: 1.7em; }
   .log b { color: var(--ink); font-weight: 400; }
-  section.on .line, section.on .sub, section.on .log { opacity: 1; transform: none; }
+  section.on .sub, section.on .log { opacity: 1; }
+  section.on .line { opacity: 1; animation: tear .6s linear .15s backwards; }
+  /* A line arrives like a bad signal: torn for a moment, then whole. */
+  @keyframes tear {
+    0% { opacity: 0; clip-path: inset(0 0 100% 0); }
+    25% { opacity: 1; clip-path: inset(0 0 60% 0); transform: translateX(-7px); }
+    45% { clip-path: inset(45% 0 15% 0); transform: translateX(9px); }
+    65% { clip-path: inset(10% 0 0 0); transform: translateX(-3px); }
+    100% { clip-path: inset(0); transform: none; }
+  }
   .hint { color: var(--hint); }
-  .name { font: 700 clamp(56px, 12vw, 180px)/.9 "Chakra Petch", sans-serif; letter-spacing: -.03em; color: var(--ink); }
-  .mark { width: clamp(200px, 30vw, 380px); height: auto; margin-bottom: 18px; opacity: 0; transition: opacity 2.4s ease .1s; }
-  section.on .mark { opacity: 1; }
+  .you { list-style: none; margin: 0 0 26px; padding: 0; font: 15px/1.9 "JetBrains Mono", monospace; color: var(--ink);
+         opacity: 0; transition: opacity 1.2s ease .2s; }
+  .you span { color: var(--dim); margin-right: 14px; }
+  section.on .you { opacity: 1; }
+
+  .reveal { position: relative; width: min(48vh, 78vw, 500px); margin-bottom: 10px; }
+  .reveal img { display: block; width: 100%; height: auto; opacity: 0; transition: opacity 2.6s ease 1.5s; }
+  .reveal svg { position: absolute; left: 52.67%; top: 41%; width: 12.67%; opacity: 0; transition: opacity .5s ease .2s;
+                filter: drop-shadow(0 0 10px rgba(224,27,40,.8)); }
+  section.on .reveal img, section.on .reveal svg { opacity: 1; }
+  .name { font: 700 clamp(52px, 11vw, 170px)/.9 "Chakra Petch", sans-serif; letter-spacing: -.03em; }
+  section.on .name { animation-delay: 2.2s; }
   .name small { display: block; margin-top: 22px; font: 600 clamp(18px, 2vw, 26px)/1.3 "Rajdhani", sans-serif;
                 letter-spacing: .02em; color: var(--dim); }
 
-  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 28px 40px; max-width: 1100px;
-           margin-top: 44px; opacity: 0; transition: opacity 1.4s ease 1s; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 26px 40px; max-width: 1180px;
+           margin-top: 40px; opacity: 0; transition: opacity 1.4s ease 1.2s; }
   section.on .facts { opacity: 1; }
   .facts h3 { margin: 0 0 6px; font: 700 15px/1.3 "JetBrains Mono", monospace; color: var(--accent); letter-spacing: .04em;
               text-transform: uppercase; }
   .facts p { margin: 0; color: #c4cace; }
 
-  a.cta, button.cta { display: inline-block; margin-top: 36px; padding: 14px 26px; border: 1px solid var(--accent);
+  a.cta, button.cta { display: inline-block; margin-top: 34px; padding: 14px 26px; border: 1px solid var(--accent);
       background: transparent; color: var(--accent); font: 700 17px/1 "Chakra Petch", sans-serif; letter-spacing: .06em;
       text-transform: uppercase; text-decoration: none; cursor: pointer; transition: background .25s, color .25s; }
   a.cta:hover, button.cta:hover, a.cta:focus-visible, button.cta:focus-visible { background: var(--accent); color: #000; outline: none; }
+  .cta.quiet { border-color: rgba(233,236,239,.35); color: var(--ink); }
+  .cta.quiet:hover, .cta.quiet:focus-visible { background: var(--ink); color: #000; }
+  section > .cta { align-self: flex-start; }
+  .row { display: flex; flex-wrap: wrap; gap: 14px; }
+  #gate .cta { margin-top: 0; }
+  .final .line, .final .row { visibility: hidden; }
+  body.done .final .line, body.done .final .row { visibility: visible; }
+
   #sound { position: fixed; right: 22px; top: 18px; z-index: 5; margin: 0; padding: 9px 14px; font-size: 12px;
            border-color: rgba(233,236,239,.35); color: var(--dim); }
+  /* What the page noticed about the visitor, in the corner the whole time. */
+  #notes { position: fixed; right: 22px; bottom: 20px; z-index: 4; margin: 0; padding: 0; list-style: none; text-align: right;
+           font: 12px/1.7 "JetBrains Mono", monospace; color: var(--dim); opacity: .7; pointer-events: none; }
+  #notes span { margin-right: 10px; }
+  #notes li:last-child { color: var(--ink); }
   #scroll { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); font: 12px "JetBrains Mono", monospace;
             color: var(--dim); letter-spacing: .2em; transition: opacity .8s; pointer-events: none; }
-  footer { padding: 40px clamp(20px, 7vw, 120px) 60px; color: var(--dim); font-size: 16px; position: relative; background: var(--bg); }
+  footer { position: relative; padding: 40px clamp(20px, 7vw, 120px) 60px; color: var(--dim); font-size: 16px; background: var(--bg);
+           scroll-snap-align: end; }
   footer a { color: var(--ink); }
-  @media (prefers-reduced-motion: reduce) { .line, .sub, .log, .facts, #veil { transition: none; } html { scroll-behavior: auto; } }
+  @media (max-width: 760px) { #notes { display: none; } section { padding-bottom: 12vh; } }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-snap-type: none; }
+    section.on .line { animation: none; }
+    .eye, #poster, body.alarm #alarm { animation: none; }
+    .sub, .log, .facts, #veil, .reveal img, .reveal svg { transition: none; }
+  }
 </style>
 </head>
-<body>
-<iframe id="room" src="play/index.html?stage=1&mqtt=off" title="A team playing an escape room, seen from above" tabindex="-1" aria-hidden="true"></iframe>
+<body class="locked">
+<iframe id="room" title="A team playing an escape room, seen from above" tabindex="-1" aria-hidden="true"></iframe>
+<img id="poster" src="brand/room.jpg" alt="">
 <div id="veil" class="black"></div>
+<div id="alarm"></div>
+<div id="count" aria-hidden="true"></div>
+<div id="flash"></div>
+
+<div id="gate" role="dialog" aria-label="Enter">
+  <svg class="eye" viewBox="306 236 96 70" aria-hidden="true">
+    <path d="M316 280 C340 276 366 264 392 246 C384 276 362 296 334 296 C324 294 318 288 316 280 Z" fill="#e01b28"/>
+    <path d="M346 270 L358 264 L354 292 L344 292 Z" fill="#07080a"/>
+  </svg>
+  <p>He is expecting you.</p>
+  <div class="choices">
+    <button class="cta" type="button" data-enter="sound">Enter with sound</button>
+    <button class="cta quiet" type="button" data-enter="silence">Enter in silence</button>
+  </div>
+  <small>A room is running behind this page. Nothing you do here leaves your browser.</small>
+</div>
+
 <button id="sound" class="cta" type="button" aria-pressed="false">Sound: off</button>
+<ul id="notes" aria-hidden="true"></ul>
 <div id="scroll" aria-hidden="true">SCROLL</div>
 
 <main>
-  <section class="mid" data-veil="black">
+  <section class="mid" data-name="They think they are alone" data-veil="black" data-bpm="46">
     <p class="line">Five people walked into a room.<br>They think they are alone.</p>
   </section>
 
-  <section data-veil="" data-do="room:lobby">
+  <section data-name="Someone is taking notes" data-veil="" data-do="room:lobby|speed:4" data-bpm="54">
     <p class="log" data-log></p>
     <p class="line">Someone is taking notes.</p>
   </section>
 
-  <section data-veil="" data-do="lamp:phone">
-    <p class="log"><b>hint</b>  lamp over the ad screen · 9 s</p>
+  <section data-name="He didn't say a word" data-veil="" data-do="lamp:phone" data-bpm="62">
+    <p class="log"><b>cue</b>   lamp over the ad screen · 9 s</p>
     <p class="line">A light came on over the clue.<br><span class="hint">He didn't say a word.</span></p>
   </section>
 
-  <section data-veil="" data-do="blackout">
-    <p class="log"><b>twist</b>  blackout · team is 5 min ahead of plan</p>
+  <section data-name="He noticed" data-veil="" data-do="blackout|speed:8" data-bpm="74">
+    <p class="log"><b>twist</b> blackout · the team is five minutes ahead of plan</p>
     <p class="line">They were ahead of schedule.<br>He noticed.</p>
   </section>
 
-  <section data-veil="dark">
-    <p class="log"><b>say</b>  ZETA → "You are doing so well. Statistically, you give up in minute seventeen."</p>
+  <section data-name="He has voices" data-veil="dark" data-bpm="86">
+    <p class="log"><b>say</b>   ZETA → "You are doing so well. Statistically, you give up in minute seventeen."</p>
     <p class="line">He has voices.<br>None of them is his own.</p>
   </section>
 
-  <section class="mid" data-veil="dark" id="name">
-    <img class="mark" src="brand/shadowman.svg" alt="" width="220" height="220">
+  <section data-name="Notes on you" data-veil="dark" data-bpm="100">
+    <ul class="you" data-you></ul>
+    <p class="line">He has been taking notes on you, too.</p>
+    <p class="sub">This page only watched how you scroll. In a room he has every sensor, every camera and every wrong answer.</p>
+  </section>
+
+  <section class="mid" data-name="Shadowman" data-veil="black" data-bpm="0" id="name">
+    <div class="reveal">
+      <img src="brand/shadowman.svg" alt="" width="430" height="430">
+      <svg viewBox="316 246 76 50" aria-hidden="true">
+        <path d="M316 280 C340 276 366 264 392 246 C384 276 362 296 334 296 C324 294 318 288 316 280 Z" fill="#e01b28"/>
+        <path d="M346 270 L358 264 L354 292 L344 292 Z" fill="#07080a"/>
+      </svg>
+    </div>
     <p class="line name">Shadowman<small>The AI game master for escape rooms.</small></p>
   </section>
 
-  <section data-veil="dark">
+  <section data-name="He runs the whole game" data-veil="dark" data-bpm="60" data-music="on" data-do="speed:6">
     <p class="line">He runs the whole game, live.</p>
     <p class="sub">You describe your room in plain words and wire the hardware to MQTT. Shadowman reads the brief, watches every player and decides what the room does next. You never see him. You see what he does.</p>
     <div class="facts">
@@ -104,56 +206,181 @@
       <div><h3>He helps quietly</h3><p>First a lamp over the clue. Then a nudge in a character's voice. A hand on the lock only as a last resort.</p></div>
       <div><h3>He raises the stakes</h3><p>A team that is too fast gets a blackout, a patrol or a door that locks again.</p></div>
       <div><h3>No two games alike</h3><p>Before the first clue is read, he redraws the puzzles for this team: solution and clue together.</p></div>
+      <div><h3>You read his notes</h3><p>Every decision arrives with one cold line of why. The operator watches him think.</p></div>
+      <div><h3>Your hardware</h3><p>Tasmota, ESPHome, Zigbee2MQTT, RTSP cameras: anything that speaks MQTT is his to play.</p></div>
     </div>
-    <a class="cta" href="play/">Watch him run a game</a>
+    <a class="cta" href="play/" data-cta>Watch him run a game</a>
   </section>
 
-  <section class="mid" data-veil="dark" data-do="room:core">
-    <p class="line">The exits are not Shadowman's.<br>Everything else is.</p>
+  <section class="mid" data-name="The exits are not his" data-veil="dark" data-do="room:core" data-bpm="70" data-music="on">
+    <p class="line">The exits are not his.<br>Everything else is.</p>
     <p class="sub">Doors, alarms and emergency systems live in a separate safety layer with its own audit log. He cannot reach it, and he never pretends he can.</p>
   </section>
 
-  <section class="mid" data-veil="black">
+  <section class="mid final" data-name="His game" data-veil="" data-finale data-bpm="132" data-music="on">
     <p class="line">Your room.<br>His game.</p>
-    <a class="cta" href="https://github.com/meron1122/EscapeRoomFramework">See how it works</a>
+    <div class="row">
+      <a class="cta" href="play/" data-cta>Watch him run a game</a>
+      <a class="cta quiet" href="https://github.com/meron1122/EscapeRoomFramework">See how he is built</a>
+    </div>
   </section>
 </main>
 
 <footer>
-  Shadowman runs on a <a href="https://fly.io/sprites">Fly.io Sprite</a>; the model and the voices are reached through Sprites Connectors, so he never holds a key.
-  The room on this page is a simulation: it stands in for real hardware on the same MQTT bus.
+  Shadowman runs on a <a href="https://fly.io/sprites">Fly.io Sprite</a>. The model and the voices are reached through Sprites Connectors, so he never holds a key.
+  The room on this page is a simulation: it stands in for real hardware on the same MQTT bus. Nothing you did here left your browser.
 </footer>
 
 <script>
-  const room = document.getElementById("room"), veil = document.getElementById("veil");
-  // The simulator exposes window.shadowman once it has loaded; commands sent before that are dropped on purpose.
-  const direct = cmd => { try { room.contentWindow.shadowman && room.contentWindow.shadowman(cmd); } catch (e) {} };
+(() => {
+  const $ = s => document.querySelector(s);
+  const room = $("#room"), veil = $("#veil"), sections = [...document.querySelectorAll("main section")];
+  const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Phones and data-saving connections get a still of the room instead of 50 MB of live simulation.
+  const light = matchMedia("(max-width: 760px)").matches || (navigator.connection && navigator.connection.saveData);
 
-  const notes = ["00:41  Fox stopped reading the screen.", "01:12  Rust and Thunder are at the phone. Mouse is guessing.",
-    "02:03  Spark has not moved for ninety seconds.", "02:40  Nobody has looked at the ad yet."];
-  const logEl = document.querySelector("[data-log]");
-  let n = 0;
-  setInterval(() => { if (logEl.closest("section").classList.contains("on")) logEl.textContent = notes.slice(0, ++n % (notes.length + 1) || 1).join("\n"); }, 2600);
+  // ---------- the room behind the page ----------
+  let wanted = [];  // what the current scene asked of the room, resent until the simulator has loaded
+  function loadRoom() {
+    room.src = "play/index.html?stage=1&mqtt=off";
+    // The simulator makes its own AudioContext; keep a handle so a click on this page can start its sound.
+    const hook = setInterval(() => {
+      let w;
+      try { w = room.contentWindow; if (!w || !w.location.pathname.includes("/play/") || !w.AudioContext) return; } catch (e) { return; }
+      if (!("__ac" in w)) {
+        const AC = w.AudioContext;
+        w.__ac = null;
+        w.AudioContext = class extends AC { constructor(...a) { super(...a); w.__ac = this; } };
+      }
+      clearInterval(hook);
+    }, 15);
+  }
+  const say = cmd => { try { const f = room.contentWindow.shadowman; if (!f) return false; f(cmd); return true; } catch (e) { return false; } };
+  function direct(cmds) { wanted = cmds ? cmds.split("|") : []; flush(); }
+  function flush() { if (!light && wanted.length && wanted.every(say)) wanted = []; }
+  setInterval(flush, 400);
+  const wake = () => { try { const c = room.contentWindow.__ac; if (c && c.state !== "running") c.resume(); } catch (e) {} };
 
-  const seen = new IntersectionObserver(entries => {
-    for (const e of entries) {
-      if (!e.isIntersecting) continue;
-      document.querySelectorAll("section.on").forEach(s => s.classList.remove("on"));
-      e.target.classList.add("on");
-      veil.className = e.target.dataset.veil || "";
-      if (e.target.dataset.do) direct(e.target.dataset.do);
-      document.getElementById("scroll").style.opacity = e.target === document.querySelector("section") ? 1 : 0;
-    }
-  }, { threshold: 0.55 });
-  document.querySelectorAll("section").forEach(s => seen.observe(s));
+  // ---------- sound: a heartbeat that speeds up with the scenes, then his music ----------
+  let ac = null, master = null, soundOn = false, bpm = 0, music = false;
+  function thump(t, f, g) {
+    const o = ac.createOscillator(), a = ac.createGain();
+    o.frequency.setValueAtTime(f, t);
+    o.frequency.exponentialRampToValueAtTime(f * 0.42, t + 0.17);
+    a.gain.setValueAtTime(0.0001, t);
+    a.gain.exponentialRampToValueAtTime(g, t + 0.012);
+    a.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+    o.connect(a).connect(master);
+    o.start(t); o.stop(t + 0.3);
+  }
+  function beat() {
+    if (soundOn && bpm && ac.state === "running") { const t = ac.currentTime + 0.02; thump(t, 118, 0.9); thump(t + 0.2, 92, 0.55); }
+    setTimeout(beat, bpm ? 60000 / bpm : 300);
+  }
+  function setSound(on) {
+    soundOn = on;
+    if (on && !ac) { ac = new AudioContext(); master = ac.createGain(); master.gain.value = 0.5; master.connect(ac.destination); beat(); }
+    if (ac) on ? ac.resume() : ac.suspend();
+    $("#sound").setAttribute("aria-pressed", on);
+    $("#sound").textContent = "Sound: " + (on ? "on" : "off");
+    applyMusic();
+  }
+  function applyMusic() { if (soundOn) wake(); say("sound:" + (soundOn && music ? "on" : "off")); }
+  $("#sound").addEventListener("click", () => { setSound(!soundOn); note(soundOn ? "you wanted to hear him." : "you chose silence."); });
 
-  const sound = document.getElementById("sound");
-  sound.addEventListener("click", () => {
-    const on = sound.getAttribute("aria-pressed") !== "true";
-    sound.setAttribute("aria-pressed", on);
-    sound.textContent = "Sound: " + (on ? "on" : "off");
-    direct("sound:" + (on ? "on" : "off"));
+  // ---------- his notes on the visitor ----------
+  let t0 = performance.now(), entered = false;
+  const log = [];
+  const stamp = () => { const s = Math.floor((performance.now() - t0) / 1000); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
+  const row = n => { const li = document.createElement("li"), at = document.createElement("span"); at.textContent = n.at; li.append(at, n.text); return li; };
+  function note(text) {
+    if (!entered || (log.length && log[log.length - 1].text === text)) return;
+    log.push({ at: stamp(), text });
+    $("#notes").replaceChildren(...log.slice(-3).map(row));
+    $("[data-you]").replaceChildren(...log.slice(-9).map(row));
+  }
+  let idle = null, awayAt = 0, exitAt = 0;
+  function moved() { clearTimeout(idle); idle = setTimeout(() => note("you stopped moving."), 8000); }
+  ["scroll", "pointermove", "keydown", "touchstart"].forEach(e => addEventListener(e, moved, { passive: true }));
+  document.addEventListener("mouseleave", e => { if (e.clientY <= 0 && performance.now() - exitAt > 15000) { exitAt = performance.now(); note("you reached for the exit."); } });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) awayAt = performance.now();
+    else if (awayAt && performance.now() - awayAt > 2000) note("you looked away for " + Math.round((performance.now() - awayAt) / 1000) + " s.");
   });
+  document.querySelectorAll("[data-cta]").forEach(a => a.addEventListener("pointerenter", () => note("you are thinking about it.")));
+
+  // The notes he keeps on the players, typed out one by one.
+  const playerNotes = ["00:41  Fox stopped reading the screen.", "01:12  Rust and Thunder are at the phone. Mouse is guessing.",
+    "02:03  Spark has not moved for ninety seconds.", "02:40  Nobody has looked at the ad yet."];
+  let shown = 0;
+  setInterval(() => { const el = $("[data-log]"); if (el.closest("section").classList.contains("on") && shown < playerNotes.length) el.textContent = playerNotes.slice(0, ++shown).join("\n"); }, 2200);
+
+  // ---------- scenes ----------
+  let current = -1, since = 0, fired = false, ticking = null;
+  function show(i) {
+    if (i === current || !entered) return;
+    const s = sections[i], now = performance.now();
+    if (current >= 0) {
+      const stayed = (now - since) / 1000;
+      if (stayed > 10) note("you stayed " + Math.round(stayed) + " s on “" + sections[current].dataset.name + "”.");
+      else if (stayed < 1.2) note("you are in a hurry.");
+      if (i < current) note("you went back.");
+    }
+    sections.forEach(x => x.classList.toggle("on", x === s));
+    current = i; since = now;
+    veil.className = s.dataset.veil || "";
+    bpm = +s.dataset.bpm || 0;
+    music = s.dataset.music === "on";
+    $("#scroll").style.opacity = i === 0 ? 1 : 0;
+    if (fired && !("finale" in s.dataset)) rewind();
+    direct(s.dataset.do || "");
+    applyMusic();
+    if ("finale" in s.dataset && !fired) finale();
+  }
+  // Sixty minutes end the way he decides: twelve seconds, a flash, and silence.
+  function finale() {
+    fired = true;
+    direct("finale");
+    document.body.classList.add("alarm");
+    let left = 12;
+    const tick = () => {
+      $("#count").textContent = "DETONATION  00:" + String(left).padStart(2, "0");
+      if (left-- > 0) return;
+      clearInterval(ticking);
+      document.body.classList.remove("alarm");
+      document.body.classList.add("done");
+      if (!calm) document.body.classList.add("flash");
+      veil.className = "black";
+      bpm = 0;
+    };
+    tick();
+    ticking = setInterval(tick, 1000);
+  }
+  // Going back up after the end starts a fresh game behind the page.
+  function rewind() {
+    fired = false;
+    clearInterval(ticking);
+    document.body.classList.remove("alarm", "done", "flash");
+    if (!light) loadRoom();
+  }
+  const seen = new IntersectionObserver(es => es.forEach(e => e.isIntersecting && show(sections.indexOf(e.target))),
+    { rootMargin: "-50% 0px -50% 0px" });  // the scene that crosses the middle of the screen is the scene
+  sections.forEach(s => seen.observe(s));
+
+  // ---------- the gate ----------
+  document.querySelectorAll("[data-enter]").forEach(b => b.addEventListener("click", () => {
+    entered = true; t0 = performance.now();
+    $("#gate").classList.add("gone");
+    document.body.classList.remove("locked");
+    setSound(b.dataset.enter === "sound");
+    note(soundOn ? "you came in. you wanted to hear." : "you came in, in silence.");
+    moved();
+    const mid = innerHeight / 2;
+    show(Math.max(0, sections.findIndex(s => { const r = s.getBoundingClientRect(); return r.top <= mid && r.bottom > mid; })));
+  }));
+
+  if (light) document.body.classList.add("poster"); else loadRoom();
+})();
 </script>
 </body>
 </html>

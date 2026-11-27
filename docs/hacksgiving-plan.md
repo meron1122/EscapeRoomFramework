@@ -1,6 +1,6 @@
-# Hacksgiving: an agent as the game master
+# Hacksgiving: Shadowman, an agent as the game master
 
-We are entering an agent that really runs an escape room: it tracks the players, reacts to what they do, and changes
+We are entering Shadowman, an agent that really runs an escape room: it tracks the players, reacts to what they do, and changes
 the course of the game while it is being played. It runs on a Sprite, with the model through a Connector, and the room
 "The Core" in the browser is its virtual hardware. Deadline: Monday 30 Nov, 9:00 Polish time (midnight PST, 29 Nov).
 

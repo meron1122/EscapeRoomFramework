@@ -1,6 +1,6 @@
 # Deploying to a Fly.io Sprite
 
-One Sprite runs everything: the engine with the AI game master, Postgres, the MQTT broker and the simulator's
+One Sprite runs everything: the engine with Shadowman (the AI game master), the landing page, Postgres, the MQTT broker and the simulator's
 web build. Two Sprites Connectors hold the model and voice keys, so no API key is ever on the Sprite.
 
 ```mermaid
@@ -21,7 +21,7 @@ flowchart LR
 
 | Path | Public | Why |
 |---|---|---|
-| `/` | yes | the simulator |
+| `/` | yes | the landing page; the simulator is under `/play/` |
 | `/mqtt` | yes, limited | a browser acts as the room's hardware; the broker's ACL lets it write only the room's sensor, start and player topics, and read only the room's topics |
 | `/voice/<hash>.mp3` | yes | spoken lines; names are content hashes |
 | `/rooms`, `/mcp`, `/safety` | no (404) | the engine API, the MCP server and the safety layer have no login, so they stay on localhost. Reach them with `sprite proxy 5201` |
@@ -107,7 +107,7 @@ bound them.
 These come from the Sprites documentation, not from a run on a real Sprite:
 
 - WebSocket upgrades through the public `*.sprites.app` URL (the docs say "HTTP(S) only"). If `/mqtt` does not
-  connect, the simulator still runs with its offline director, but the game master is then not in the loop.
+  connect, the landing page still works (its room runs offline), but `/play/` then runs without Shadowman.
 - `sudo`/`apt` and `systemctl` on the Sprite image, and the CPU architecture (the bundle is built for x86_64).
 - Whether the gateway overrides the placeholder `Authorization` header the Anthropic SDK sends.
 - Whether local connections between the engine and the broker keep the Sprite awake. If they do, the Sprite

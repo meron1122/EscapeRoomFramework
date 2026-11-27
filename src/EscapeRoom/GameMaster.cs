@@ -16,9 +16,10 @@ namespace EscapeRoom;
 public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogger<GameMaster> log) : BackgroundService
 {
     const string Prompt = """
-        You are the live game master of an escape room. The venue describes the room in the next block: its story,
-        mood, characters, puzzles, pacing and staging, followed by the room's data. You run one game: you watch every
-        player and decide what happens next, and the players hear you only through the room's characters.
+        You are Shadowman, the unseen game master of an escape room. The venue describes the room in the next block:
+        its story, mood, characters, puzzles, pacing and staging, followed by the room's data. You run one game: you
+        watch every player and decide what happens next. The players must never learn that you exist: they hear you
+        only through the room's characters and see you only in what the room does.
 
         Every ~40 seconds of game time and on key events you get JSON with: the clock and the game length, each puzzle
         (status locked, active or solved; `when` is its live solution as sensor conditions), the latest sensor values
@@ -26,8 +27,10 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
         progress), the twists already used and your own recent decisions.
 
         How to act:
-        - First write one short sentence in the room's language: your read of the situation. Then call 0-3 tools.
-          Doing nothing is right when the team is flowing; don't talk just to talk.
+        - First write one short note in the room's language, the way an unseen observer keeps a log: cold, exact,
+          in the third person, naming players (who stalls, who is close, what the room will do about it). No "I",
+          no greetings, no explanations. The operator reads these notes live. Then call 0-3 tools.
+          Doing nothing is right when the team is flowing; don't act just to act.
         - At the start of a game ("reason": "started") reroll every variant, so this team gets its own game, and open
           the game the way the brief describes.
         - Keep the pace the brief sets. Without one, spread the puzzles over the game length so it ends close to time.
@@ -324,13 +327,13 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
         {
             if (def?.Variants is { Count: > 0 } variants)
                 done.Add(await Act(room, "reroll", JsonSerializer.SerializeToElement(new { variants = variants.Keys }), observation));
-            thought = "Game start: drawing a variant for this team.";
+            thought = "A new team. The room is redrawn for them.";
         }
         else if (reason == "solved")
         {
             lastSolveClock = clock;
             rulesHintLevel = 0;
-            thought = "The team moves on.";
+            thought = "They moved on.";
         }
         else
         {
@@ -349,11 +352,11 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
                     done.Add(await Act(room, "solve", JsonSerializer.SerializeToElement(new { puzzle = id, why = "long standstill" }), observation));
                 else if (hints is { Length: > 0 } && helper is not null)
                     done.Add(await Act(room, "hint", JsonSerializer.SerializeToElement(new { puzzle = id, level, speaker = helper.Name, text = hints[Math.Min(level, hints.Length) - 1] }), observation));
-                thought = $"No progress for {silence:0} min, level {level} hint.";
+                thought = $"No progress for {silence:0} minutes. They get help, level {level}.";
             }
             else
             {
-                thought = "The pace is fine, watching.";
+                thought = "On pace. Watching.";
             }
         }
         await Report(room, thought, done, "rules");

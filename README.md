@@ -1,6 +1,23 @@
-# EscapeRoomFramework
+# Shadowman
 
-**Shadowman** is the AI game master at the heart of it: he watches every player and decides what the room does next. The landing page in `site/` introduces him; see [deploy/README.md](deploy/README.md) for hosting.
+**The AI game master for escape rooms.** You never see him. You see what he does.
+
+Shadowman runs a whole escape room live. He reads the venue's brief, watches every sensor and every player, and
+decides what the room does next: a lamp over a clue, a line in a character's voice, a blackout for a team that is too
+fast, a puzzle redrawn before anyone has seen it. The players never learn he exists. The exits are not his: doors and
+alarms live in a separate safety layer that he cannot reach.
+
+| In this repository | |
+|---|---|
+| [`src/EscapeRoom`](src/EscapeRoom) | the engine he works through: rooms as data, MQTT hardware, Postgres, the safety layer, an MCP server, and Shadowman himself (`GameMaster.cs`) |
+| [`examples/the-core.json`](examples/the-core.json), [`docs/scenario-the-core.md`](docs/scenario-the-core.md) | one complete room, "The Core": its definition and the brief he runs it from |
+| [`simulator`](simulator) | that room in the browser, standing in for real hardware on the same MQTT bus |
+| [`site`](site) | the landing page |
+| [`deploy`](deploy) | everything to host it on one Fly.io Sprite, with the keys in Sprites Connectors |
+
+The rest of this document describes the engine underneath him.
+
+## The engine
 
 A scenario engine for escape rooms. You describe a room in JSON: its inputs (sensors), outputs (locks, lights)
 and a graph of puzzles. The engine tracks the game's progress, stores every event in Postgres and drives the hardware.
@@ -77,7 +94,7 @@ Tasmota sends buttons and switches to `stat/.../RESULT` only after they are deta
 
 `start` (at room level) is the steps run when the game starts, e.g. locking everything.
 
-### For the game master (`characters`, `variants`, `twists`, `hints`, brief)
+### For Shadowman (`characters`, `variants`, `twists`, `hints`, brief)
 
 The AI game master has nothing about a particular room in its code. Everything it knows comes from the engine, so it runs
 any room, one at a time.
