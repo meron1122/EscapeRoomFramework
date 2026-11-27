@@ -457,60 +457,98 @@ func _build_environment() -> void:
 	_build_post()
 
 
+const LAMP_AT := {  # which prop holds the clue each hint lamp points at
+	"przeszukanie": ["donica"], "telefon": ["reklama"], "szafka": ["monitor_recepcji"], "bramka": ["bramka"],
+	"sciana": ["sciana"], "zdrive": ["zdrive"], "zmart": ["kiosk"], "firewall": ["czujniki"], "uzbrojenie": ["konsola"],
+}
+const LAMP_COLOR := Color("#ff4fa3")  # Kruk's colour: nothing else in the building glows pink, so a hint is unmistakable
+
+
 func _hint_lamp(id: String, on: bool) -> void:
-	## A hint lamp the game master controls: a bare bulb on a cord over the puzzle's place, warm against the cold room.
+	## A hint lamp the game master controls: Kruk hacks a service light over the clue. A bulb on a cord, a soft
+	## beam down and a ring on the floor.
 	if not lamps.has(id):
-		if not sim.tasks.has(id) or sim.tasks[id].def.spots.is_empty():
-			return
-		var spot: Array = sim.tasks[id].def.spots[0]
-		var holder := Node3D.new()
-		holder.position = Vector3(spot[0], 0, spot[1])
-		add_child(holder)
-		var cord := MeshInstance3D.new()
-		var cm := CylinderMesh.new()
-		cm.top_radius = 0.008
-		cm.bottom_radius = 0.008
-		cm.height = 1.2
-		cord.mesh = cm
-		cord.position.y = 2.9
-		cord.material_override = _glow(Color("#15171a"), 0.0)
-		holder.add_child(cord)
-		var bulb := MeshInstance3D.new()
-		var sm := SphereMesh.new()
-		sm.radius = 0.07
-		sm.height = 0.16
-		bulb.mesh = sm
-		bulb.position.y = 2.25
-		var bm := StandardMaterial3D.new()
-		bm.albedo_color = Color("#3a3226")
-		bm.emission_enabled = true
-		bm.emission = Color("#ffc46b")
-		bm.emission_energy_multiplier = 0.0
-		bulb.material_override = bm
-		holder.add_child(bulb)
-		var light := OmniLight3D.new()
-		light.position.y = 2.1
-		light.light_color = Color("#ffc46b")
-		light.light_energy = 0.0
-		light.omni_range = 4.5
-		holder.add_child(light)
-		lamps[id] = {"mat": bm, "light": light, "tween": null}
+		var names: Array = LAMP_AT.get(id, [])
+		if id == "skanery":
+			names = sim.variant.skanery.map(func(k): return "skaner" + str(k))
+		var list: Array = []
+		for name in names:
+			if not props.has(name):
+				continue
+			var at: Vector3 = props[name].position
+			var holder := Node3D.new()
+			holder.position = Vector3(at.x, 0, maxf(at.z, 0.7))  # wall props: hang it just in front of the wall
+			add_child(holder)
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color("#2a2226")
+			mat.emission_enabled = true
+			mat.emission = LAMP_COLOR
+			mat.emission_energy_multiplier = 0.0
+			var bulb := MeshInstance3D.new()
+			var sm := SphereMesh.new()
+			sm.radius = 0.09
+			sm.height = 0.2
+			bulb.mesh = sm
+			bulb.position.y = 2.6
+			bulb.material_override = mat
+			holder.add_child(bulb)
+			var cord := MeshInstance3D.new()
+			var cm := CylinderMesh.new()
+			cm.top_radius = 0.008
+			cm.bottom_radius = 0.008
+			cm.height = 0.9
+			cord.mesh = cm
+			cord.position.y = 3.1
+			cord.material_override = _glow(Color("#15171a"), 0.0)
+			holder.add_child(cord)
+			var beam := MeshInstance3D.new()
+			var bc := CylinderMesh.new()
+			bc.top_radius = 0.05
+			bc.bottom_radius = 0.75
+			bc.height = 2.5
+			bc.cap_top = false
+			bc.cap_bottom = false
+			beam.mesh = bc
+			beam.position.y = 1.3
+			var bm := StandardMaterial3D.new()
+			bm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			bm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			bm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			bm.cull_mode = BaseMaterial3D.CULL_DISABLED
+			bm.albedo_color = Color(LAMP_COLOR, 0.0)
+			beam.material_override = bm
+			beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			holder.add_child(beam)
+			var light := OmniLight3D.new()
+			light.position.y = 2.3
+			light.light_color = LAMP_COLOR
+			light.light_energy = 0.0
+			light.omni_range = 5.0
+			holder.add_child(light)
+			list.append({"mat": mat, "beam": bm, "light": light})
+		lamps[id] = {"parts": list, "tween": null}
 	var lamp: Dictionary = lamps[id]
 	if lamp.tween:
 		lamp.tween.kill()
+	lamp.tween = null
+	if lamp.parts.is_empty():
+		return
+	var level := func(e: float):
+		for part in lamp.parts:
+			part.light.light_energy = 4.0 * e
+			part.mat.emission_energy_multiplier = 6.0 * e
+			part.beam.albedo_color = Color(LAMP_COLOR, 0.10 * e)
 	var tw := create_tween()
 	lamp.tween = tw
 	if on:
-		# It flickers on like an old filament, then pulses gently so the eye is drawn to it.
+		# It flickers on like a hacked service light, then pulses so the eye is drawn to it.
 		for e in [1.0, 0.1, 1.0, 0.3, 1.0]:
-			tw.tween_property(lamp.light, "light_energy", 3.2 * e, 0.07)
-		tw.parallel().tween_property(lamp.mat, "emission_energy_multiplier", 4.0, 0.1)
+			tw.tween_callback(level.bind(e)).set_delay(0.07)
 		for i in 60:  # the engine switches it off; the cap only stops a forgotten lamp from pulsing forever
-			tw.tween_property(lamp.light, "light_energy", 2.2, 0.7)
-			tw.tween_property(lamp.light, "light_energy", 3.2, 0.7)
+			tw.tween_method(level, 1.0, 0.6, 0.7)
+			tw.tween_method(level, 0.6, 1.0, 0.7)
 	else:
-		tw.tween_property(lamp.light, "light_energy", 0.0, 0.5)
-		tw.parallel().tween_property(lamp.mat, "emission_energy_multiplier", 0.0, 0.5)
+		tw.tween_method(level, 0.6, 0.0, 0.5)
 
 
 func _build_markers() -> void:
