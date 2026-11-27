@@ -1,7 +1,7 @@
 # Deploying to a Fly.io Sprite
 
 One Sprite runs everything: the engine with Shadowman (the AI game master), the landing page, Postgres, the MQTT broker and the simulator's
-web build. Two Sprites Connectors hold the model and voice keys, so no API key is ever on the Sprite.
+web build. One Sprites Connector holds the key for both the model and the voice, so no API key is ever on the Sprite.
 
 ```mermaid
 flowchart LR

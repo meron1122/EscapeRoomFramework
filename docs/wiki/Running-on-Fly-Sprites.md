@@ -70,7 +70,7 @@ acl_file /home/sprite/app/deploy/browser.acl
 max_connections 40
 ```
 
-Both doors are anonymous. The first cannot be reached from outside. The second is the one Caddy proxies, and its ACL is written by [`make-acl.py`](https://github.com/meron1122/EscapeRoomFramework/blob/main/deploy/make-acl.py) from the room definition at build time, so it always matches the room's real input topics:
+Both doors are anonymous, and `per_listener_settings true` gives each its own rules. The first cannot be reached from outside. The second is the one Caddy proxies, and its ACL is written by [`make-acl.py`](https://github.com/meron1122/EscapeRoomFramework/blob/main/deploy/make-acl.py) from the room definition at build time, so it always matches the room's real input topics:
 
 ```
 topic read escaperoom/the-core/#

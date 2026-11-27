@@ -370,7 +370,7 @@ func build(fonts_: Dictionary) -> void:
 	hint.anchor_bottom = 1.0
 	hint.anchor_left = 1.0
 	hint.anchor_right = 1.0
-	hint.offset_left = -900
+	hint.offset_left = -1040
 	hint.offset_top = -100
 	root.add_child(hint)
 
@@ -391,7 +391,7 @@ func build(fonts_: Dictionary) -> void:
 
 
 func _build_intro(root: Control) -> void:
-	## Three pages of story over a slow camera, then the start screen. A lighter veil than the start screen's,
+	## A few pages of story and the crew over a slow camera, then the start screen. A lighter veil than the start screen's,
 	## so the picture behind each page is part of it.
 	_intro = ColorRect.new()
 	(_intro as ColorRect).color = Color(0, 0, 0, 0.55)
@@ -855,7 +855,7 @@ func set_team(npcs: Array) -> void:
 
 
 func add_log(speaker: String, text: String) -> void:
-	var c: String = {"RAVEN": "#fcee0a", "ZETA": "#00f0ff", "NOMADS": "#ffffff", "SYSTEM": "#cbcbcb", "YOU": "#ff4fa3"}.get(speaker, "#cbcbcb")
+	var c: String = {"RAVEN": "#fcee0a", "ZETA": "#00f0ff", "NOMADS": "#9fd8de", "SYSTEM": "#cbcbcb", "YOU": "#ffffff"}.get(speaker, "#cbcbcb")  # pink is his alone; the visitor is white
 	_log.append_text("[b][color=%s]%s>[/color][/b] [color=%s]%s[/color]\n" % [c, speaker, "#ffffff" if speaker != "SYSTEM" else "#cbcbcb", text])
 	if speaker in ["RAVEN", "ZETA"]:  # subtitles carry the two voices; the team's chatter stays above their heads
 		subtitle(speaker, text, 5.0)
