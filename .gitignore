@@ -486,3 +486,7 @@ $RECYCLE.BIN/
 # Godot
 simulator/godot/.godot/
 simulator/web/
+
+# deployment bundle
+deploy/bundle/
+deploy/bundle.tgz

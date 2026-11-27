@@ -1,0 +1,36 @@
+# The only thing the internet reaches. Everything else on the Sprite listens on localhost.
+:8080 {
+	encode zstd gzip
+
+	# The room's speakers (here: the simulator page) fetch spoken lines. Names are content hashes.
+	@voice path_regexp ^/voice/[0-9a-f]{32}\.mp3$
+	handle @voice {
+		reverse_proxy 127.0.0.1:5201 {
+			header_up Host localhost
+		}
+	}
+
+	# MQTT over WebSocket for the simulator. What a browser may read and write is decided by the broker's ACL.
+	handle /mqtt {
+		reverse_proxy 127.0.0.1:9001
+	}
+
+	# The engine API, the MCP server and the safety layer are never public: use `sprite proxy 5201` to reach them.
+	@private path /rooms* /mcp* /safety* /voice*
+	handle @private {
+		respond 404
+	}
+
+	handle {
+		root * /home/sprite/app/web
+		header {
+			# Godot's web build needs these to run; the rest is hardening.
+			Cross-Origin-Opener-Policy same-origin
+			Cross-Origin-Embedder-Policy require-corp
+			X-Content-Type-Options nosniff
+			Referrer-Policy no-referrer
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' wss: blob: data:; worker-src 'self' blob:; frame-ancestors 'none'"
+		}
+		file_server
+	}
+}

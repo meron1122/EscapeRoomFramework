@@ -6,7 +6,7 @@ using Npgsql;
 namespace EscapeRoom;
 
 /// <summary>Runs games: routes MQTT messages to running sessions, stores every change in Postgres, fires outputs.</summary>
-public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engine> log) : BackgroundService
+public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, IConfiguration config, ILogger<Engine> log) : BackgroundService
 {
     public const string Schema = """
         create table if not exists rooms (
@@ -60,6 +60,7 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
 
     readonly SemaphoreSlim gate = new(1, 1); // one change at a time across all rooms; a venue's traffic is tiny
     readonly Dictionary<string, Session> running = [];
+    readonly Queue<DateTimeOffset> mqttStarts = [];  // touched only by the single message loop
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -434,6 +435,17 @@ public class Engine(NpgsqlDataSource db, Mqtt mqtt, Safety safety, ILogger<Engin
         // escaperoom/<room>/control {"command":"start"} starts a game; the simulator uses it instead of the HTTP API.
         if (topic.StartsWith("escaperoom/") && topic.EndsWith("/control") && Payload.Extract(payload, "command") == "start")
         {
+            // Anyone who reaches the broker can ask for a game, and each game costs model and voice calls.
+            // Limits:GameStartsPerHour caps that on a public demo (0 = no cap; the HTTP API and MCP are not capped).
+            var cap = config.GetValue("Limits:GameStartsPerHour", 0);
+            var now = DateTimeOffset.UtcNow;
+            while (mqttStarts.TryPeek(out var at) && now - at > TimeSpan.FromHours(1)) mqttStarts.Dequeue();
+            if (cap > 0 && mqttStarts.Count >= cap)
+            {
+                log.LogWarning("Start of {Topic} refused: {Cap} games per hour already started over MQTT", topic, cap);
+                return;
+            }
+            mqttStarts.Enqueue(now);
             await Start(topic.Split('/')[1], Payload.Extract(payload, "nonce"));
             return;
         }

@@ -10,6 +10,9 @@ namespace EscapeRoom;
 /// </summary>
 public class Voice(IConfiguration config, ILogger<Voice> log)
 {
+    sealed class Budget { public DateOnly Day; public int Characters; public bool Warned; }
+    readonly Budget spent = new();
+
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     public string Folder { get; } = config["Voice:Cache"] ?? Path.Combine(Path.GetTempPath(), "escaperoom-voice");
@@ -26,6 +29,21 @@ public class Voice(IConfiguration config, ILogger<Voice> log)
         var path = Path.Combine(Folder, name);
         if (!File.Exists(path))
         {
+            // Voice:MaxCharactersPerDay caps what a public demo can spend on speech (0 = no cap). Cached lines are free.
+            var cap = config.GetValue("Voice:MaxCharactersPerDay", 0);
+            lock (spent)
+            {
+                var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                if (spent.Day != today) (spent.Day, spent.Characters) = (today, 0);
+                if (cap > 0 && spent.Characters + text.Length > cap)
+                {
+                    if (!spent.Warned) log.LogWarning("Voice budget of {Cap} characters for today is used up; lines stay text", cap);
+                    spent.Warned = true;
+                    return null;
+                }
+                spent.Characters += text.Length;
+                spent.Warned = false;
+            }
             var url = $"{(string.IsNullOrEmpty(baseUrl) ? "https://api.elevenlabs.io" : baseUrl.TrimEnd('/'))}/v1/text-to-speech/{Uri.EscapeDataString(voiceId)}?output_format=mp3_44100_128";
             using var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
