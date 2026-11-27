@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://de6wwrm036j3m"
-path="res://.godot/imported/room_hol_Stone.png-fb6c15c431a565690abe69baab1630b3.ctex"
+uid="uid://buudqoc83jypl"
+path="res://.godot/imported/room_lobby_Hazard.png-f5cdbe99507f077599c2e3ef2fa63436.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "09d706c0fdaae641be5c2a9cdffb4ec5"
+"md5": "9c8c05690c43cb679770f5c9bae97a9d"
 }
 
 [deps]
 
-source_file="res://assets/room_hol_Stone.png"
-dest_files=["res://.godot/imported/room_hol_Stone.png-fb6c15c431a565690abe69baab1630b3.ctex"]
+source_file="res://assets/room_lobby_Hazard.png"
+dest_files=["res://.godot/imported/room_lobby_Hazard.png-f5cdbe99507f077599c2e3ef2fa63436.ctex"]
 
 [params]
 

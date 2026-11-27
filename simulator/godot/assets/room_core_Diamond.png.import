@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cs3ujd3wbkqaj"
-path="res://.godot/imported/room_hol_Rug.png-0ed808108b5a3345ca6a95a0ff2bd9a8.ctex"
+uid="uid://b4u7q1xwij1wq"
+path="res://.godot/imported/room_core_Diamond.png-2c308ad88cef556caa5bee6aa4fad275.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "f54e7ea71c0ac7d4cc70eea19e815fbc"
+"md5": "6cd1c0b3891feb5e0d4030b06038123c"
 }
 
 [deps]
 
-source_file="res://assets/room_hol_Rug.png"
-dest_files=["res://.godot/imported/room_hol_Rug.png-0ed808108b5a3345ca6a95a0ff2bd9a8.ctex"]
+source_file="res://assets/room_core_Diamond.png"
+dest_files=["res://.godot/imported/room_core_Diamond.png-2c308ad88cef556caa5bee6aa4fad275.ctex"]
 
 [params]
 

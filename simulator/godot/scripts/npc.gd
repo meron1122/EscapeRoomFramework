@@ -12,7 +12,7 @@ var face_point := Vector3.ZERO
 var at_spot := false
 var mode := "idle"  # idle | walk | explore | leave | gone
 var explore_until := 0.0
-var activity := "czeka"
+var activity := "waiting"
 var stuck := 0.0  # game seconds at the same spot without a solve
 var carry := ""
 

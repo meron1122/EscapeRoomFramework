@@ -43,7 +43,7 @@ func _process(_delta: float) -> void:
 			if not _hello_sent:
 				_hello_sent = true
 				var body := PackedByteArray([0x00, 0x04, 0x4D, 0x51, 0x54, 0x54, 0x04, 0x02, 0x00, 0x3C])  # "MQTT", v3.1.1, clean session, keepalive 60 s
-				body.append_array(_string("jadro-sim-%d" % (randi() % 1000000)))
+				body.append_array(_string("the-core-sim-%d" % (randi() % 1000000)))
 				_send(0x10, body)
 			while _ws.get_available_packet_count() > 0:
 				_buffer.append_array(_ws.get_packet())

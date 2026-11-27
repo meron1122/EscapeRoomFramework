@@ -550,7 +550,7 @@ def rolls(bars, at=3.0):
                                         (bar * 4 + at + 0.75, 0.25, 0.03125))]
 
 
-def hol():
+def lobby():
     """Room 1, the corporation's lobby: cold corporate menace. F minor, 127 bpm, 32 bars.
     A (bars 0-15): Fm Db Bbm C. B (16-31): Fm Gb Db C, open hats, cold pad and the Z jingle on a supersaw."""
     tr = Track(127, 32)
@@ -609,10 +609,10 @@ def hol():
         "lead": reverb(echo(tr.buses["lead"], tr.at(0.75), 0.35, 0.3), 2.5, 0.35) * 0.57,
         "fx": reverb(tr.buses["fx"], 2.5, 0.4) * 0.36})
     tr.edit(mix, [(7 * 4 + 3.5, 0.5, 0.125), (23 * 4 + 3.5, 0.5, 0.125)] + rolls((15, 31)))
-    write("hol", master(mix))
+    write("lobby", master(mix))
 
 
-def pietro():
+def habit():
     """Room 2, the addiction lab: EBM / industrial groove. G minor, 125 bpm, 32 bars.
     A: squelchy 16th bass riff (G G G G Eb Eb F F), rumble kick, metal percussion, notification glitches.
     B: new riff (G G Bb Bb Eb Eb D D), gritty supersaw stabs and a square-wave hook."""
@@ -673,10 +673,10 @@ def pietro():
         "stab": reverb(drive(tr.buses["stab"] * 2, 1.0), 1.5, 0.3) * 1.9 * duck, "hook": hook * 0.17,
         "fx": reverb(tr.buses["fx"], 2.5, 0.4) * 0.5})
     tr.edit(mix, [(b * 4 + 3.5, 0.5, 0.125) for b in (3, 7, 11, 19, 23, 27)] + rolls((15, 31)))
-    write("pietro", master(mix))
+    write("habit", master(mix))
 
 
-def jadro():
+def core():
     """Room 3, the server core: heavy darksynth. D minor, 112 bpm, 32 bars.
     A (0-15): Dm Bb Gm A, 3-3-2 reese bass, gated snare, dark choir; arp from bar 8.
     B (16-31): Bb C Dm A, four-on-the-floor, galloping reese, screaming supersaw lead."""
@@ -739,7 +739,7 @@ def jadro():
         "arp": reverb(echo(arp, tr.at(0.75), 0.4, 0.35, hi=3000), 2.0, 0.3) * 0.2 * duck, "lead": lead * 0.25,
         "fx": reverb(tr.buses["fx"], 2.5, 0.4) * 0.45})
     tr.edit(mix, [(15 * 4 + 2.5, 0.5, 0.0625), (23 * 4 + 3.5, 0.5, 0.125)] + rolls((31,)))
-    write("jadro", master(mix))
+    write("core", master(mix))
 
 
 def final():
@@ -848,7 +848,7 @@ def effects():
 
 
 if __name__ == "__main__":
-    for part in (hol, pietro, jadro, final, effects):
+    for part in (lobby, habit, core, final, effects):
         t0 = time.time()
         part()
         print(f"       ({time.time() - t0:.1f} s to render)")

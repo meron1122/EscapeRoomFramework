@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://32g8u5wac0nd"
-path="res://.godot/imported/room_jadro_Concrete.png-67357012e19675f63ac5daba4464bb20.ctex"
+uid="uid://bvlglmg1bke8b"
+path="res://.godot/imported/room_core_DiamondN.png-c77cc0b0b7c59377d98a2565e45f1de1.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "9471ba9815c319a351970a4155156625"
+"md5": "92580ed0adec13fa8b1901f26b6e4319"
 }
 
 [deps]
 
-source_file="res://assets/room_jadro_Concrete.png"
-dest_files=["res://.godot/imported/room_jadro_Concrete.png-67357012e19675f63ac5daba4464bb20.ctex"]
+source_file="res://assets/room_core_DiamondN.png"
+dest_files=["res://.godot/imported/room_core_DiamondN.png-c77cc0b0b7c59377d98a2565e45f1de1.ctex"]
 
 [params]
 

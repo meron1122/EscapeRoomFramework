@@ -15,7 +15,7 @@ const WHITE := Color("#ffffff")
 const GREY := Color("#cbcbcb")
 const SCALE := 0.78
 const MUTED := Color("#8fb3b8")  # labels and finished things; cyan is kept for what is active now
-const ROOMS := {"hol": "POKÓJ 1 · HOL", "pietro": "POKÓJ 2 · PIĘTRO NAWYKÓW", "jadro": "POKÓJ 3 · JĄDRO"}
+const ROOMS := {"lobby": "ROOM 1 · LOBBY", "habit": "ROOM 2 · HABIT FLOOR", "core": "ROOM 3 · THE CORE"}
 const STATES := {"locked": "LOCKED_", "active": "ACTIVE_", "solved": "SOLVED_"}
 
 
@@ -83,7 +83,7 @@ func build(fonts_: Dictionary) -> void:
 	top.add_theme_constant_override("separation", -6)
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(top)
-	top.add_child(_text("/// JADRO.SIM_", "mono", 14, CYAN))
+	top.add_child(_text("/// THE_CORE.SIM_", "mono", 14, CYAN))
 	_clock = _text("60:00", "display", 46, YELLOW)
 	top.add_child(_clock)
 	_stage = _text("", "text", 22, WHITE)
@@ -163,7 +163,7 @@ func build(fonts_: Dictionary) -> void:
 	controls.alignment = BoxContainer.ALIGNMENT_END
 	controls.add_theme_constant_override("separation", 10)
 	root.add_child(controls)
-	_pause = _button("PAUZA", false)
+	_pause = _button("PAUSE", false)
 	_pause.pressed.connect(func(): pause_toggled.emit())
 	controls.add_child(_pause)
 	for v in [1.0, 5.0, 20.0]:
@@ -171,16 +171,16 @@ func build(fonts_: Dictionary) -> void:
 		b.pressed.connect(func(): speed_requested.emit(v))
 		controls.add_child(b)
 		_speed_buttons[v] = b
-	_music = _button("MUZYKA: ON", false)
+	_music = _button("MUSIC: ON", false)
 	_music.toggle_mode = true
 	_music.button_pressed = true
-	_music.toggled.connect(func(on): _music.text = "MUZYKA: ON" if on else "MUZYKA: OFF"; music_toggled.emit(on))
+	_music.toggled.connect(func(on): _music.text = "MUSIC: ON" if on else "MUSIC: OFF"; music_toggled.emit(on))
 	controls.add_child(_music)
-	var ng := _button("NOWA GRA", true)
+	var ng := _button("NEW GAME", true)
 	ng.pressed.connect(func(): new_game_requested.emit())
 	controls.add_child(ng)
 
-	var hint := _text("LPM / PPM: przesuń   ·   kółko: zoom   ·   1 2 3: pokoje   ·   F: śledź drużynę   ·   H: ukryj panele", "mono", 12, GREY)
+	var hint := _text("LMB / RMB: pan   ·   wheel: zoom   ·   1 2 3: rooms   ·   F: follow team   ·   H: hide panels", "mono", 12, GREY)
 	hint.anchor_top = 1.0
 	hint.anchor_bottom = 1.0
 	hint.anchor_left = 1.0
@@ -189,10 +189,10 @@ func build(fonts_: Dictionary) -> void:
 	hint.offset_top = -100
 	root.add_child(hint)
 
-	_start = _overlay("JĄDRO", "Pięcioro Nomadów, trzy pokoje, sześćdziesiąt minut. Każda gra ma inny wariant,\na reżyser AI dobiera podpowiedzi i zwroty akcji do tempa drużyny.", "ROZPOCZNIJ SYMULACJĘ")
+	_start = _overlay("THE CORE", "Five Nomads, three rooms, sixty minutes. Every game has a different variant,\nand the AI director matches hints and twists to the team's pace.", "START THE SIMULATION")
 	_start.get_meta("button").pressed.connect(func(): _start.visible = false; start_requested.emit())
 	root.add_child(_start)
-	_end = _overlay("KONIEC", "", "NOWA GRA")
+	_end = _overlay("THE END", "", "NEW GAME")
 	_end_text = _end.get_meta("body")
 	_end.get_meta("button").pressed.connect(func(): new_game_requested.emit())
 	_end.visible = false
@@ -271,7 +271,7 @@ func hide_start() -> void:
 func set_clock(clock: String, room: String, plan_minutes: int, paused: bool) -> void:
 	_clock.text = clock
 	_film_clock.text = clock
-	_stage.text = "%s   ·   PLAN %d:00%s" % [ROOMS[room], plan_minutes, "   ·   PAUZA" if paused else ""]
+	_stage.text = "%s   ·   PLAN %d:00%s" % [ROOMS[room], plan_minutes, "   ·   PAUSE" if paused else ""]
 
 
 func set_speed(value: float) -> void:
@@ -301,7 +301,7 @@ func set_task(id: String, state: String) -> void:
 func set_variant(lines: Array[String]) -> void:
 	for c in _variant.get_children():
 		c.queue_free()
-	_variant.add_child(_text("/// WARIANT.GRY_", "mono", 13, MUTED))
+	_variant.add_child(_text("/// GAME.VARIANT_", "mono", 13, MUTED))
 	for l in lines:
 		var lab := _text(l, "text", 17, WHITE)
 		lab.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -317,7 +317,7 @@ func set_team(npcs: Array) -> void:
 	if _team.get_child_count() != npcs.size() + 1:
 		for c in _team.get_children():
 			c.queue_free()
-		_team.add_child(_text("/// NOMADZI_", "mono", 13, CYAN))
+		_team.add_child(_text("/// NOMADS_", "mono", 13, CYAN))
 		for n in npcs:
 			var row := HBoxContainer.new()
 			var dot := ColorRect.new()
@@ -336,9 +336,9 @@ func set_team(npcs: Array) -> void:
 
 
 func add_log(speaker: String, text: String) -> void:
-	var c: String = {"KRUK": "#fcee0a", "ZETA": "#00f0ff", "NOMADZI": "#ffffff", "SYSTEM": "#cbcbcb"}.get(speaker, "#cbcbcb")
+	var c: String = {"RAVEN": "#fcee0a", "ZETA": "#00f0ff", "NOMADS": "#ffffff", "SYSTEM": "#cbcbcb"}.get(speaker, "#cbcbcb")
 	_log.append_text("[b][color=%s]%s>[/color][/b] [color=%s]%s[/color]\n" % [c, speaker, "#ffffff" if speaker != "SYSTEM" else "#cbcbcb", text])
-	if speaker in ["KRUK", "ZETA"]:  # subtitles carry the two voices; the team's chatter stays above their heads
+	if speaker in ["RAVEN", "ZETA"]:  # subtitles carry the two voices; the team's chatter stays above their heads
 		_subtitle.text = "[center][b][color=%s]%s[/color][/b]  %s[/center]" % [c, speaker, text]
 		_subtitle_until = Time.get_ticks_msec() + 5000
 
@@ -425,7 +425,7 @@ func _overlay(title: String, body: String, action: String) -> Control:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 18)
 	center.add_child(box)
-	box.add_child(_text("/// NOMADZI.OPERACJA_JADRO_", "mono", 16, CYAN))
+	box.add_child(_text("/// NOMADS.OPERATION_CORE_", "mono", 16, CYAN))
 	box.add_child(_text(title, "display", 120, YELLOW))
 	var b := _text(body, "text", 26, WHITE)
 	box.add_child(b)

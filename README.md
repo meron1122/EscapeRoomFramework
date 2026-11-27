@@ -1,199 +1,199 @@
 # EscapeRoomFramework
 
-Silnik scenariuszy dla escape roomów. Opisujesz pokój w JSON-ie: jego wejścia (czujniki), wyjścia (zamki, światła)
-i graf zagadek. Silnik pilnuje postępu gry, zapisuje każde zdarzenie w Postgresie i steruje sprzętem.
+A scenario engine for escape rooms. You describe a room in JSON: its inputs (sensors), outputs (locks, lights)
+and a graph of puzzles. The engine tracks the game's progress, stores every event in Postgres and drives the hardware.
 
-## Architektura
+## Architecture
 
-Każdy sprzęt rozmawia z silnikiem przez **MQTT**. To wspólny mianownik całego ekosystemu IoT:
+Every piece of hardware talks to the engine over **MQTT**. It is the common denominator of the whole IoT ecosystem:
 
 ```
 Tasmota ─┐
 ESPHome ─┤                      ┌─ Engine (.NET) ── Postgres
 zigbee2mqtt (Zigbee) ─┼─ MQTT ──┤
-Shelly / cokolwiek ───┤         └─ API HTTP (pod przyszły front React)
-Kamera RTSP → QrCamera ─┘
+Shelly / anything ────┤         └─ HTTP API (for a future React front end)
+RTSP camera → QrCamera ─┘
 ```
 
-Kamera RTSP nie mówi MQTT, więc `QrCamera` robi z niej urządzenie MQTT. ffmpeg pobiera klatki, ZXing czyta kody QR,
-a odczytany kod trafia na `escaperoom/camera/<id>/qr` jak każdy inny czujnik. Tak samo da się później dopiąć
-inne „wirtualne czujniki” (rozpoznawanie obrazu, audio itp.), bez zmian w silniku.
+An RTSP camera does not speak MQTT, so `QrCamera` turns it into an MQTT device. ffmpeg grabs frames, ZXing reads QR codes,
+and the code it reads goes to `escaperoom/camera/<id>/qr` like any other sensor. Other "virtual sensors"
+(image recognition, audio and so on) can be attached later the same way, with no changes to the engine.
 
-## Uruchomienie
+## Running
 
 ```bash
 docker compose up -d                      # Postgres (port 5433) + Mosquitto (1883)
-dotnet run --project src/EscapeRoom       # API na http://localhost:5201
+dotnet run --project src/EscapeRoom       # API at http://localhost:5201
 curl -X PUT localhost:5201/rooms/lab -H 'content-type: application/json' --data-binary @examples/lab.json
 curl -X POST localhost:5201/rooms/lab/start
 curl localhost:5201/rooms/lab/session
 ```
 
-Testy: `dotnet test`.
+Tests: `dotnet test`.
 
-## Definicja pokoju
+## Room definition
 
-Pełny przykład: [examples/lab.json](examples/lab.json). Kamera czyta QR, co otwiera pułapkę. W pułapce są czujniki
-(kolby Zigbee, termometr ESPHome, przyciski Tasmota). Rozwiązanie kolb otwiera skrytkę, a kolby razem z przyciskami
-odblokowują wyjście.
+Full example: [examples/lab.json](examples/lab.json). A camera reads a QR code, which opens a trapdoor. Inside are sensors
+(Zigbee flasks, an ESPHome thermometer, Tasmota buttons). Solving the flasks opens a stash, and the flasks together
+with the buttons unlock the exit.
 
-### Wejścia i wyjścia (`inputs`, `outputs`)
+### Inputs and outputs (`inputs`, `outputs`)
 
-Każde ustawia dokładnie jedno z: `topic`, `tasmota`, `esphome`, `z2m`, `camera`.
+Each one sets exactly one of: `topic`, `tasmota`, `esphome`, `z2m`, `camera`.
 
-| Preset | Wejście (subskrypcja) | Wyjście (publikacja) |
+| Preset | Input (subscription) | Output (publication) |
 |---|---|---|
-| `{"topic": "a/b", "path": "x.y"}` | `a/b`, pole `x.y` z JSON-a | `a/b`, z `path` → `{"path": value}` |
-| `{"tasmota": "dev", "path": "Button1.Action"}` | `stat/dev/RESULT` | `cmnd/dev/<command>` (domyślnie `Power1`) |
+| `{"topic": "a/b", "path": "x.y"}` | `a/b`, field `x.y` of the JSON | `a/b`, with `path` → `{"path": value}` |
+| `{"tasmota": "dev", "path": "Button1.Action"}` | `stat/dev/RESULT` | `cmnd/dev/<command>` (`Power1` by default) |
 | `{"esphome": "node", "entity": "switch/lock"}` | `node/switch/lock/state` | `node/switch/lock/command` |
 | `{"z2m": "name", "path": "contact"}` | `zigbee2mqtt/name` | `zigbee2mqtt/name/set` |
 | `{"camera": "cam1"}` | `escaperoom/camera/cam1/qr` | — |
 
-Bez `path` wartością jest cały payload. Wartości porównywane są jako tekst bez rozróżniania wielkości liter
+Without `path` the value is the whole payload. Values are compared as text, case-insensitively
 (`true`, `"ON"`, `42`).
 
-Tasmota wysyła przyciski i przełączniki na `stat/.../RESULT` dopiero po odpięciu ich od przekaźników:
-`SetOption73 1` dla przycisków, `SetOption114 1` dla przełączników.
+Tasmota sends buttons and switches to `stat/.../RESULT` only after they are detached from the relays:
+`SetOption73 1` for buttons, `SetOption114 1` for switches.
 
-### Zagadki (`puzzles`)
+### Puzzles (`puzzles`)
 
 ```json
 { "id": "flasks", "after": ["qr-code"], "when": { ... }, "then": [ ... ] }
 ```
 
-- `after`: zagadka jest aktywna dopiero po rozwiązaniu wszystkich wymienionych. Pozwala to robić gałęzie
-  równoległe i ich złączenia.
-- `when`: warunek. Liczy się od chwili aktywacji, także na podstawie stanu sprzed niej: czujnik, który już jest
-  w dobrej pozycji, rozwiązuje zagadkę od razu. Brak `when` oznacza zagadkę zaliczaną tylko ręcznie przez MG.
-  - `{"input": "thermo", "equals": "x" | "gt": 40 | "lt": 10}`. Bez porównania pasuje dowolna wartość.
+- `after`: the puzzle becomes active only once all the listed ones are solved. This allows parallel branches
+  and their joins.
+- `when`: the condition. It counts from the moment of activation, including state from before it: a sensor that is
+  already in the right position solves the puzzle at once. No `when` means a puzzle that only the GM can solve by hand.
+  - `{"input": "thermo", "equals": "x" | "gt": 40 | "lt": 10}`. Without a comparison any value matches.
   - `{"all": [...]}`, `{"any": [...]}`.
-  - `{"sequence": [...]}`: kolejność zdarzeń, np. przyciski albo kod. Liczy się ostatnie N pasujących zdarzeń,
-    więc pomyłka nie blokuje gry, a zdarzenia niepasujące do żadnego kroku (puszczenie przycisku) są ignorowane.
-    Musi być całym `when`.
-- `then`: kroki wykonywane po rozwiązaniu: `{"output": "lock", "value": "OFF"}` albo `{"delay": 3000}`
-  (np. impuls na elektrozamek).
+  - `{"sequence": [...]}`: an order of events, e.g. buttons or a code. The last N matching events count,
+    so a mistake does not block the game, and events that match no step (releasing a button) are ignored.
+    It must be the whole `when`.
+- `then`: steps run after the puzzle is solved: `{"output": "lock", "value": "OFF"}` or `{"delay": 3000}`
+  (e.g. a pulse for an electric lock).
 
-`start` (na poziomie pokoju) to kroki wykonywane przy starcie gry, np. zamknięcie wszystkiego.
+`start` (at room level) is the steps run when the game starts, e.g. locking everything.
 
-### Dla mistrza gry (`characters`, `variants`, `twists`, `hints`, brief)
+### For the game master (`characters`, `variants`, `twists`, `hints`, brief)
 
-Mistrz gry AI nie ma w kodzie nic o konkretnym pokoju. Wszystko, co wie, dostaje z silnika, więc prowadzi każdy pokój,
-jeden naraz.
+The AI game master has nothing about a particular room in its code. Everything it knows comes from the engine, so it runs
+any room, one at a time.
 
-- **Brief** (`PUT /rooms/{id}/brief`, Markdown): historia, klimat, postacie, wygląd zagadek, tempo i reżyseria,
-  opisane przez lokal tak jak dla człowieka. Przykład: [docs/scenariusz-jadro.md](docs/scenariusz-jadro.md).
-- `characters`: głosy, którymi mówi, np. `{"name": "KRUK", "about": "...", "output": "voice", "voice": "<id głosu TTS>", "screen": "screen_zeta"}`.
-  Kwestia trafia na `output` jako `{speaker, text, to, audio}`, a tekst także na `screen`.
-- `variants`: dla klucza lista wariantów `{"solutions": {"zagadka": {warunek}}, "clues": [kroki], "summary": "..."}`.
-  Losowanie podmienia rozwiązanie i wskazówkę razem, tylko w bieżącej grze (zapisany pokój zostaje przy domyślnym).
-- `twists`: przygotowane zwroty akcji `{"about": "...", "then": [kroki], "adds": [zagadki], "blocks": [...], "after": [...]}`,
-  raz na grę. `adds` dokłada zagadki, `blocks` każe im czekać na dodane, `after` mówi, co musi być już rozwiązane.
-- `cues`: wskazówki bez słów wbudowane w pokój (lampka, neon, dźwięk): `{"about": "...", "puzzle": "telefon", "then": [kroki]}`.
-  Mistrz gry może je odpalać wielokrotnie, zanim cokolwiek powie; z `puzzle` tylko gdy ta zagadka jest aktywna.
-- `hints` w zagadce: przygotowane podpowiedzi lokalu, od najdelikatniejszej. Bez modelu mistrz gry używa tylko ich.
+- **Brief** (`PUT /rooms/{id}/brief`, Markdown): the story, the mood, the characters, what the puzzles look like, pacing and
+  direction, described by the venue the way it would be for a human. Example: [docs/scenario-the-core.md](docs/scenario-the-core.md).
+- `characters`: the voices it speaks with, e.g. `{"name": "RAVEN", "about": "...", "output": "voice", "voice": "<TTS voice id>", "screen": "screen_zeta"}`.
+  A line goes to `output` as `{speaker, text, to, audio}`, and the text also to `screen`.
+- `variants`: for each key, a list of variants `{"solutions": {"puzzle": {condition}}, "clues": [steps], "summary": "..."}`.
+  A draw swaps the solution and the clue together, only in the current game (the saved room keeps its default).
+- `twists`: prepared twists `{"about": "...", "then": [steps], "adds": [puzzles], "blocks": [...], "after": [...]}`,
+  once per game. `adds` adds puzzles, `blocks` makes puzzles wait for the added ones, `after` says what must already be solved.
+- `cues`: wordless hints built into the room (a lamp, a neon, a sound): `{"about": "...", "puzzle": "phone", "then": [steps]}`.
+  The game master can fire them repeatedly before it says anything; with `puzzle`, only while that puzzle is active.
+- `hints` in a puzzle: the venue's prepared hints, from the gentlest. Without a model the game master uses only these.
 
-Wyjścia o nazwach `gm` (myśli mistrza gry) i `hint` (która zagadka dostała pomoc) są opcjonalne.
+Outputs named `gm` (the game master's thoughts) and `hint` (which puzzle got help) are optional.
 
-Model: `OPENROUTER_API_KEY` (przez OpenRouter) albo `ANTHROPIC_API_KEY` / `ant auth login`; bez danych logowania gra
-prowadzi się na regułach. Głos: `ELEVENLABS_API_KEY` (model `Voice:Model`, domyślnie `eleven_v3`); pliki mp3 trafiają
-pod `/voice/…` (adres publiczny w `Voice:PublicUrl`). Na Sprite klucze trzymają Connectory: `GameMaster:BaseUrl`
-i `Voice:BaseUrl` wskazują ich bramki.
+Model: `OPENROUTER_API_KEY` (through OpenRouter) or `ANTHROPIC_API_KEY` / `ant auth login`; without credentials the game
+runs on rules. Voice: `ELEVENLABS_API_KEY` (model `Voice:Model`, `eleven_v3` by default); the mp3 files are served
+under `/voice/…` (public address in `Voice:PublicUrl`). On a Sprite the keys are held by Connectors: `GameMaster:BaseUrl`
+and `Voice:BaseUrl` point at their gateways.
 
-Definicja jest walidowana przy zapisie: nieznane pola (literówka `"equal"`), nieistniejące wejścia, wyjścia
-i zagadki oraz cykle w `after` zwracają 400 z listą błędów.
+The definition is validated on save: unknown fields (the typo `"equal"`), inputs, outputs and puzzles that do not exist,
+and cycles in `after` return 400 with a list of errors.
 
-## Kamery
+## Cameras
 
-W `appsettings.json` lub w zmiennych środowiskowych (`Cameras__0__Id`, `Cameras__0__Url`):
+In `appsettings.json` or in environment variables (`Cameras__0__Id`, `Cameras__0__Url`):
 
 ```json
 "Cameras": [ { "Id": "lab-cam", "Url": "rtsp://user:pass@10.0.0.20/stream1", "Width": 1280, "Height": 720, "Fps": 2 } ]
 ```
 
-Wymaga `ffmpeg` w PATH. Ten sam kod publikowany jest ponownie dopiero wtedy, gdy przez ~3 s zniknie z kadru.
+Requires `ffmpeg` on the PATH. The same code is published again only after it has been out of frame for ~3 s.
 
 ## API
 
 | | |
 |---|---|
-| `PUT /rooms/{id}` | zapis definicji (walidacja) |
-| `GET /rooms/{id}` | definicja |
-| `POST /rooms/{id}/start` | nowa gra (przerywa trwającą) |
-| `POST /rooms/{id}/stop` | koniec gry |
-| `POST /rooms/{id}/puzzles/{puzzle}/solve` | ręczne zaliczenie przez MG (wykonuje `then`) |
-| `GET /rooms/{id}/session` | stan ostatniej gry: status zagadek i wartości wejść |
-| `PUT /rooms/{id}/brief`, `GET /rooms/{id}/brief` | brief pokoju dla mistrza gry (Markdown) |
-| `GET /voice/{plik}.mp3` | nagrane kwestie postaci dla głośników pokoju |
-| `GET /safety`, `GET /safety/log`, `PUT /safety` | warstwa bezpieczeństwa, patrz niżej (zmiana tylko z tokenem operatora) |
+| `PUT /rooms/{id}` | save a definition (validated) |
+| `GET /rooms/{id}` | the definition |
+| `POST /rooms/{id}/start` | a new game (stops the running one) |
+| `POST /rooms/{id}/stop` | end the game |
+| `POST /rooms/{id}/puzzles/{puzzle}/solve` | solved by hand by the GM (runs `then`) |
+| `GET /rooms/{id}/session` | state of the latest game: puzzle statuses and input values |
+| `PUT /rooms/{id}/brief`, `GET /rooms/{id}/brief` | the room's brief for the game master (Markdown) |
+| `GET /voice/{file}.mp3` | recorded character lines for the room's speakers |
+| `GET /safety`, `GET /safety/log`, `PUT /safety` | the safety layer, see below (changes only with an operator token) |
 
-Każde zdarzenie (`input`, `solved`, `output`, `gm-solve`, `room-updated`, `started`, `finished`…) trafia
-do tabeli `events`. Trwająca gra jest wznawiana po restarcie procesu.
+Every event (`input`, `solved`, `output`, `gm-solve`, `room-updated`, `started`, `finished`…) goes
+to the `events` table. A running game is resumed after the process restarts.
 
-Zapis pokoju (`PUT` lub MCP) w trakcie gry od razu podmienia definicję w tej grze i zachowuje postęp.
-Nowa lub przepięta zagadka, której warunek już jest spełniony, rozwiązuje się od razu i wykonuje swoje kroki.
+Saving a room (`PUT` or MCP) during a game swaps the definition in that game at once and keeps the progress.
+A new or rewired puzzle whose condition is already met is solved at once and runs its steps.
 
-## Serwer MCP
+## MCP server
 
-Silnik wystawia serwer MCP (Streamable HTTP) pod `/mcp`. Dzięki temu model AI może prowadzić grę i przepinać
-zagadki na żywo. Podłączenie do Claude Code:
+The engine exposes an MCP server (Streamable HTTP) at `/mcp`. With it an AI model can run the game and rewire
+puzzles live. Connecting it to Claude Code:
 
 ```bash
 claude mcp add --transport http escaperoom http://localhost:5201/mcp
 ```
 
-| Narzędzie | Do czego |
+| Tool | What for |
 |---|---|
-| `list_rooms`, `get_room`, `game_status` | odczyt pokoi i stanu gry |
-| `list_mqtt_topics` | co jest na szynie MQTT i co wysyła, żeby znaleźć nowe urządzenia |
-| `upsert_input`, `upsert_output` | dodanie lub podmiana czujnika albo wyjścia |
-| `upsert_puzzle` | spięcie wejść i wyjść w zagadkę (dodanie lub podmiana po `id`) |
-| `remove_from_room`, `save_room` | usunięcie elementu, zapis całego pokoju |
-| `start_game`, `stop_game`, `solve_puzzle` | przebieg gry |
-| `simulate_input` | wartość „jakby z czujnika”: test zagadki albo zastępstwo za zepsuty czujnik |
-| `trigger_output` | sterowanie wyjściem od ręki, także bez gry |
-| `get_brief`, `reroll_variant`, `fire_twist`, `fire_cue` | brief pokoju, losowanie wariantu, zwrot akcji i wskazówka świetlna w trwającej grze |
+| `list_rooms`, `get_room`, `game_status` | reading rooms and the game state |
+| `list_mqtt_topics` | what is on the MQTT bus and what it sends, to find new devices |
+| `upsert_input`, `upsert_output` | add or replace a sensor or an output |
+| `upsert_puzzle` | wire inputs and outputs into a puzzle (add or replace by `id`) |
+| `remove_from_room`, `save_room` | remove an element, save the whole room |
+| `start_game`, `stop_game`, `solve_puzzle` | running the game |
+| `simulate_input` | a value "as if from a sensor": testing a puzzle or standing in for a broken sensor |
+| `trigger_output` | driving an output by hand, also without a game |
+| `get_brief`, `reroll_variant`, `fire_twist`, `fire_cue` | the room's brief, drawing a variant, a twist and a light cue in the running game |
 
-Każda zmiana przechodzi tę samą walidację co `PUT`. Błędna zmiana jest odrzucana z listą powodów i nic się nie zapisuje.
+Every change goes through the same validation as `PUT`. A wrong change is rejected with a list of reasons and nothing is saved.
 
-API i MCP odpowiadają tylko dla hostów z `AllowedHosts` (domyślnie localhost), co chroni przed DNS rebindingiem
-ze stron WWW. Żeby sięgnąć do serwera z innej maszyny, dopisz jej nazwę lub IP serwera w `appsettings.json`.
+The API and MCP answer only for hosts in `AllowedHosts` (localhost by default), which protects against DNS rebinding
+from web pages. To reach the server from another machine, add its name or the server's IP in `appsettings.json`.
 
-## Bezpieczeństwo
+## Safety
 
-Funkcje bezpieczeństwa (przycisk awaryjny, czujnik dymu, odcięcie zasilania zamków, oświetlenie awaryjne) to osobna
-kategoria dla całego obiektu, niezależna od pokoi i gier. Przykład: [examples/safety.json](examples/safety.json).
+Safety functions (the emergency button, the smoke detector, cutting power to the locks, emergency lighting) are a separate
+category for the whole venue, independent of rooms and games. Example: [examples/safety.json](examples/safety.json).
 
-- **Reguły działają zawsze**, także bez trwającej gry. Liczą się w pamięci, w pętli MQTT, i nie czekają na bazę.
-  Dopóki warunek jest spełniony, każda nowa wartość czujnika ponownie wysyła wyjścia (np. gdy sterownik zamka
-  się zrestartował).
-- **Gra i MCP nie mogą ich dotknąć.** Wyjście pokoju, które publikowałoby do urządzenia bezpieczeństwa, jest
-  odrzucane przy zapisie pokoju. Dodatkowo tuż przed każdą publikacją gry sprawdzana jest ostatnia blokada, zapisywana
-  w audycie jako `blocked`. Do urządzenia „należy” każda komenda do niego, podszywanie się pod jego odczyty,
-  broadcast Tasmoty `cmnd/tasmotas/` i `zigbee2mqtt/bridge/`. MCP nie ma żadnego narzędzia do bezpieczeństwa,
-  a `list_mqtt_topics` oznacza tematy bezpieczeństwa jako `safety: true`.
-- **Zmiana konfiguracji wymaga tokenu operatora** (`PUT /safety`, nagłówek `X-Safety-Token`, w treści `reason`
-  i `config`). W konfiguracji serwera trzymany jest tylko SHA-256 tokenu, więc jej odczyt nie pozwala się podszyć:
+- **The rules always run**, also with no game in progress. They are evaluated in memory, in the MQTT loop, and do not wait
+  for the database. As long as the condition holds, every new sensor value sends the outputs again (e.g. when the lock
+  controller has restarted).
+- **The game and MCP cannot touch them.** A room output that would publish to a safety device is
+  rejected when the room is saved. In addition, right before every publication by the game a last block is checked,
+  written to the audit as `blocked`. A device "owns" every command to it, anything impersonating its readings,
+  the Tasmota broadcast `cmnd/tasmotas/` and `zigbee2mqtt/bridge/`. MCP has no safety tool at all,
+  and `list_mqtt_topics` marks safety topics as `safety: true`.
+- **Changing the configuration requires an operator token** (`PUT /safety`, header `X-Safety-Token`, with `reason`
+  and `config` in the body). The server's configuration holds only the SHA-256 of the token, so reading it does not let anyone impersonate an operator:
 
   ```bash
-  TOKEN=$(openssl rand -hex 32); echo "token dla operatora: $TOKEN"
-  printf %s "$TOKEN" | shasum -a 256   # wynik do Safety:Operators:<imię> (np. zmienna Safety__Operators__jan)
+  TOKEN=$(openssl rand -hex 32); echo "token for the operator: $TOKEN"
+  printf %s "$TOKEN" | shasum -a 256   # the result goes to Safety:Operators:<name> (e.g. the variable Safety__Operators__jan)
   ```
 
-- **Audyt:** tabela `safety_log` tylko do dopisywania. Trigger w Postgresie odrzuca UPDATE, DELETE i TRUNCATE.
-  Trafia tam każda próba zmiany (`denied`, `rejected`, `config` z operatorem, IP i powodem), każde zadziałanie
-  reguły (`fired`, `output`, `failed`) i każda zablokowana publikacja gry (`blocked`). Zmiana jest zapisywana
-  w audycie, zanim zacznie obowiązywać. Odczyt: `GET /safety`, `GET /safety/log`.
+- **Audit:** the `safety_log` table is append-only. A trigger in Postgres rejects UPDATE, DELETE and TRUNCATE.
+  It records every attempted change (`denied`, `rejected`, `config` with the operator, IP and reason), every time a rule
+  fires (`fired`, `output`, `failed`) and every blocked publication by the game (`blocked`). A change is written
+  to the audit before it takes effect. Reading: `GET /safety`, `GET /safety/log`.
 
-**To warstwa dodatkowa, nie zastępuje sprzętowego bezpieczeństwa.** Elektrozamki muszą puszczać po zaniku zasilania,
-a przycisk awaryjny musi fizycznie odcinać ich zasilanie, niezależnie od tego serwera, sieci i brokera. Dalsze
-uszczelnienie należy do wdrożenia:
-- ACL w brokerze, żeby inne klienty MQTT nie mogły publikować do tematów bezpieczeństwa;
-- urządzenia bezpieczeństwa poza grupami zigbee2mqtt;
-- aplikacja łącząca się z Postgresem rolą, która nie jest właścicielem `safety_log` i nie może zdjąć triggera.
+**This is an additional layer; it does not replace hardware safety.** Electric locks must release when power is lost,
+and the emergency button must physically cut their power, independently of this server, the network and the broker. Further
+hardening belongs to the deployment:
+- ACLs in the broker, so that other MQTT clients cannot publish to safety topics;
+- safety devices kept out of zigbee2mqtt groups;
+- an application that connects to Postgres with a role that does not own `safety_log` and cannot drop the trigger.
 
-Przywrócenie zasilania zamków po alarmie jest celowo poza oprogramowaniem i robi je człowiek.
+Restoring power to the locks after an alarm is deliberately outside the software and is done by a person.
 
-## Czego jeszcze nie ma
+## What is not there yet
 
-Front, uwierzytelnianie API, MCP i brokera, limit czasu gry i podpowiedzi, `simulate_input` i `trigger_output`
-w HTTP API (na razie tylko w MCP), ponawianie komend przy zerwanym MQTT, migracje bazy (schemat to `create if not exists`).
+A front end, authentication for the API, MCP and the broker, a game time limit and hints, `simulate_input` and `trigger_output`
+in the HTTP API (for now only in MCP), retrying commands when MQTT is down, database migrations (the schema is `create if not exists`).

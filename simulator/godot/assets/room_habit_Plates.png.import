@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://drhgi4pk1mha3"
-path="res://.godot/imported/room_hol_BrushedHol.png-f0bf196eddc72470e5052c86a6c4283e.ctex"
+uid="uid://clrgimiarrhfl"
+path="res://.godot/imported/room_habit_Plates.png-30c3443d9e929fac6dabc00a929166e2.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "288608ae33b6447e5bd1fcdb43d9147f"
+"md5": "aa6d88cc33d302566e27abd34bb3219d"
 }
 
 [deps]
 
-source_file="res://assets/room_hol_BrushedHol.png"
-dest_files=["res://.godot/imported/room_hol_BrushedHol.png-f0bf196eddc72470e5052c86a6c4283e.ctex"]
+source_file="res://assets/room_habit_Plates.png"
+dest_files=["res://.godot/imported/room_habit_Plates.png-30c3443d9e929fac6dabc00a929166e2.ctex"]
 
 [params]
 

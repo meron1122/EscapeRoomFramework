@@ -33,7 +33,7 @@ func _init(layout: Dictionary) -> void:
 		elif d.wall == "east":
 			rect = rect.grow_side(SIDE_RIGHT, 1.2)
 		doors[d.id] = _cells(rect)
-		set_door(d.id, d.id == "wejscie")
+		set_door(d.id, d.id == "entrance")
 
 
 func set_door(id: String, open: bool) -> void:

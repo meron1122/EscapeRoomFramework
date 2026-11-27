@@ -1,16 +1,16 @@
 extends Node3D
-## Builds the isometric simulator from layout.json and the Blender models, and plays a game of Jądro with simulated people.
+## Builds the isometric simulator from layout.json and the Blender models, and plays a game of The Core with simulated people.
 
-const NAMES := ["Iskra", "Rdza", "Mysz", "Grom", "Lis"]
+const NAMES := ["Spark", "Rust", "Mouse", "Thunder", "Fox"]
 const COLORS := [Color("#fcee0a"), Color("#00f0ff"), Color("#ffffff"), Color("#ff5fd2"), Color("#9dff5c")]
-const NEXT_ROOM := {"winda": "pietro", "zejscie": "jadro"}
+const NEXT_ROOM := {"elevator": "habit", "descent": "core"}
 const ISO_PITCH := -35.264
 const CHAT := {
-	"hol": ["Ten grafik coś znaczy.", "Reklama rysuje gest.", "Sprawdź donice.", "Kto ma dziś zmianę?"],
-	"pietro": ["Raport mówi, kto ich trzyma.", "To auto ma tryb serwisowy.", "Plakaty mówią, co kupi.", "Ile mamy rdzeni?"],
-	"jadro": ["Ustaw lustra.", "Nie ufaj jej.", "Kod z trzech fragmentów.", "Szybko, zanim ochrona…"],
+	"lobby": ["That roster means something.", "The ad is drawing a gesture.", "Check the planters.", "Who's on shift today?"],
+	"habit": ["The report says what keeps them hooked.", "This car has a service mode.", "The posters say what they'll buy.", "How many rods have we got?"],
+	"core": ["Set the mirrors.", "Don't trust her.", "A code from three fragments.", "Quick, before security…"],
 }
-const REPLIES := ["Racja.", "Sprawdzę.", "Daj mi chwilę.", "Nie jestem pewien.", "Dobra, idę."]
+const REPLIES := ["Right.", "I'll check.", "Give me a moment.", "I'm not sure.", "OK, on it."]
 
 static var started_once := false
 
@@ -25,7 +25,7 @@ var doors := {}
 var npcs: Array[Npc] = []
 var room_lights := {}
 var atmosphere: Atmosphere
-var reached := {"hol": true}
+var reached := {"lobby": true}
 var rng := RandomNumberGenerator.new()
 var speed := 5.0
 var paused := false
@@ -67,7 +67,7 @@ var gm_text := ""
 var _pending_start := false
 var _nonce := ""
 var _players_at := 0.0
-const ROOM_ID := "jadro"
+const ROOM_ID := "the-core"
 var _next_chat := 6.0
 
 
@@ -191,7 +191,7 @@ func _connect_engine() -> void:
 			if (q !== null) return q;
 			return ['localhost', '127.0.0.1'].includes(location.hostname) ? 'ws://localhost:9001' : 'wss://' + location.host + '/mqtt'; })()"""))
 	if url == "" or url == "off":
-		hud.set_director("TRYB OFFLINE\nSymulator bez silnika: reżyser na regułach lokalnych.")
+		hud.set_director("OFFLINE MODE\nSimulator without the engine: the director runs on local rules.")
 		return
 	link = MqttLink.new()
 	add_child(link)
@@ -204,7 +204,7 @@ func _connect_engine() -> void:
 
 func _on_engine_connected() -> void:
 	sim.engine_mode = true
-	gm_text = "TRYB: SILNIK + AI GAME MASTER\nCzekam na start gry."
+	gm_text = "MODE: ENGINE + AI GAME MASTER\nWaiting for the game to start."
 	if _pending_start:
 		_pending_start = false
 		_engine_start()
@@ -214,9 +214,9 @@ func _on_engine_lost() -> void:
 	if not sim.engine_mode:
 		link = null  # never connected: stay offline
 		_pending_start = false
-		hud.set_director("TRYB OFFLINE\nBrak połączenia z silnikiem: reżyser na regułach lokalnych.")
+		hud.set_director("OFFLINE MODE\nNo connection to the engine: the director runs on local rules.")
 	else:
-		gm_text = "UTRACONO POŁĄCZENIE Z SILNIKIEM"
+		gm_text = "CONNECTION TO THE ENGINE LOST"
 
 
 func _engine_start() -> void:
@@ -256,7 +256,7 @@ func _on_engine_message(topic: String, payload: String) -> void:
 			var target := _npc_named(str(d.get("to", "")))
 			if target:
 				target.emote("listen", 5.0)
-				get_tree().create_timer(1.2).timeout.connect(func(): target.bark(["Jasne.", "Słyszę.", "Dobra, sprawdzam."][rng.randi() % 3], 1.8))
+				get_tree().create_timer(1.2).timeout.connect(func(): target.bark(["Got it.", "I hear you.", "OK, checking."][rng.randi() % 3], 1.8))
 		"escaperoom/%s/hint" % ROOM_ID:
 			var id: String = Sim.ENGINE_TO_TASK.get(str(d.get("puzzle", "")), str(d.get("puzzle", "")))
 			sim.boosts[id] = sim.t + 150.0
@@ -271,19 +271,19 @@ func _on_engine_message(topic: String, payload: String) -> void:
 				"lockdown":
 					for n in npcs:
 						if n.visible and rng.randf() < 0.5:
-							n.bark("Zamknęła drzwi!", 2.0)
+							n.bark("She locked the door!", 2.0)
 			if not sim.twists_used.has(str(d.get("kind", ""))):
 				sim.twists_used.append(str(d.get("kind", "")))
 		"escaperoom/%s/gm" % ROOM_ID:
 			var actions: Array = d.get("actions", [])
-			var mode := "MODEL " + str(d.get("model", "")) if d.get("mode", "") == "model" else "REGUŁY (bez modelu)"
+			var mode := "MODEL " + str(d.get("model", "")) if d.get("mode", "") == "model" else "RULES (no model)"
 			gm_text = "%s\n%s%s" % [mode, str(d.get("thought", "")), ("\n› " + "\n› ".join(PackedStringArray(actions.map(func(a): return str(a))))) if not actions.is_empty() else ""]
 		"sim/%s/fx/scanners" % ROOM_ID:
-			sim.variant.skanery = d.get("active", []).map(func(x): return str(x))
+			sim.variant.scanners = d.get("active", []).map(func(x): return str(x))
 			_aim_scanners_and_sensors()
 			_refresh_variant()
 		"sim/%s/fx/sensors" % ROOM_ID:
-			sim.variant.czujniki = d.get("active", []).map(func(x): return int(x))
+			sim.variant.sensors = d.get("active", []).map(func(x): return int(x))
 			if sim.tasks.has("firewall") and sim.tasks.firewall.state == "active":
 				_on_task("firewall", "active")
 			_refresh_variant()
@@ -293,20 +293,20 @@ func _engine_screen(kind: String, d: Dictionary) -> void:
 	## Clues come from the engine, so a rerolled puzzle shows its new clue at once.
 	var v := sim.variant
 	match kind:
-		"reklama":
-			v.gest = str(d.get("gest", v.get("gest", "Z")))
-		"grafik":
-			v.dyzurny = str(d.get("duty", ""))
+		"ad":
+			v.gesture = str(d.get("gesture", v.get("gesture", "Z")))
+		"roster":
+			v.duty = str(d.get("duty", ""))
 			v.shifts = d.get("shifts", {})
-		"raport":
+		"report":
 			v.minutes = d.get("minutes", {})
 		"zdrive":
-			v.kod = str(d.get("kod", ""))
+			v.code = str(d.get("code", ""))
 		"kiosk":
-			v.klientka = str(d.get("klientka", ""))
-		"fragmenty":
-			v.fragmenty = d.get("fragments", [])
-			v.haslo = str(d.get("haslo", ""))
+			v.customer = str(d.get("customer", ""))
+		"fragments":
+			v.fragments = d.get("fragments", [])
+			v.slogan = str(d.get("slogan", ""))
 		"zeta":
 			last_zeta = str(d.get("line", last_zeta))
 			return
@@ -322,8 +322,8 @@ func _refresh_variant() -> void:
 func _on_submit(task_id: String) -> void:
 	## The team thinks it has it: send what the devices would send for the puzzle's current solution.
 	var engine_id := task_id
-	if task_id == "wybor":
-		engine_id = "detonacja" if rng.randf() < 0.85 else "uklad"
+	if task_id == "choice":
+		engine_id = "detonation" if rng.randf() < 0.85 else "deal"
 	var puzzle: Dictionary = {}
 	for p in engine_def.get("puzzles", []):
 		if p.id == engine_id:
@@ -379,7 +379,7 @@ func _value(w: Dictionary) -> String:
 
 func _wrong_attempt(n: Npc) -> void:
 	## People get it wrong before they get it right; the game master sees these attempts.
-	var engine_id: String = "detonacja" if n.task_id == "wybor" else n.task_id
+	var engine_id: String = "detonation" if n.task_id == "choice" else n.task_id
 	for p in engine_def.get("puzzles", []):
 		if p.id == engine_id and p.has("when"):
 			var pairs := _inputs_for(p.when)
@@ -387,7 +387,7 @@ func _wrong_attempt(n: Npc) -> void:
 				return
 			var pick: Array = pairs[rng.randi() % pairs.size()]
 			_send_input(pick[0], str(rng.randi_range(1, 9)) if pick[1].length() <= 1 else str(rng.randi_range(1000, 9999)))
-			n.bark(["Nie to…", "Źle!", "Jeszcze raz."][rng.randi() % 3], 1.6)
+			n.bark(["Not that…", "Wrong!", "Again."][rng.randi() % 3], 1.6)
 			return
 
 
@@ -458,19 +458,19 @@ func _build_environment() -> void:
 
 
 const LAMP_AT := {  # which prop holds the clue each hint lamp points at
-	"przeszukanie": ["donica"], "telefon": ["reklama"], "szafka": ["monitor_recepcji"], "bramka": ["bramka"],
-	"sciana": ["sciana"], "zdrive": ["zdrive"], "zmart": ["kiosk"], "firewall": ["czujniki"], "uzbrojenie": ["konsola"],
+	"search": ["planter"], "phone": ["ad"], "locker": ["reception_monitor"], "gate": ["gate"],
+	"wall": ["wall"], "zdrive": ["zdrive"], "zmart": ["kiosk"], "firewall": ["sensors"], "arming": ["console"],
 }
-const LAMP_COLOR := Color("#ff4fa3")  # Kruk's colour: nothing else in the building glows pink, so a hint is unmistakable
+const LAMP_COLOR := Color("#ff4fa3")  # Raven's colour: nothing else in the building glows pink, so a hint is unmistakable
 
 
 func _hint_lamp(id: String, on: bool) -> void:
-	## A hint lamp the game master controls: Kruk hacks a service light over the clue. A bulb on a cord, a soft
+	## A hint lamp the game master controls: Raven hacks a service light over the clue. A bulb on a cord, a soft
 	## beam down and a ring on the floor.
 	if not lamps.has(id):
 		var names: Array = LAMP_AT.get(id, [])
-		if id == "skanery":
-			names = sim.variant.skanery.map(func(k): return "skaner" + str(k))
+		if id == "scanners":
+			names = sim.variant.scanners.map(func(k): return "scanner" + str(k))
 		var list: Array = []
 		for name in names:
 			if not props.has(name):
@@ -647,14 +647,14 @@ func _build_world() -> void:
 		leaf.set_meta("width", float(d.width))
 		add_child(leaf)
 		doors[d.id] = leaf
-		if d.id == "wejscie":
+		if d.id == "entrance":
 			leaf.position.z += d.width
 	bomb = load("res://assets/bomb.glb").instantiate()
 	bomb.position = Vector3(layout.bomb.x, 0, layout.bomb.z)
 	bomb.scale = Vector3.ONE * 0.01
 	bomb.visible = false
 	add_child(bomb)
-	var core: MeshInstance3D = props.jadro_wieza.find_child("Core", true, false)
+	var core: MeshInstance3D = props.core_tower.find_child("Core", true, false)
 	core_mat = (core.mesh.surface_get_material(0) as StandardMaterial3D).duplicate()
 	core.material_override = core_mat
 
@@ -681,21 +681,21 @@ func _build_lights() -> void:
 	## Moody rooms: low ambient, and pools of light over the places where the game happens.
 	var white := Color("#e9eefc")
 	var warm := Color("#ffd2a0")
-	# Hol: warm pools over the desk, the seating and the gate; one cool wash so the stone still reads.
+	# Lobby: warm pools over the desk, the seating and the gate; one cool wash so the stone still reads.
 	for p in [Vector3(4.6, 3.0, 3.9), Vector3(2.6, 2.8, 7.4), Vector3(11.3, 3.0, 2.4), Vector3(10.4, 3.0, 7.6)]:
-		_light("hol", SpotLight3D.new(), p, warm, 3.4, 7.0, true)
-	_light("hol", OmniLight3D.new(), Vector3(6.3, 3.6, 5.0), white, 0.45, 11.0)
-	# Piętro: white work light over each station, a faint cyan from the scanner walls.
+		_light("lobby", SpotLight3D.new(), p, warm, 3.4, 7.0, true)
+	_light("lobby", OmniLight3D.new(), Vector3(6.3, 3.6, 5.0), white, 0.45, 11.0)
+	# Habit Floor: white work light over each station, a faint cyan from the scanner walls.
 	for p in [Vector3(16.4, 3.2, 2.4), Vector3(26.0, 3.3, 3.6), Vector3(19.6, 3.2, 9.2), Vector3(21.3, 3.2, 4.8), Vector3(24.5, 3.2, 9.8)]:
-		_light("pietro", SpotLight3D.new(), p, white, 3.6, 7.5, true)
+		_light("habit", SpotLight3D.new(), p, white, 3.6, 7.5, true)
 	for p in [Vector3(14.8, 2.4, 10.6), Vector3(28.6, 2.4, 10.6)]:
-		_light("pietro", OmniLight3D.new(), p, Color("#7fe6ee"), 0.4, 7.0)
-	_light("pietro", OmniLight3D.new(), Vector3(21.5, 3.8, 6.3), white, 0.35, 13.0)
-	# Jądro: cold and the darkest; the core is the light.
-	_light("jadro", OmniLight3D.new(), Vector3(36.8, 1.7, 5.0), Color("#00f0ff"), 2.4, 9.0, true)
+		_light("habit", OmniLight3D.new(), p, Color("#7fe6ee"), 0.4, 7.0)
+	_light("habit", OmniLight3D.new(), Vector3(21.5, 3.8, 6.3), white, 0.35, 13.0)
+	# The Core: cold and the darkest; the core is the light.
+	_light("core", OmniLight3D.new(), Vector3(36.8, 1.7, 5.0), Color("#00f0ff"), 2.4, 9.0, true)
 	for p in [Vector3(32.8, 3.0, 3.4), Vector3(40.9, 3.0, 3.4), Vector3(34.0, 3.0, 9.4), Vector3(40.0, 3.0, 9.4)]:
-		_light("jadro", SpotLight3D.new(), p, Color("#8fa8e6"), 2.8, 7.0, true)
-	_light("jadro", OmniLight3D.new(), Vector3(37.0, 3.6, 7.5), Color("#c9d4ea"), 0.4, 12.0)
+		_light("core", SpotLight3D.new(), p, Color("#8fa8e6"), 2.8, 7.0, true)
+	_light("core", OmniLight3D.new(), Vector3(37.0, 3.6, 7.5), Color("#c9d4ea"), 0.4, 12.0)
 
 
 func _build_screens() -> void:
@@ -752,7 +752,7 @@ func _build_audio() -> void:
 	alarm.stream = _mp3("alarm", true)
 	alarm.volume_db = -16.0
 	add_child(alarm)
-	# Kruk talks over a radio from the van: band-limited and a little overdriven.
+	# Raven talks over a radio from the van: band-limited and a little overdriven.
 	var radio := AudioServer.bus_count
 	AudioServer.add_bus(radio)
 	AudioServer.set_bus_name(radio, "Radio")
@@ -792,7 +792,7 @@ func _on_voice_loaded(result: int, code: int, _headers: PackedStringArray, body:
 	var stream := AudioStreamMP3.new()
 	stream.data = body
 	voice.stream = stream
-	voice.bus = "Radio" if line.speaker == "KRUK" else "Master"
+	voice.bus = "Radio" if line.speaker == "RAVEN" else "Master"
 	voice.play()
 	create_tween().tween_property(music[music_active], "volume_db", _music_db() - 10.0, 0.3)  # duck the music
 
@@ -820,14 +820,14 @@ func _build_camera() -> void:
 func _aim_scanners_and_sensors() -> void:
 	## The variant decides which scanners and sensors count; the puzzle spots follow it.
 	var spots := []
-	for k in sim.variant.skanery:
-		var s: Node3D = props["skaner" + k]
+	for k in sim.variant.scanners:
+		var s: Node3D = props["scanner" + k]
 		spots.append([s.position.x + (0.55 if s.position.x < 21.0 else -0.55), s.position.z])
-		_set_mat("skaner" + k, "Ring", _glow(Color("#00f0ff"), 0.4))
-	sim.tasks.skanery.def.spots = spots
+		_set_mat("scanner" + k, "Ring", _glow(Color("#00f0ff"), 0.4))
+	sim.tasks.scanners.def.spots = spots
 	for i in 4:
-		if not str(i + 1) in sim.variant.skanery:
-			_set_mat("skaner%d" % (i + 1), "Ring", _glow(Color("#1a1d22"), 0.0))
+		if not str(i + 1) in sim.variant.scanners:
+			_set_mat("scanner%d" % (i + 1), "Ring", _glow(Color("#1a1d22"), 0.0))
 
 
 # ---------- game events ----------
@@ -838,11 +838,11 @@ func _on_log(speaker: String, text: String) -> void:
 		print("[%s] %s> %s" % [sim.clock(), speaker, text])
 	if speaker == "ZETA":
 		last_zeta = text
-	if speaker == "KRUK" and sim.running and not npcs.is_empty():
+	if speaker == "RAVEN" and sim.running and not npcs.is_empty():
 		for n in npcs:
 			n.emote("listen", 4.0)
 		if rng.randf() < 0.4:
-			npcs[rng.randi() % npcs.size()].bark("Słyszeliście?", 1.8)
+			npcs[rng.randi() % npcs.size()].bark("Did you hear that?", 1.8)
 
 
 func _on_task(id: String, state: String) -> void:
@@ -859,19 +859,19 @@ func _on_task(id: String, state: String) -> void:
 			if n.mode == "explore":
 				n.mode = "idle"
 		_point_at(id)
-		if id == "skanery":
-			for k in sim.variant.skanery:
-				_set_mat("skaner" + k, "Ring", _glow(Color("#00f0ff"), 3.0))
+		if id == "scanners":
+			for k in sim.variant.scanners:
+				_set_mat("scanner" + k, "Ring", _glow(Color("#00f0ff"), 3.0))
 		if id == "firewall":
-			for s in sim.variant.czujniki:
-				_set_mat("czujniki", "Sensor%d" % (s - 1), _glow(Color("#00f0ff"), 3.0))
+			for s in sim.variant.sensors:
+				_set_mat("sensors", "Sensor%d" % (s - 1), _glow(Color("#00f0ff"), 3.0))
 	if state == "solved" or state == "locked":
 		var workers: Array = sim.tasks[id].workers.duplicate()
 		for w in workers:
 			w.task_id = ""
 			w.at_spot = false
 			w.mode = "idle"
-			w.activity = "czeka"
+			w.activity = "waiting"
 			w.stuck = 0.0
 			if state == "solved":
 				w.emote("cheer", 5.0)
@@ -886,57 +886,57 @@ func _solved_effects(id: String, workers: Array) -> void:
 	var first: Npc = workers[0] if not workers.is_empty() else null
 	if first:
 		first.bark(sim.tasks[id].def.say.split(".")[0] + ".", 3.0)
-	var frag: Array = sim.variant.fragmenty
+	var frag: Array = sim.variant.fragments
 	match id:
-		"przeszukanie":
+		"search":
 			if first:
 				first.set_carry("badge")
-		"telefon":
+		"phone":
 			screens.solved("zphone")
-		"szafka":
-			_set_mat("szafka", "KeypadLight", _glow(Color("#00f0ff"), 3.0))
-		"bramka":
+		"locker":
+			_set_mat("locker", "KeypadLight", _glow(Color("#00f0ff"), 3.0))
+		"gate":
 			for flap in ["FlapL", "FlapR"]:
-				var f: Node3D = props.bramka.find_child(flap, true, false)
+				var f: Node3D = props.gate.find_child(flap, true, false)
 				create_tween().tween_property(f, "scale:x", 0.05, 0.6)
 			for n in npcs:
 				if n.carry == "badge":
 					n.set_carry("")
-		"sciana":
-			screens.solved("raport", frag[0])
-			screens.solved("licznik")
+		"wall":
+			screens.solved("report", frag[0])
+			screens.solved("meter")
 			for i in 6:
-				_set_mat("sciana", "SlotLight%d" % i, _glow(Color("#fcee0a"), 3.0))
+				_set_mat("wall", "SlotLight%d" % i, _glow(Color("#fcee0a"), 3.0))
 		"zdrive":
 			screens.solved("zdrive", frag[1])
-			screens.solved("licznik")
+			screens.solved("meter")
 			var lights: Node3D = props.zdrive.find_child("Headlights", true, false)
 			var tw := create_tween().set_loops(4)
 			tw.tween_callback(func(): lights.visible = false).set_delay(0.15)
 			tw.tween_callback(func(): lights.visible = true).set_delay(0.15)
 		"zmart":
 			screens.solved("kiosk", frag[2])
-			screens.solved("licznik")
-		"skanery":
-			for k in sim.variant.skanery:
-				_set_mat("skaner" + k, "Ring", _glow(Color("#fcee0a"), 3.0))
+			screens.solved("meter")
+		"scanners":
+			for k in sim.variant.scanners:
+				_set_mat("scanner" + k, "Ring", _glow(Color("#fcee0a"), 3.0))
 		"firewall":
-			for s in sim.variant.czujniki:
-				_set_mat("czujniki", "Sensor%d" % (s - 1), _glow(Color("#fcee0a"), 3.0))
+			for s in sim.variant.sensors:
+				_set_mat("sensors", "Sensor%d" % (s - 1), _glow(Color("#fcee0a"), 3.0))
 			_beams()
 			for door_name in ["DoorL", "DoorR"]:
-				var dn: Node3D = props.szafa_serwisowa.find_child(door_name, true, false)
+				var dn: Node3D = props.service_cabinet.find_child(door_name, true, false)
 				create_tween().tween_property(dn, "scale:x", 0.05, 0.8)
 			bomb.visible = true
 			create_tween().tween_property(bomb, "scale", Vector3.ONE, 0.8).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		"uzbrojenie":
+		"arming":
 			for i in 3:
 				var ring: MeshInstance3D = bomb.find_child("SlotRing%d" % i, true, false)
 				ring.material_override = _glow(Color("#00f0ff"), 4.0)
 			for n in npcs:
 				if n.carry == "rod":
 					n.set_carry("")
-	if id in ["sciana", "zdrive", "zmart"] and first:
+	if id in ["wall", "zdrive", "zmart"] and first:
 		first.set_carry("rod")
 
 
@@ -969,32 +969,32 @@ func _on_stage(room: String) -> void:
 func _on_twist(kind: String, _seconds: float) -> void:
 	for n in npcs:
 		if kind == "patrol":
-			n.bark("Nie ruszać się!", 3.0)
+			n.bark("Nobody move!", 3.0)
 
 
 func _on_finished(kind: String) -> void:
-	red_alert = kind == "detonacja"
-	if kind == "detonacja":
+	red_alert = kind == "detonation"
+	if kind == "detonation":
 		alarm.play()
 		_play("final")
-	elif kind == "uklad":
-		_play("hol")
+	elif kind == "deal":
+		_play("lobby")
 	else:
-		_play("jadro")
+		_play("core")
 	for n in npcs:
 		n.task_id = ""
 		n.at_spot = false
 		n.mode = "leave"
-		n.activity = "ucieka" if kind == "detonacja" else "wychodzi"
+		n.activity = "running" if kind == "detonation" else "leaving"
 		n.go(nav, Vector3(45.1, 0, 6.44 + rng.randf_range(-0.3, 0.3)), Vector3(46.2, 0, 6.44))
-	if kind == "detonacja":
+	if kind == "detonation":
 		finale_at = _clock
 		end_shown_at = _clock + COUNTDOWN + 5.0
 	else:
 		end_shown_at = _clock + 7.0
-		if kind == "uklad":
+		if kind == "deal":
 			# The deal: no alarm. The core calms down and the camera holds on it.
-			_focus(props.jadro_wieza.position, 13.0, 7.0)
+			_focus(props.core_tower.position, 13.0, 7.0)
 
 
 func _focus(at: Vector3, size: float, seconds: float) -> void:
@@ -1008,28 +1008,28 @@ func _finale(delta: float) -> void:
 		return
 	var left := COUNTDOWN - (_clock - finale_at)
 	if left > 0.0:
-		hud.set_countdown("DETONACJA  00:%02d" % int(ceil(left)))
+		hud.set_countdown("DETONATION  00:%02d" % int(ceil(left)))
 		if left < COUNTDOWN - 5.0:  # the team is out of frame by now: pull back to see the whole core room
-			_focus(props.jadro_wieza.position + Vector3(0, 0, 1.5), 24.0, 1.0)
+			_focus(props.core_tower.position + Vector3(0, 0, 1.5), 24.0, 1.0)
 	elif not blasted:
 		blasted = true
 		red_alert = false
 		alarm.stop()
 		hud.set_countdown("")
 		hud.flash()
-		_on_log("SYSTEM", "Jądro offline. Strefa się budzi.")
+		_on_log("SYSTEM", "The Core is offline. The Zone is waking up.")
 		shake = 1.6
 		for i in 2:
 			create_tween().tween_property(music[i], "volume_db", -80.0, 0.4)
-		_focus(props.jadro_wieza.position + Vector3(0, 0, 1.5), 30.0, 6.0)
+		_focus(props.core_tower.position + Vector3(0, 0, 1.5), 30.0, 6.0)
 	shake = maxf(0.0, shake - delta)
 
 
 func _summary() -> String:
-	var titles := {"detonacja": "DETONACJA", "uklad": "UKŁAD Z ZETĄ", "czas": "KONIEC CZASU"}
-	var twists := ", ".join(PackedStringArray(sim.twists_used)) if not sim.twists_used.is_empty() else "brak"
-	return "Zakończenie: %s\nCzas gry: %02d:%02d z 60:00\nPodpowiedzi Kruka: %d\nZwroty akcji: %s\nWariant: gest %s, dyżur %s, %s" % [
-		titles[sim.ending], int(sim.t) / 60, int(sim.t) % 60, sim.hints_used, twists, sim.variant.gest, sim.variant.dyzurny, sim.variant.kod]
+	var titles := {"detonation": "DETONATION", "deal": "DEAL WITH ZETA", "time": "TIME'S UP"}
+	var twists := ", ".join(PackedStringArray(sim.twists_used)) if not sim.twists_used.is_empty() else "none"
+	return "Ending: %s\nGame time: %02d:%02d of 60:00\nRaven's hints: %d\nTwists: %s\nVariant: gesture %s, %s on duty, %s" % [
+		titles[sim.ending], int(sim.t) / 60, int(sim.t) % 60, sim.hints_used, twists, sim.variant.gesture, sim.variant.duty, sim.variant.code]
 
 
 # ---------- per frame ----------
@@ -1049,7 +1049,7 @@ func _process(delta: float) -> void:
 			if n.stuck > 420.0:
 				n.stuck = 0.0
 				n.emote("shrug", 6.0)
-				n.bark(["To nie ma sensu…", "Ktoś ma pomysł?", "Utknęliśmy."][rng.randi() % 3], 2.4)
+				n.bark(["This makes no sense…", "Anyone got an idea?", "We're stuck."][rng.randi() % 3], 2.4)
 	_chat()
 	_separate(delta)
 	screens.update(sim, last_zeta)
@@ -1105,7 +1105,7 @@ func _think(n: Npc) -> void:
 			n.mode = "task"
 			n.activity = tk.def.name.to_lower()
 			if rng.randf() < 0.6:
-				n.bark(["Biorę to.", "Ja to zrobię.", "Mam pomysł.", "Sprawdzam."][rng.randi() % 4])
+				n.bark(["I'll take this.", "I've got it.", "I have an idea.", "Checking."][rng.randi() % 4])
 			return
 	var r: Dictionary = layout.rooms.filter(func(x): return x.id == sim.stage)[0]
 	var p := Vector3(rng.randf_range(r.x + 0.8, r.x + r.w - 0.8), 0, rng.randf_range(r.z + 1.0, r.z + r.d - 0.8))
@@ -1113,9 +1113,9 @@ func _think(n: Npc) -> void:
 		n.mode = "explore"
 		n.task_id = ""
 		n.explore_until = sim.t + rng.randf_range(20.0, 50.0)
-		n.activity = "szuka wskazówek"
+		n.activity = "looking for clues"
 		if rng.randf() < 0.25:
-			n.bark(["Coś tu musi być.", "Szukam wskazówek.", "Patrzcie na ekrany."][rng.randi() % 3])
+			n.bark(["There must be something here.", "Looking for clues.", "Watch the screens."][rng.randi() % 3])
 
 
 func _chat() -> void:
@@ -1144,7 +1144,7 @@ func _point_at(id: String) -> void:
 			best = n
 	if best and best.position.distance_to(target) < 7.0:
 		best.emote("point", 4.0, target)
-		best.bark(["Tam!", "Patrzcie na to!", "Coś się otworzyło."][rng.randi() % 3], 1.8)
+		best.bark(["There!", "Look at that!", "Something opened."][rng.randi() % 3], 1.8)
 
 
 func _spot(id: String, idx: int) -> Vector3:
@@ -1190,12 +1190,12 @@ func _director_text() -> String:
 	var gap := sim.t - plan_end
 	var lines := []
 	if gap > 0:
-		lines.append("Spóźnienie względem planu: %d:%02d" % [int(gap) / 60, int(gap) % 60])
+		lines.append("Behind the plan: %d:%02d" % [int(gap) / 60, int(gap) % 60])
 	else:
-		lines.append("Do końca planu pokoju: %d:%02d" % [int(-gap) / 60, int(-gap) % 60])
-	lines.append("Podpowiedzi Kruka: %d (poziom %d)" % [sim.hints_used, sim.hint_level])
-	lines.append("Tempo drużyny: ×%.1f" % sim.rate_scale())
-	lines.append("Zwroty akcji: %s" % (", ".join(PackedStringArray(sim.twists_used)) if not sim.twists_used.is_empty() else "brak"))
+		lines.append("Left in the room's plan: %d:%02d" % [int(-gap) / 60, int(-gap) % 60])
+	lines.append("Raven's hints: %d (level %d)" % [sim.hints_used, sim.hint_level])
+	lines.append("Team pace: ×%.1f" % sim.rate_scale())
+	lines.append("Twists: %s" % (", ".join(PackedStringArray(sim.twists_used)) if not sim.twists_used.is_empty() else "none"))
 	return "\n".join(PackedStringArray(lines))
 
 
@@ -1216,7 +1216,7 @@ func _update_lights(delta: float) -> void:
 				c = Color("#ff7a3a")
 			l.light_energy = lerpf(l.light_energy, target, minf(1.0, delta * 4.0))
 			l.light_color = l.light_color.lerp(c, minf(1.0, delta * 4.0))
-	core_mat.emission_energy_multiplier = (2.6 + 0.9 * sin(_clock * 2.2)) if reached.has("jadro") else 1.0
+	core_mat.emission_energy_multiplier = (2.6 + 0.9 * sin(_clock * 2.2)) if reached.has("core") else 1.0
 	if red_alert:
 		core_mat.emission_energy_multiplier = 3.0 + 4.0 * pulse
 	if blasted:
@@ -1224,12 +1224,12 @@ func _update_lights(delta: float) -> void:
 
 
 func _beams() -> void:
-	var emitter: Node3D = props.emiter
+	var emitter: Node3D = props.emitter
 	var start := emitter.position + Vector3(0, 1.0, 0)
-	var mirrors := ["lustro1", "lustro2", "lustro3"]
-	var stand: Node3D = props.czujniki
+	var mirrors := ["mirror1", "mirror2", "mirror3"]
+	var stand: Node3D = props.sensors
 	for i in 3:
-		var s: int = sim.variant.czujniki[i] - 1
+		var s: int = sim.variant.sensors[i] - 1
 		var mirror: Vector3 = props[mirrors[i]].position + Vector3(0, 1.05, 0)
 		var sensor := stand.to_global(Vector3(0.18, 1.4 - s * 0.25, -0.6 + s * 0.3))
 		_beam(start, mirror)

@@ -267,17 +267,17 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
                 await Speak(room, who, text, Str("to"));
                 // An output named "hint" (a hint screen, the simulator) learns which puzzle got help; rooms without one skip it.
                 await Out(room, "hint", new { puzzle = id, level, to = Str("to") });
-                return $"podpowiedź {level} ({id}): {text}";
+                return $"hint {level} ({id}): {text}";
             }
             case "cue":
             {
                 var (ok, message) = await engine.Cue(room, Str("cue") ?? "");
-                return ok ? $"wskazówka świetlna: {message}" : $"cue: rejected ({message})";
+                return ok ? $"light cue: {message}" : $"cue: rejected ({message})";
             }
             case "twist":
             {
                 var (ok, message) = await engine.Twist(room, Str("twist") ?? "", rng);
-                return ok ? $"zwrot akcji: {message}" : $"twist: rejected ({message})";
+                return ok ? $"twist: {message}" : $"twist: rejected ({message})";
             }
             case "reroll":
             {
@@ -286,13 +286,13 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
                 foreach (var item in list.EnumerateArray())
                     if (await engine.Reroll(room, item.GetString() ?? "", rng) is (true, var summary))
                         done.Add($"{item.GetString()}: {summary}");
-                return done.Count == 0 ? "reroll: nothing changed" : "wariant: " + string.Join("; ", done);
+                return done.Count == 0 ? "reroll: nothing changed" : "variant: " + string.Join("; ", done);
             }
             case "solve":
             {
                 var id = Str("puzzle");
                 if (id is null || statuses.GetValueOrDefault(id) != "active") return $"solve: rejected ({id} is not active)";
-                return await engine.Solve(room, id) ? $"rozwiązane za graczy: {id}" : "solve: failed";
+                return await engine.Solve(room, id) ? $"solved for the players: {id}" : "solve: failed";
             }
             default:
                 return $"{tool}: unknown tool";
@@ -324,13 +324,13 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
         {
             if (def?.Variants is { Count: > 0 } variants)
                 done.Add(await Act(room, "reroll", JsonSerializer.SerializeToElement(new { variants = variants.Keys }), observation));
-            thought = "Start gry: losuję wariant dla tej drużyny.";
+            thought = "Game start: drawing a variant for this team.";
         }
         else if (reason == "solved")
         {
             lastSolveClock = clock;
             rulesHintLevel = 0;
-            thought = "Drużyna idzie dalej.";
+            thought = "The team moves on.";
         }
         else
         {
@@ -346,14 +346,14 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
                 if (level == 1 && cue is not null)
                     done.Add(await Act(room, "cue", JsonSerializer.SerializeToElement(new { cue }), observation));
                 else if (level == 3)
-                    done.Add(await Act(room, "solve", JsonSerializer.SerializeToElement(new { puzzle = id, why = "długi przestój" }), observation));
+                    done.Add(await Act(room, "solve", JsonSerializer.SerializeToElement(new { puzzle = id, why = "long standstill" }), observation));
                 else if (hints is { Length: > 0 } && helper is not null)
                     done.Add(await Act(room, "hint", JsonSerializer.SerializeToElement(new { puzzle = id, level, speaker = helper.Name, text = hints[Math.Min(level, hints.Length) - 1] }), observation));
-                thought = $"Brak postępu od {silence:0} min, podpowiedź poziomu {level}.";
+                thought = $"No progress for {silence:0} min, level {level} hint.";
             }
             else
             {
-                thought = "Tempo w porządku, obserwuję.";
+                thought = "The pace is fine, watching.";
             }
         }
         await Report(room, thought, done, "rules");
@@ -362,7 +362,7 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
     async Task Report(string room, string thought, List<string> done, string mode)
     {
         await Out(room, "gm", new { thought, actions = done, mode, model = mode == "model" ? Model : null });
-        memory.Add($"{thought} → {(done.Count == 0 ? "nic" : string.Join("; ", done))}");
+        memory.Add($"{thought} → {(done.Count == 0 ? "nothing" : string.Join("; ", done))}");
         log.LogInformation("GM ({Mode}): {Thought} | {Actions}", mode, thought, string.Join(" | ", done));
     }
 

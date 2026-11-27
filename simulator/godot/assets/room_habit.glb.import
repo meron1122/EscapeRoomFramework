@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://jvr78sr0gthb"
-path="res://.godot/imported/room_hol.glb-2a70edc70e34731a0a4c01fc649bb16b.scn"
+uid="uid://brmyq0jsvumb"
+path="res://.godot/imported/room_habit.glb-cca0ae71d3f0f81467c0cb501ad899dc.scn"
 
 [deps]
 
-source_file="res://assets/room_hol.glb"
-dest_files=["res://.godot/imported/room_hol.glb-2a70edc70e34731a0a4c01fc649bb16b.scn"]
+source_file="res://assets/room_habit.glb"
+dest_files=["res://.godot/imported/room_habit.glb-cca0ae71d3f0f81467c0cb501ad899dc.scn"]
 
 [params]
 

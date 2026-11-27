@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://c3wrxf5pwo00n"
-path="res://.godot/imported/room_jadro.glb-33b04e7d887d4c11815aa2ffb9454d15.scn"
+uid="uid://cqgf0wnlvfhk1"
+path="res://.godot/imported/room_lobby.glb-68f0d839ee05f62db7a2ba62df74c86f.scn"
 
 [deps]
 
-source_file="res://assets/room_jadro.glb"
-dest_files=["res://.godot/imported/room_jadro.glb-33b04e7d887d4c11815aa2ffb9454d15.scn"]
+source_file="res://assets/room_lobby.glb"
+dest_files=["res://.godot/imported/room_lobby.glb-68f0d839ee05f62db7a2ba62df74c86f.scn"]
 
 [params]
 

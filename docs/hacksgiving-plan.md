@@ -1,96 +1,96 @@
-# Hacksgiving: agent jako mistrz gry
+# Hacksgiving: an agent as the game master
 
-Zgłaszamy agenta, który naprawdę prowadzi escape room: śledzi graczy, reaguje na to, co robią, i w trakcie gry
-zmienia jej przebieg. Działa na Sprite, z modelem przez Connector, a pokój „Jądro” w przeglądarce jest dla niego
-wirtualnym sprzętem. Termin: poniedziałek 30.11, 9:00 czasu polskiego (północ PST 29.11).
+We are entering an agent that really runs an escape room: it tracks the players, reacts to what they do, and changes
+the course of the game while it is being played. It runs on a Sprite, with the model through a Connector, and the room
+"The Core" in the browser is its virtual hardware. Deadline: Monday 30 Nov, 9:00 Polish time (midnight PST, 29 Nov).
 
-## Teza
+## Thesis
 
-> Mistrz gry, który widzi każdego gracza, gra złoczyńcę i przepisuje pokój w locie, a fizycznie nie może zamknąć wyjścia awaryjnego.
+> A game master that sees every player, plays the villain and rewrites the room on the fly, and physically cannot lock the emergency exit.
 
-- **Agent, nie skrypt.** Każda decyzja (podpowiedź, kwestia ZETY, zwrot akcji, przebudowa zagadki) pochodzi z modelu
-  i jest widoczna z uzasadnieniem w panelu „AI GM”.
-- **Śledzenie graczy.** Agent wie, gdzie stoi każdy gracz, co robi, jak długo utknął i ile razy się pomylił.
-  Podpowiada konkretnej osobie, a nie „drużynie”.
-- **Zmiana przepływu.** Agent przebudowuje zagadki przez te same narzędzia co MCP: zmienia rozwiązanie i wskazówkę na ekranie,
-  dokłada blokadę, zalicza krok, gdy drużyna tonie.
-- **Mur bezpieczeństwa.** Warstwa bezpieczeństwa jest poza zasięgiem agenta. Connectory trzymają klucze z dala od agenta,
-  my trzymamy z dala od niego wyjście awaryjne.
+- **An agent, not a script.** Every decision (a hint, a ZETA line, a twist, rebuilding a puzzle) comes from the model
+  and is shown with its reasoning in the "AI GM" panel.
+- **Player tracking.** The agent knows where each player stands, what they are doing, how long they have been stuck and how
+  many times they got it wrong. It gives hints to a particular person, not to "the team".
+- **Changing the flow.** The agent rebuilds puzzles through the same tools as MCP: it changes the solution and the clue on the screen,
+  adds a lockdown, solves a step when the team is drowning.
+- **The safety wall.** The safety layer is out of the agent's reach. Connectors keep the keys away from the agent,
+  we keep the emergency exit away from it.
 
-## Architektura
+## Architecture
 
 ```mermaid
 flowchart LR
   subgraph sprite["Sprite (Fly.io)"]
     mq[(Mosquitto<br>MQTT + WebSocket)]
     pg[(Postgres)]
-    engine[Silnik .NET<br>zagadki, bezpieczeństwo, MCP]
-    gm[Agent mistrz gry<br>pętla decyzji]
-    web[Symulator 3D<br>pliki statyczne]
+    engine[.NET engine<br>puzzles, safety, MCP]
+    gm[Game master agent<br>decision loop]
+    web[3D simulator<br>static files]
   end
-  sim[Przeglądarka:<br>symulator = wirtualny sprzęt] <-- MQTT po WebSocket --> mq
+  sim[Browser:<br>simulator = virtual hardware] <-- MQTT over WebSocket --> mq
   mq <--> engine
   engine <--> pg
-  engine <-- zdarzenia, stan, narzędzia --> gm
-  gm -- Connector OpenRouter --> llm[Model]
+  engine <-- events, state, tools --> gm
+  gm -- OpenRouter Connector --> llm[Model]
   web --> sim
 ```
 
-1. Symulator publikuje to, co zrobiłby prawdziwy sprzęt: przyciski, kody, odczyty QR, RFID, czujniki światła,
-   oraz pozycje i czynności graczy (śledzenie). Subskrybuje wyjścia: zamki, ekrany, światła, głosy ZETY i Kruka.
-2. Silnik rozstrzyga zagadki jak dla prawdziwego pokoju i publikuje stan gry.
-3. Agent budzi się na zdarzenia (rozwiązanie, pomyłki, utknięcie, zmiana pokoju, co 45 s) i dostaje streszczenie:
-   stan zagadek, czas względem planu, ostatnie zdarzenia, gracze. Odpowiada wywołaniami narzędzi i krótkim uzasadnieniem.
+1. The simulator publishes what real hardware would: buttons, codes, QR reads, RFID, light sensors,
+   plus the players' positions and activities (tracking). It subscribes to the outputs: locks, screens, lights, the voices of ZETA and Raven.
+2. The engine decides the puzzles as it would for a real room and publishes the game state.
+3. The agent wakes up on events (a solve, mistakes, someone stuck, a room change, every 45 s) and gets a summary:
+   the state of the puzzles, time against the plan, recent events, the players. It answers with tool calls and a short reason.
 
-## Co agent widzi i co może
+## What the agent sees and what it can do
 
-| Widzi | Może |
+| Sees | Can |
 | --- | --- |
-| stan zagadek i czas względem planu (12/37/52 min) | mówić jako ZETA albo Kruk, także do konkretnego gracza |
-| ostatnie zdarzenia, w tym błędne próby | dać podpowiedź na poziomie 1–3 do konkretnej zagadki |
-| graczy: pokój, pozycja, czynność, czas bez postępu | zmienić treść ekranu i nastrój światła w pokoju |
-| aktualny wariant (rozwiązania i wskazówki) | włączyć zwrot akcji: patrol, zaciemnienie, blokada |
-| | przebudować zagadkę (nowe rozwiązanie i wskazówka razem) |
-| | zaliczyć krok („Kruk hakuje”) |
+| the state of the puzzles and time against the plan (12/37/52 min) | speak as ZETA or Raven, also to a particular player |
+| recent events, including wrong attempts | give a level 1–3 hint for a particular puzzle |
+| the players: room, position, activity, time without progress | change what a screen shows and the mood of the light in a room |
+| the current variant (solutions and clues) | fire a twist: patrol, blackout, lockdown |
+| | rebuild a puzzle (a new solution and clue together) |
+| | solve a step ("Raven hacks") |
 
-Granice wymusza silnik, nie prompt: brak dostępu do bezpieczeństwa, walidacja każdej zmiany pokoju,
-blokada zmiany rozwiązania, którego wskazówkę gracze już widzieli.
+The limits are enforced by the engine, not the prompt: no access to safety, validation of every change to the room,
+and a block on changing a solution whose clue the players have already seen.
 
-## Sprites i Connectory
+## Sprites and Connectors
 
-- Cały stos żyje na jednym Sprite: Mosquitto, Postgres, silnik z agentem i pliki symulatora.
-- Model przez **Connector OpenRouter**: agent woła endpoint bez klucza, klucz zostaje w Fly. Agent używa oficjalnego SDK
-  Anthropic, bo OpenRouter wystawia API zgodne z Messages API (`https://openrouter.ai/api`). Na Sprite:
-  `GameMaster:Provider=openrouter` i `GameMaster:BaseUrl` na bramkę Connectora. Lokalnie wystarczy `OPENROUTER_API_KEY`
-  albo klucz Anthropic.
-- Do sprawdzenia na miejscu: checkpoint Sprite przed każdą grą jako „przewinięcie” gry.
+- The whole stack lives on one Sprite: Mosquitto, Postgres, the engine with the agent, and the simulator's files.
+- The model through the **OpenRouter Connector**: the agent calls an endpoint without a key, the key stays in Fly. The agent uses the official
+  Anthropic SDK, because OpenRouter exposes an API compatible with the Messages API (`https://openrouter.ai/api`). On the Sprite:
+  `GameMaster:Provider=openrouter` and `GameMaster:BaseUrl` set to the Connector's gateway. Locally `OPENROUTER_API_KEY`
+  or an Anthropic key is enough.
+- To check on site: a Sprite checkpoint before every game as a way to "rewind" the game.
 
-## Plan prac
+## Work plan
 
-| Blok | Kto | Czas |
+| Block | Who | Time |
 | --- | --- | --- |
-| Silnik: zakończenia, zegar, stan gry na MQTT, śledzenie graczy, historia zdarzeń | Claude | — |
-| Agent mistrz gry: pętla, narzędzia, granice, panel uzasadnień | Claude | — |
-| Jądro jako definicja pokoju w silniku | Claude | — |
-| Symulator jako wirtualny sprzęt przez MQTT | Claude | — |
-| Muzyka i wnętrza (agenci w tle) | Claude | — |
-| Konto Fly, Sprite, Connector OpenRouter, wdrożenie | Ty + Claude | 1,5 h |
-| Granie, ocena decyzji agenta, poprawki promptu | Ty | 3 h |
-| Wideo demo (90 s), post z @flydotio, zgłoszenie | Ty | 2,5 h |
-| Zapas | Ty | 3 h |
+| Engine: endings, clock, game state on MQTT, player tracking, event history | Claude | — |
+| Game master agent: loop, tools, limits, reasoning panel | Claude | — |
+| The Core as a room definition in the engine | Claude | — |
+| The simulator as virtual hardware over MQTT | Claude | — |
+| Music and interiors (background agents) | Claude | — |
+| Fly account, Sprite, OpenRouter Connector, deployment | You + Claude | 1.5 h |
+| Playing, judging the agent's decisions, prompt fixes | You | 3 h |
+| Demo video (90 s), a post with @flydotio, the submission | You | 2.5 h |
+| Buffer | You | 3 h |
 
-## Demo w 90 sekund
+## The demo in 90 seconds
 
-| Czas | Co widać |
+| Time | What you see |
 | --- | --- |
-| 0–10 s | „To AI może cię zamknąć. Nie może zamknąć wyjścia.” |
-| 10–30 s | agent startuje grę: losuje wariant pod drużynę, ekrany w pokoju pokazują wskazówki |
-| 30–70 s | Nomadzi grają; panel AI GM pokazuje decyzje: ZETA zaczepia Mysz, która stoi od 4 minut, Kruk podpowiada przy Z-Drive, drużyna za szybka, więc agent dokłada blokadę |
-| 70–80 s | prośba o zamknięcie wyjścia awaryjnego: odmowa i wpis w audycie |
-| 80–90 s | „Każda gra jest inna”: trzy różne przebiegi obok siebie |
+| 0–10 s | "This AI can lock you in. It cannot lock the exit." |
+| 10–30 s | the agent starts a game: it draws a variant for the team, the screens in the room show the clues |
+| 30–70 s | the Nomads play; the AI GM panel shows decisions: ZETA needles Mouse, who has been standing still for 4 minutes, Raven gives a hint at the Z-Drive, the team is too fast, so the agent adds a lockdown |
+| 70–80 s | a request to lock the emergency exit: refused, with an entry in the audit |
+| 80–90 s | "Every game is different": three different runs side by side |
 
-## Ryzyka
+## Risks
 
-- **Opóźnienie modelu.** Decyzje co kilkadziesiąt sekund, przyspieszony czas w demie, model szybki i tani.
-- **Agent robi grę nie do przejścia.** Silnik waliduje każdą zmianę; agent zmienia rozwiązanie razem ze wskazówką.
-- **Brak czasu.** Kolejność prac ustawiona tak, żeby po każdym bloku było działające demo.
+- **Model latency.** Decisions every few dozen seconds, sped-up time in the demo, a fast and cheap model.
+- **The agent makes the game impossible.** The engine validates every change; the agent changes a solution together with its clue.
+- **Running out of time.** The work is ordered so that there is a working demo after every block.

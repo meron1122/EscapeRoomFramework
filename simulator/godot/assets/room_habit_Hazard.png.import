@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dcgahddffw2sm"
-path="res://.godot/imported/room_pietro_PlatesN.png-b1b3ea3ea1795db135e1e92cc2205383.ctex"
+uid="uid://dyn7qhpyonot4"
+path="res://.godot/imported/room_habit_Hazard.png-94aa19d9fa36c2d6a66b7c0a41690814.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "887bbb343163fbc9d9daecc19ff1f25b"
+"md5": "9c8c05690c43cb679770f5c9bae97a9d"
 }
 
 [deps]
 
-source_file="res://assets/room_pietro_PlatesN.png"
-dest_files=["res://.godot/imported/room_pietro_PlatesN.png-b1b3ea3ea1795db135e1e92cc2205383.ctex"]
+source_file="res://assets/room_habit_Hazard.png"
+dest_files=["res://.godot/imported/room_habit_Hazard.png-94aa19d9fa36c2d6a66b7c0a41690814.ctex"]
 
 [params]
 

@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c7ssg1dayajkl"
-path="res://.godot/imported/room_jadro_GratingN.png-92801b339b1e8e2b08c639ba3825e234.ctex"
+uid="uid://bmwdrnc3w3ulx"
+path="res://.godot/imported/room_core_Hazard.png-2d5927a518653651d283fd22fc052a04.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "d2ff720fe0e0b0b8d1c544a10172d001"
+"md5": "9c8c05690c43cb679770f5c9bae97a9d"
 }
 
 [deps]
 
-source_file="res://assets/room_jadro_GratingN.png"
-dest_files=["res://.godot/imported/room_jadro_GratingN.png-92801b339b1e8e2b08c639ba3825e234.ctex"]
+source_file="res://assets/room_core_Hazard.png"
+dest_files=["res://.godot/imported/room_core_Hazard.png-2d5927a518653651d283fd22fc052a04.ctex"]
 
 [params]
 

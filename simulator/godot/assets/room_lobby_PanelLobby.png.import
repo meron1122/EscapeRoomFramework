@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cvn1i1v6dtngy"
-path="res://.godot/imported/room_hol_PanelHol.png-fecb6b9f0029863b21a3b9dfc944c1b9.ctex"
+uid="uid://b4itsyax5xiyp"
+path="res://.godot/imported/room_lobby_PanelLobby.png-f3471171cbe4b7a51284c91a3cf75518.ctex"
 metadata={
 "vram_texture": false
 }
@@ -13,8 +13,8 @@ generator_parameters={
 
 [deps]
 
-source_file="res://assets/room_hol_PanelHol.png"
-dest_files=["res://.godot/imported/room_hol_PanelHol.png-fecb6b9f0029863b21a3b9dfc944c1b9.ctex"]
+source_file="res://assets/room_lobby_PanelLobby.png"
+dest_files=["res://.godot/imported/room_lobby_PanelLobby.png-f3471171cbe4b7a51284c91a3cf75518.ctex"]
 
 [params]
 

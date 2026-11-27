@@ -1,7 +1,7 @@
 """Builds every 3D asset of the simulator in Blender and exports them as glTF for Godot.
 
 Run: /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python simulator/blender/build_assets.py
-Append `-- room_hol npc ...` to rebuild only those assets.
+Append `-- room_lobby npc ...` to rebuild only those assets.
 Coordinates below are Godot's (x right, y up, z towards the camera); `bl()` converts them for Blender.
 Objects that Godot drives (Screen, Headlights, LegL, Door, ...) keep fixed names (KEEP and the npc pivots); so do the
 Jacket, Skin and Visor materials. Everything else in a model is merged into one mesh per parent when it is exported,
@@ -301,13 +301,13 @@ def mats():
         "display": material("Display", "#05080a", 0.2, emit="#0f4a57", strength=1.0),
         "lcd": material("DisplayYellow", "#fcee0a", 0.3, emit="#fcee0a", strength=1.2),
         # rooms (metallic at most 0.2 so floors and walls never go black without reflections)
-        "floor_hol": tex_material("FloorStone", stone, 0.3, 0.0),
-        "wall_hol": tex_material("WallPanelHol", tex_brushed("PanelHol", "#69655f", 8, 0.3), 0.55, 0.0),
-        "floor_pietro": tex_material("FloorPlates", plates, 0.4, 0.1, normal=plates_n),
-        "wall_pietro": tex_material("WallPanelLab", tex_brushed("PanelLab", "#566769", 9, 0.3), 0.55, 0.0),
-        "floor_jadro": tex_material("FloorGrating", grating, 0.45, 0.2, normal=grating_n),
+        "floor_lobby": tex_material("FloorStone", stone, 0.3, 0.0),
+        "wall_lobby": tex_material("WallPanelLobby", tex_brushed("PanelLobby", "#69655f", 8, 0.3), 0.55, 0.0),
+        "floor_habit": tex_material("FloorPlates", plates, 0.4, 0.1, normal=plates_n),
+        "wall_habit": tex_material("WallPanelLab", tex_brushed("PanelLab", "#566769", 9, 0.3), 0.55, 0.0),
+        "floor_core": tex_material("FloorGrating", grating, 0.45, 0.2, normal=grating_n),
         "diamond": tex_material("DiamondPlate", diamond, 0.35, 0.2, normal=diamond_n),
-        "wall_jadro": tex_material("WallConcrete", tex_concrete(), 0.8, 0.0),
+        "wall_core": tex_material("WallConcrete", tex_concrete(), 0.8, 0.0),
         "hazard": tex_material("Hazard", tex_hazard(), 0.6),
         "rug": tex_material("Rug", tex_rug(), 0.95),
         # characters (Godot tints Jacket per character and drives the Visor colour)
@@ -723,7 +723,7 @@ def beams_x(x0, x1, z_out=0.38, y=H - 0.2, step=1.5, trough="light"):
 
 
 def beams_z(z0, z1, x_out=0.38, y=H - 0.2, step=1.5, trough="light"):
-    """The same ceiling structure along the top of the Hol west wall."""
+    """The same ceiling structure along the top of the Lobby west wall."""
     m = M["graphite"]
     box("BeamTop", (0.2, 0.03, z1 - z0), (x_out, y + 0.185, (z0 + z1) / 2), m)
     box("BeamWeb", (0.03, 0.17, z1 - z0), (x_out, y + 0.085, (z0 + z1) / 2), m)
@@ -787,39 +787,39 @@ def poster(w, h, kind):
         for a, b in (((-1, 1), (1, 1)), ((1, 1), (-1, -1)), ((-1, -1), (1, -1))):
             cable("Gesture", [(w * 0.2 + a[0] * w * 0.08, -h * 0.05 + a[1] * h * 0.12, z + 0.01),
                               (w * 0.2 + b[0] * w * 0.08, -h * 0.05 + b[1] * h * 0.12, z + 0.01)], 0.008, M["yellow"])
-        text("PosterT1", "JEDEN GEST", (-w * 0.45, h * 0.38, z), h * 0.075, ink, align="LEFT")
-        text("PosterT2", "I JESTEŚ", (-w * 0.45, h * 0.28, z), h * 0.055, ink, align="LEFT")
-        text("PosterT3", "W DOMU", (-w * 0.45, h * 0.2, z), h * 0.055, ink, align="LEFT")
+        text("PosterT1", "ONE GESTURE", (-w * 0.45, h * 0.38, z), h * 0.075, ink, align="LEFT")
+        text("PosterT2", "AND YOU'RE", (-w * 0.45, h * 0.28, z), h * 0.055, ink, align="LEFT")
+        text("PosterT3", "HOME", (-w * 0.45, h * 0.2, z), h * 0.055, ink, align="LEFT")
         box("PosterBar", (w, h * 0.1, 0.012), (0, -h * 0.45, z), M["black"])
         text("PosterT4", "Z-PHONE", (0, -h * 0.45, z + 0.008), h * 0.06, M["yellow"])
     elif kind == "drive":
         for i, (sx, sy, x, y) in enumerate(((0.7, 0.08, 0, -0.05), (0.42, 0.07, -0.02, 0.02), (0.82, 0.02, 0, -0.1))):
             box("CarArt", (w * sx, h * sy, 0.012), (w * x, h * y, z), M["yellow"] if i < 2 else M["nc"], 0.005)
         text("PosterT1", "Z-DRIVE", (0, h * 0.36, z), h * 0.1, M["yellow"])
-        text("PosterT2", "WIE, DOKĄD", (0, h * 0.24, z), h * 0.05, ink)
-        text("PosterT3", "JEDZIESZ", (0, h * 0.18, z), h * 0.05, ink)
-        text("PosterT4", "HAMULCE W ABONAMENCIE", (0, -h * 0.4, z), h * 0.03, M["yellow"])
+        text("PosterT2", "KNOWS WHERE", (0, h * 0.24, z), h * 0.05, ink)
+        text("PosterT3", "YOU'RE GOING", (0, h * 0.18, z), h * 0.05, ink)
+        text("PosterT4", "BRAKES BY SUBSCRIPTION", (0, -h * 0.4, z), h * 0.03, M["yellow"])
     elif kind == "boost":
-        text("PosterT1", "NIE ŚPISZ?", (0, h * 0.34, z), h * 0.085, ink)
+        text("PosterT1", "NO SLEEP?", (0, h * 0.34, z), h * 0.085, ink)
         box("PosterBar", (w * 0.9, h * 0.004 + 0.01, 0.012), (0, h * 0.24, z), M["black"])
-        text("PosterT2", "RANO Z-BOOST", (0, h * 0.08, z), h * 0.06, ink)
-        text("PosterT3", "WIECZOREM", (0, -h * 0.08, z), h * 0.06, ink)
-        text("PosterT4", "Z-SEN", (0, -h * 0.2, z), h * 0.09, ink)
+        text("PosterT2", "MORNING: Z-BOOST", (0, h * 0.08, z), h * 0.06, ink)
+        text("PosterT3", "EVENING:", (0, -h * 0.08, z), h * 0.06, ink)
+        text("PosterT4", "Z-SLEEP", (0, -h * 0.2, z), h * 0.09, ink)
         z_letter("PosterZ", 0, -h * 0.38, z, h * 0.1, M["black"], depth=0.012)
     elif kind in ("metric", "time"):
-        title = "ZALEŻNOŚĆ" if kind == "metric" else "CZAS EKRANOWY"
+        title = "DEPENDENCY" if kind == "metric" else "SCREEN TIME"
         text("PosterT1", title, (0, h * 0.38, z), h * 0.06, M["nt"] if kind == "time" else ink)
         for i in range(6):
             bh = h * (0.08 + 0.07 * i)
             box("PosterChart", (w * 0.1, bh, 0.012), (-w * 0.35 + i * w * 0.14, -h * 0.3 + bh / 2, z),
                 M["nt"] if i == 5 else M["nw"] if kind == "metric" else M["yellow"])
-        text("PosterT2", "97,4%" if kind == "metric" else "+38 MIN", (0, h * 0.24, z), h * 0.08, M["yellow"])
-        text("PosterT3", "STREFA Z" if kind == "metric" else "NASTOLATKI / DZIEŃ", (0, -h * 0.42, z), h * 0.035, ink)
+        text("PosterT2", "97.4%" if kind == "metric" else "+38 MIN", (0, h * 0.24, z), h * 0.08, M["yellow"])
+        text("PosterT3", "Z ZONE" if kind == "metric" else "TEENAGERS / DAY", (0, -h * 0.42, z), h * 0.035, ink)
     elif kind == "zeta":
         torus("PosterEye", w * 0.28, 0.012, (0, h * 0.05, z), M["nc"], axis="z")
         cyl("PosterPupil", w * 0.1, 0.01, (0, h * 0.05, z), M["nc"], axis="z")
-        text("PosterT1", "ZETA SŁUCHA", (0, h * 0.36, z), h * 0.06, ink)
-        text("PosterT2", "DLA TWOJEGO DOBRA", (0, -h * 0.36, z), h * 0.035, M["nt"])
+        text("PosterT1", "ZETA LISTENS", (0, h * 0.36, z), h * 0.06, ink)
+        text("PosterT2", "FOR YOUR OWN GOOD", (0, -h * 0.36, z), h * 0.035, M["nt"])
 
 
 def cctv(pos, yaw):
@@ -1356,7 +1356,7 @@ def w_clock():
     box("ClockMin", (0.01, 0.18, 0.004), (-0.05, 0.07, 0.047), M["nw"], rot=(0, 0, 38))
 
 
-def w_plate(txt="RECEPCJA", w=0.9, h=0.2, ink="yellow", size=0.1):
+def w_plate(txt="RECEPTION", w=0.9, h=0.2, ink="yellow", size=0.1):
     box("SignPlate", (w, h, 0.02), (0, 0, 0.01), M["black"])
     box("SignEdge", (w, 0.012, 0.012), (0, -h / 2 + 0.006, 0.024), M["brass"])
     text("SignText", txt, (0, 0.01, 0.024), size, M[ink])
@@ -1367,7 +1367,7 @@ def w_warn(txt="!"):
     text("WarnText", txt, (0, 0, 0.012), 0.16 if len(txt) < 2 else 0.07, M["black"])
 
 
-def w_panel(w=0.7, h=0.7, label="SERWIS"):
+def w_panel(w=0.7, h=0.7, label="SERVICE"):
     """Maintenance panel: door, gauges, breakers, status LEDs, hazard strip."""
     box("MPanel", (w, h, 0.07), (0, 0, 0.035), M["dsteel"])
     box("MPanelDoor", (w - 0.08, h - 0.08, 0.008), (0, 0, 0.074), M["graphite"])
@@ -1442,13 +1442,13 @@ def brackets(x0, x1, z0, z1, mat, ln=0.4, y=0.003):
 
 # ---------- rooms ----------
 
-def room_hol():
-    R = "hol"
+def room_lobby():
+    R = "lobby"
     r = ROOM[R]
     x0, x1, z1 = r["x"], r["x"] + r["w"], r["d"]
-    sofa, gate, lift, entry = PROP["kanapa"], PROP["bramka"], DOOR["winda"], DOOR["wejscie"]
-    logo_x, ad_x = PROP["logo_hol"]["x"], PROP["reklama"]["x"]
-    floor_slab(x0, x1, z1, "floor_hol", 2.0, (0, 0, 0))
+    sofa, gate, lift, entry = PROP["sofa"], PROP["gate"], DOOR["elevator"], DOOR["entrance"]
+    logo_x, ad_x = PROP["logo_lobby"]["x"], PROP["ad"]["x"]
+    floor_slab(x0, x1, z1, "floor_lobby", 2.0, (0, 0, 0))
     # floor: brass inlay lines, the Z medallion, entrance mat, a dark rug in the sofa corner, lift threshold
     mx, mz, mr = s(5.2), s(4.6), 1.9
     box("FloorLine", (5.4, 0.004, 0.025), (3.9, 0.002, s(2.75)), M["brass"])
@@ -1468,17 +1468,17 @@ def room_hol():
             M["brass"], rot=(0, -math.degrees(a), 0))
     z_flat("FloorZ", mx, mz, 2.2, M["brass"], y=0.005)
     box("EntryMat", (1.2, 0.008, 1.7), (0.75, 0.004, entry["z"]), M["rubber"])
-    text("EntryMatText", "WITAMY", (0.75, 0.009, entry["z"]), 0.16, M["yellow"], flat=True, depth=0.002)
+    text("EntryMatText", "WELCOME", (0.75, 0.009, entry["z"]), 0.16, M["yellow"], flat=True, depth=0.002)
     rx, rz, rw, rd = sofa["x"] + 0.05, sofa["z"] + 0.35, 3.6, 2.6
     tbox("Rug", (rw, 0.008, rd), (rx, 0.004, rz), "rug", (rw, rd), off=(rx - rw / 2, 0, rz + rd / 2))
     tbox("LiftHazard", (0.45, 0.006, lift["width"]), (x1 - 0.225, 0.003, lift["z"]), "hazard", 0.4)
     # north wall: slatted Z feature wall, one big window, the ad wall, the security corner
     wa, wb = s(2.35), s(4.55)
-    north_wall(-0.2, lift["x"], "wall_hol", windows=[(wa, wb)], sill=0.4, head=2.85, accent="ny")
+    north_wall(-0.2, lift["x"], "wall_lobby", windows=[(wa, wb)], sill=0.4, head=2.85, accent="ny")
     seams("n", wb, x1, 0.12, 2.85, 1.2, "brass", rows=(0.12, 2.85))
     hang(w_slats, (1.7, 0, 0), w=3.0)
-    mount("logo_hol", 1.34, 1.54, 0.133)
-    mount("reklama", 3.0, 1.9, 0.048)
+    mount("logo_lobby", 1.34, 1.54, 0.133)
+    mount("ad", 3.0, 1.9, 0.048)
     for x in (ad_x - 1.62, ad_x + 1.62):  # glass fins with brass edges framing the ad screen
         box("GlassFin", (0.02, 2.2, 0.3), (x, 1.75, 0.16), M["glass"])
         box("GlassFinEdge", (0.024, 2.2, 0.012), (x, 1.75, 0.31), M["brass"])
@@ -1488,7 +1488,7 @@ def room_hol():
         hang(w_sconce, (x, 2.0, 0))
     put(R, k_secdesk, 10.72, 0.26)
     hang(w_monitors, (10.72, 1.85, 0))
-    hang(w_plate, (10.72, 2.36, 0), txt="OCHRONA", w=0.7, h=0.17, ink="nw", size=0.085)
+    hang(w_plate, (10.72, 2.36, 0), txt="SECURITY", w=0.7, h=0.17, ink="nw", size=0.085)
     extinguisher((10.12, 0, 0.0))
     box("Reader", (0.09, 0.14, 0.03), (10.12, 1.3, 0.015), M["black"], 0.005)
     box("ReaderLed", (0.05, 0.01, 0.004), (10.12, 1.35, 0.032), M["led_c"])
@@ -1496,12 +1496,12 @@ def room_hol():
     beams_x(0.0, x1)
     box("BrandPlate", (3.2, 0.2, 0.02), (ad_x, 3.1, 0.49), M["black"])
     box("BrandEdge", (3.2, 0.012, 0.012), (ad_x, 2.995, 0.5), M["brass"])
-    text("Brand", "KORPORACJA Z", (ad_x, 3.1, 0.505), 0.21, M["yellow"])
+    text("Brand", "Z CORPORATION", (ad_x, 3.1, 0.505), 0.21, M["yellow"])
     # west wall: entrance with a glass sidelight, planter trough, posters, clock, slats behind the cosy corner
     zc, half = entry["z"], entry["width"] / 2
     side = [(s(3.5), s(4.2))]
     gaps = [((a + b) / 2, b - a) for a, b in side] + [(zc, entry["width"])]
-    wall_x("WallWest", x0 - 0.1, -0.2, z1, H, "wall_hol", gaps=gaps, lintel=2.45)
+    wall_x("WallWest", x0 - 0.1, -0.2, z1, H, "wall_lobby", gaps=gaps, lintel=2.45)
     for a, b in side:
         box("SideGlass", (0.012, 2.45, b - a), (-0.1, 1.225, (a + b) / 2), M["wglass"])
         for z in (a + 0.02, b - 0.02):
@@ -1514,7 +1514,7 @@ def room_hol():
     box("EntryHead", (0.3, 0.1, entry["width"] + 0.16), (x0 - 0.1, 2.5, zc), M["graphite"])
     box("ExitBracket", (0.3, 0.02, 0.02), (0.15, 2.72, zc), M["dsteel"])
     box("ExitBlade", (0.5, 0.15, 0.04), (0.3, 2.62, zc), M["ng"])
-    text("ExitText", "WEJŚCIE", (0.3, 2.62, zc + 0.022), 0.075, M["black"])
+    text("ExitText", "ENTRANCE", (0.3, 2.62, zc + 0.022), 0.075, M["black"])
     box("EntryReader", (0.03, 0.14, 0.09), (0.015, 1.25, side[0][0] - 0.12), M["black"])
     box("EntryReaderLed", (0.006, 0.012, 0.06), (0.032, 1.3, side[0][0] - 0.12), M["led_c"])
     seams("w", 0.0, side[0][0], 0.12, 2.85, 1.2, "brass", rows=(0.12, 2.85), at=0.0)
@@ -1529,7 +1529,7 @@ def room_hol():
     put(R, k_umbrella, 0.25, 4.96)
     hang(w_slats, (0, 0, 8.87), 90, w=1.7)
     box("CosySignBack", (0.012, 0.36, 0.9), (0.085, 2.05, 8.87), M["black"])
-    text("CosySign", "zostań", (0.1, 2.05, 8.87), 0.26, M["ny"], yaw=90, depth=0.02)
+    text("CosySign", "stay", (0.1, 2.05, 8.87), 0.26, M["ny"], yaw=90, depth=0.02)
     cctv((0.0, 2.7, z1 - 0.15), 135)
     beams_z(0.0, z1)
     # waiting area along the south edge (low, so it hides nothing) and the divider
@@ -1539,25 +1539,25 @@ def room_hol():
     put(R, k_planter, 7.95, 9.56, w=2.0, h=0.4, seed=8)
     put(R, k_magrack, x1 - 0.17, 5.3, -90)
     put(R, k_seatbench, x1 - 0.27, 6.5, -90, w=1.6)
-    hang(w_plate, (x1, 0.8, 1.0), -90, txt="PIĘTRA 1-40", w=0.9, h=0.2, ink="nw", size=0.09)
+    hang(w_plate, (x1, 0.8, 1.0), -90, txt="FLOORS 1-40", w=0.9, h=0.2, ink="nw", size=0.09)
     # divider with the lift portal
-    low_wall(lift["x"], 0.0, ROOM["pietro"]["d"], "panel", [(lift["z"], lift["width"])], "ny", t=0.56)
-    portal("Lift", lift["x"], lift["z"], lift["width"], 2.5, "graphite", "ny", "WINDA", "PIĘTRO NAWYKÓW", t=0.62)
-    for i, z in enumerate((4.75, 5.05 + 1.7, 12.2)):  # Z-Mart rules and metrics on the Pietro face of the divider
+    low_wall(lift["x"], 0.0, ROOM["habit"]["d"], "panel", [(lift["z"], lift["width"])], "ny", t=0.56)
+    portal("Lift", lift["x"], lift["z"], lift["width"], 2.5, "graphite", "ny", "ELEVATOR", "HABIT FLOOR", t=0.62)
+    for i, z in enumerate((4.75, 5.05 + 1.7, 12.2)):  # Z-Mart rules and metrics on the Habit Floor face of the divider
         with Made() as g:
             poster(0.62, 0.8, ("boost", "metric", "time")[i])
         place(g.objs, (lift["x"] + 0.28, 0.6, z), 90)
     south_curb(x0, x1, z1, "panel", "ny")
 
 
-def room_pietro():
-    R = "pietro"
+def room_habit():
+    R = "habit"
     r = ROOM[R]
     x0, x1, z1 = r["x"], r["x"] + r["w"], r["d"]
     off = (x0, 0, 0)
-    lift, dd = DOOR["winda"], DOOR["zejscie"]
-    car, phone, lab, count = PROP["zdrive"], PROP["sciana"], PROP["stol_lab"], PROP["licznik"]
-    floor_slab(x0, x1, z1, "floor_pietro", 2.0, off)
+    lift, dd = DOOR["elevator"], DOOR["descent"]
+    car, phone, lab, count = PROP["zdrive"], PROP["wall"], PROP["lab_table"], PROP["meter"]
+    floor_slab(x0, x1, z1, "floor_habit", 2.0, off)
     # floor: walkway panels, station zones, test bays, the Z-Drive turntable, thresholds
     for x in np.arange(x0 + 2.2, x1 - 1.5, 1.4):
         box("FloorPanel", (0.56, 0.006, 0.56), (x, 0.003, s(4.95)), M["dsteel"])
@@ -1593,20 +1593,20 @@ def room_pietro():
             torus("ScanPad", 0.42, 0.012, (p["x"], 0.004, p["z"]), M["nt"], seg=32, mseg=4, squash=0.25)
     for x, z, w, d in ((14.0, 1.25, 1.2, 0.5), (16.4, 1.25, 1.2, 0.5), (19.2, 6.4, 0.6, 1.6), (13.6, 8.3, 1.6, 0.5)):
         floor_window(s(x), s(z), w * 1.2, d * 1.2, "nt")
-    cable_cover((phone["x"] - 0.6, 0.35), (phone["x"] - 0.6, PROP["stol_telefony"]["z"] - 0.4))
+    cable_cover((phone["x"] - 0.6, 0.35), (phone["x"] - 0.6, PROP["phone_table"]["z"] - 0.4))
     cable_cover((lab["x"] + 0.5, 0.5), (lab["x"] + 0.5, lab["z"] - 0.4))
     cable_cover((s(14.3), s(7.0)), (s(14.75), s(7.0)))
     cable_cover((car["x"] - 0.75, 0.7), (car["x"] - 0.75, car["z"] - 1.3))
     # north wall: glass columns, phone station, lab cabinets under the counter screen, windows behind the car
     wins = [(s(17.65), s(19.25)), (s(20.55), s(21.35))]
-    north_wall(lift["x"], dd["x"], "wall_pietro", windows=wins, sill=0.45, head=2.65, accent="nt", off=off)
+    north_wall(lift["x"], dd["x"], "wall_habit", windows=wins, sill=0.45, head=2.65, accent="nt", off=off)
     seams("n", x0, wins[0][0], 0.12, 2.65, 1.0, "panel_t", rows=(0.12, 1.4, 2.65))
     box("WallStripe", (wins[0][0] - x0, 0.05, 0.02), ((x0 + wins[0][0]) / 2, 1.0, 0.012), M["nt"])
     for x in (x0 + 0.5, phone["x"] + 2.45, wins[0][0] - 0.3):
         glass_column((x, 0, 0.22), r=0.17)
     box("PhoneBacking", (3.2, 2.56, 0.088), (phone["x"], 1.28, 0.044), M["graphite"])
-    mount("licznik", 4.0, 1.5, 0.048, "graphite", "nt")
-    mount("logo_pietro", 1.34, 1.54, 0.133, "graphite", "nt")
+    mount("meter", 4.0, 1.5, 0.048, "graphite", "nt")
+    mount("logo_habit", 1.34, 1.54, 0.133, "graphite", "nt")
     cab0, ncab = count["x"] - 2.1, 8
     for i in range(ncab):  # lab cabinets with a worktop and clutter
         x = cab0 + i * 0.6
@@ -1638,7 +1638,7 @@ def room_pietro():
     put(R, k_testrig, car["x"] - 0.72, 0.36)
     put(R, k_cart, car["x"] + 0.4, 0.32)
     put(R, k_drums, x1 - 0.62, 0.32, n=2)
-    hang(w_panel, (wins[0][1] + 0.3, 1.3, 0), w=0.4, h=0.6, label="GAZ")
+    hang(w_panel, (wins[0][1] + 0.3, 1.3, 0), w=0.4, h=0.6, label="GAS")
     # overhead: big duct, coolant pipe, conduit, pendant rings and light housings
     xm, ln = (x0 + x1) / 2, x1 - x0
     cyl("Duct", 0.16, ln, (xm, 3.02, 0.2), M["dsteel"], axis="x", verts=20)
@@ -1651,7 +1651,7 @@ def room_pietro():
             box("DiffuserGlow", (0.24, 0.01, 0.14), (x + 0.7, 2.828, 0.2), M["nt"])
     pipe_x(x0, x1, 2.8, 0.1, 0.06, "pipe_t", flange=2.0)
     cyl("Conduit", 0.025, ln, (xm, 2.72, 0.04), M["dsteel"], axis="x", verts=8)
-    for p in (PROP["stol_telefony"], lab):  # station pendant rings
+    for p in (PROP["phone_table"], lab):  # station pendant rings
         torus("Pendant", 0.55, 0.03, (p["x"], 2.95, p["z"]), M["nw"], seg=40)
         torus("PendantHousing", 0.55, 0.045, (p["x"], 2.99, p["z"]), M["graphite"], seg=40, mseg=6)
         for k in range(3):
@@ -1660,12 +1660,12 @@ def room_pietro():
     for z in (car["z"] - 0.9, car["z"] + 0.9):  # showroom light frame over the car
         box("CarLight", (1.6, 0.04, 0.06), (car["x"], 3.05, z), M["nw"])
         box("CarLightHousing", (1.6, 0.05, 0.1), (car["x"], 3.09, z), M["graphite"])
-    for p, w in ((PROP["regal"], 2.2), (PROP["kasa"], 1.4)):
+    for p, w in ((PROP["shelf"], 2.2), (PROP["checkout"], 1.4)):
         box("MartLight", (w, 0.04, 0.08), (p["x"], 2.9, p["z"]), M["ny"])
         box("MartLightHousing", (w, 0.06, 0.14), (p["x"], 2.95, p["z"]), M["graphite"])
     extinguisher((x1 - 1.37, 0, 0.0))
     cctv((x1 - 0.1, 2.6, 0.0), -40)
-    # along the Hol divider: benches and storage, low
+    # along the Lobby divider: benches and storage, low
     put(R, k_bench, x0 + 0.34, 8.3, 90, w=1.8, seed=2)
     put(R, k_shelving, x0 + 0.28, 10.1, 90, w=1.4, h=1.15, levels=3, seed=6)
     # along the core divider
@@ -1683,8 +1683,8 @@ def room_pietro():
     put(R, k_glasswall, 26.6, 12.4, w=2.6)
     # divider to the core with the stair portal
     low_wall(dd["x"], 0.0, z1, "panel_t", [(dd["z"], dd["width"])], "nt", t=0.56)
-    portal("Stair", dd["x"], dd["z"], dd["width"], 2.5, "dsteel", "nc", "POZIOM -3", "POZIOM -3", t=0.62)
-    pipe_side = dd["x"] + 0.36  # the Jadro face of the divider: low coolant pipes
+    portal("Stair", dd["x"], dd["z"], dd["width"], 2.5, "dsteel", "nc", "LEVEL -3", "LEVEL -3", t=0.62)
+    pipe_side = dd["x"] + 0.36  # the Core face of the divider: low coolant pipes
     for za, zb in ((0.1, dd["z"] - dd["width"] / 2 - 0.25), (dd["z"] + dd["width"] / 2 + 0.25, z1 - 0.1)):
         cyl("LowPipe", 0.05, zb - za, (pipe_side, 0.82, (za + zb) / 2), M["pipe"], axis="z", verts=12)
         cyl("LowPipe", 0.035, zb - za, (pipe_side, 0.62, (za + zb) / 2), M["pipe_t"], axis="z", verts=10)
@@ -1693,15 +1693,15 @@ def room_pietro():
     south_curb(x0, x1, z1, "panel_t", "nt")
 
 
-def room_jadro():
-    R = "jadro"
+def room_core():
+    R = "core"
     r = ROOM[R]
     x0, x1, z1 = r["x"], r["x"] + r["w"], r["d"]
     off = (x0, 0, 0)
-    core = PROP["jadro_wieza"]
+    core = PROP["core_tower"]
     cx, cz = core["x"], core["z"]
-    dd, dz = DOOR["wyjscie"], DOOR["zejscie"]
-    floor_slab(x0, x1, z1, "floor_jadro", 0.5, off)
+    dd, dz = DOOR["exit"], DOOR["descent"]
+    floor_slab(x0, x1, z1, "floor_core", 0.5, off)
     # floor: diamond-plate ring around the core with hazard tape, walkways with trim strips, trench covers, catwalk edge
     cyl("CoreDeck", 2.55, 0.006, (cx, 0.003, cz), M["black"], verts=48)
     uvw(cyl("CoreDiamond", 2.5, 0.008, (cx, 0.004, cz), M["diamond"], verts=48), 0.5, off)
@@ -1750,7 +1750,7 @@ def room_jadro():
         for k in range(6):
             box("DrainSlot", (0.42, 0.004, 0.025), (x, 0.005, z - 0.19 + k * 0.075), M["black"])
     # north wall: concrete, steel columns, coolers flanking the ZETA eye, glass coolant tubes, pipes, trays, cables
-    north_wall(dz["x"], x1 + 0.2, "wall_jadro", tile=2.4, off=off, t=0.3)
+    north_wall(dz["x"], x1 + 0.2, "wall_core", tile=2.4, off=off, t=0.3)
     for x in (x0 + 0.15, x1 - 0.15):
         box("ColumnWeb", (0.04, H, 0.22), (x, H / 2, 0.11), M["dsteel"])
         for sg in (-1, 1):
@@ -1771,7 +1771,7 @@ def room_jadro():
         for k in range(3):
             box("CoolerLed", (0.02, 0.02, 0.006), (xc - 0.3 + k * 0.05, 1.8, 0.427), M["ledr" if k == 0 else "led_c"])
         tbox("CoolerHaz", (0.84, 0.1, 0.44), (xc, 0.1, 0.21), "hazard", 0.4)
-        text("CoolerText", "CHŁODZENIE", (xc, 0.3, 0.428), 0.06, M["nw"])
+        text("CoolerText", "COOLING", (xc, 0.3, 0.428), 0.06, M["nw"])
         box("Beacon", (0.12, 0.05, 0.12), (xc + 0.25, 1.925, 0.2), M["graphite"])
         cyl("BeaconDome", 0.05, 0.08, (xc + 0.25, 1.99, 0.2), M["red"], verts=12)
         cable("CoolerPipe", [(xc - 0.2, 1.9, 0.2), (xc - 0.2, 2.4, 0.2), (xc - 0.2, 2.62, 0.18), (xc - 0.2, 2.9, 0.18)],
@@ -1824,7 +1824,7 @@ def room_jadro():
     side = [p for p in LAYOUT["props"] if p["model"] == "rack" and p["yaw"] != 0]
     for a, b in zip(side, side[1:]):
         put(R, k_filler, a["x"], (a["z"] + b["z"]) / 2, 90, nook=True)
-    # along the Pietro divider (its low pipes run 8 cm off the face, so everything stands clear of them)
+    # along the Habit Floor divider (its low pipes run 8 cm off the face, so everything stands clear of them)
     put(R, k_toolchest, x0 + 0.47, 2.7, 90)
     put(R, k_drums, x0 + 0.47, 3.65, 90, n=2)
     put(R, k_crate, x0 + 0.5, 7.0, 90, w=0.9, h=0.5, d=0.5)
@@ -1832,8 +1832,8 @@ def room_jadro():
     # along the east wall: crates in the corner, the coolant pump skid, panels and plates on the wall
     put(R, k_crates, x1 - 0.38, 2.4, -90, seed=11)
     put(R, k_pump, x1 - 0.38, 9.4, -90)
-    hang(w_panel, (x1, 0.62, 11.3), -90, label="POMPY")
-    hang(w_panel, (x1, 0.62, 4.95), -90, w=0.5, h=0.6, label="CZUJNIKI")
+    hang(w_panel, (x1, 0.62, 11.3), -90, label="PUMPS")
+    hang(w_panel, (x1, 0.62, 4.95), -90, w=0.5, h=0.6, label="SENSORS")
     hang(w_warn, (x1, 0.8, 8.0), -90, txt="400V")
     # catwalk edge along the south: railings, tools, drums
     put(R, k_railing, 35.0, z1 - 0.1, w=4.0)
@@ -1842,17 +1842,17 @@ def room_jadro():
     put(R, k_reel, 34.3, 12.12)
     put(R, k_drums, 36.6, 12.15, n=2)
     put(R, k_crate, 40.3, 12.15, w=0.9, h=0.45, d=0.5, mat="olive2")
-    # divider face is built with the Pietro room; east wall: low with the exit
-    wall_x("WallEast", dd["x"] + 0.1, -0.2, z1 + 0.2, LOW, "wall_jadro", gaps=[(dd["z"], dd["width"])], tile=2.4)
+    # divider face is built with the Habit Floor room; east wall: low with the exit
+    wall_x("WallEast", dd["x"] + 0.1, -0.2, z1 + 0.2, LOW, "wall_core", gaps=[(dd["z"], dd["width"])], tile=2.4)
     for za, zb in ((-0.2, dd["z"] - dd["width"] / 2), (dd["z"] + dd["width"] / 2, z1 + 0.2)):
         box("EastCap", (0.24, 0.05, zb - za), (dd["x"] + 0.1, LOW + 0.025, (za + zb) / 2), M["graphite"])
         box("EastNeon", (0.03, 0.012, zb - za - 0.04), (dd["x"] + 0.1, LOW + 0.056, (za + zb) / 2), M["nc"])
-    portal("Exit", dd["x"] + 0.1, dd["z"], dd["width"], 2.4, "dsteel", "nc", "WYJŚCIE", "WYJŚCIE", "ng")
+    portal("Exit", dd["x"] + 0.1, dd["z"], dd["width"], 2.4, "dsteel", "nc", "EXIT", "EXIT", "ng")
     box("ExitSign", (0.06, 0.25, 0.6), (dd["x"] + 0.1, 2.95, dd["z"]), M["ng"])
     south_curb(x0, x1, z1, "dsteel", "nc")
 
 
-ROOMS = {"hol": room_hol, "pietro": room_pietro, "jadro": room_jadro}
+ROOMS = {"lobby": room_lobby, "habit": room_habit, "core": room_core}
 
 
 # ---------- props (origin at the floor, centre of the footprint, facing +z) ----------
@@ -1939,7 +1939,7 @@ def z_logo():
     for x, y, sx, sy in ((0, 0.6, 0.98, 0.02), (0, -0.6, 0.98, 0.02), (-0.5, 0, 0.02, 1.18), (0.5, 0, 0.02, 1.18)):
         box("Rim", (sx, sy, 0.01), (x, y, 0.018), M["brass"])
     z_letter("Z", 0, 0.08, 0.04, 0.8, M["yellow"])
-    text("Name", "KORPORACJA", (0, -0.44, 0.02), 0.085, M["nw"])
+    text("Name", "CORPORATION", (0, -0.44, 0.02), 0.085, M["nw"])
     for x in (-0.47, 0.47):
         for y in (-0.57, 0.57):
             cyl("Bolt", 0.015, 0.02, (x, y, 0.02), M["steel"], axis="z", verts=8)
@@ -1969,8 +1969,8 @@ def locker():
             box("Key", (0.026, 0.022, 0.006), (0.27 + c * 0.03, 1.18 - r * 0.03, 0.272), M["steel"])
     box("KeypadLight", (0.09, 0.015, 0.005), (0.3, 1.225, 0.272), M["led_y"])
     box("Sticker", (0.12, 0.06, 0.002), (0.3, 0.98, 0.251), M["yellow"])
-    text("StickerText", "KOD", (0.3, 0.98, 0.2525), 0.03, M["black"], depth=0.001)
-    text("Label", "OCHRONA", (-0.22, 1.62, 0.255), 0.07, M["yellow"], depth=0.004)
+    text("StickerText", "CODE", (0.3, 0.98, 0.2525), 0.03, M["black"], depth=0.001)
+    text("Label", "SECURITY", (-0.22, 1.62, 0.255), 0.07, M["yellow"], depth=0.004)
     box("SidePanel", (0.006, 0.9, 0.42), (0.442, 0.75, -0.025), M["graphite"])  # the side the camera sees
     for k in range(6):
         box("SideLouvre", (0.006, 0.02, 0.36), (0.443, 1.5 + k * 0.05, -0.025), M["black"])
@@ -2061,7 +2061,7 @@ def phone_wall():
     box("Back", (3.06, 1.76, 0.04), (0, 1.45, -0.05), M["graphite"])
     box("Panel", (3.0, 1.7, 0.08), (0, 1.45, -0.01), M["panel"], 0.02)
     box("Header", (3.0, 0.16, 0.06), (0, 2.38, -0.01), M["ochre"], 0.01)
-    text("HeaderText", "Z-PHONE  /  ŚCIANA POWIADOMIEŃ", (-1.42, 2.38, 0.022), 0.085, M["black"], align="LEFT")
+    text("HeaderText", "Z-PHONE  /  NOTIFICATION WALL", (-1.42, 2.38, 0.022), 0.085, M["black"], align="LEFT")
     for i in range(6):
         col, row = i % 3, i // 3
         x, y = -1.0 + col * 0.55, 1.75 - row * 0.65
@@ -2073,7 +2073,7 @@ def phone_wall():
         box(f"SlotLight{i}", (0.3, 0.03, 0.01), (x, y - 0.3, 0.06), M["led_c"])
     box("ScreenFrame", (0.95, 0.65, 0.05), (1.0, 1.55, 0.05), M["black"], 0.008)
     box("Screen", (0.9, 0.6, 0.005), (1.0, 1.55, 0.078), M["screen"])
-    text("ScreenLabel", "RAPORT", (1.0, 1.93, 0.032), 0.04, M["paint_w"])
+    text("ScreenLabel", "REPORT", (1.0, 1.93, 0.032), 0.04, M["paint_w"])
     box("Lockbox", (0.6, 0.4, 0.04), (1.0, 0.92, 0.035), M["steel"], 0.006)
     box("LockPad", (0.08, 0.1, 0.01), (1.2, 0.92, 0.06), M["black"])
     box("LockLed", (0.03, 0.008, 0.004), (1.2, 0.99, 0.066), M["ledr"])
@@ -2171,7 +2171,7 @@ def car():
         box("SeatStripe", (0.08, 0.55, 0.01), (x, 1.15, -0.736), M["ochre"], rot=(-12, 0, 0))
         box("Headrest", (0.3, 0.14, 0.1), (x, 1.53, -0.88), M["black"], 0.03)
     box("Binder", (0.24, 0.05, 0.31), (0.4, 0.945, -0.48), M["ochre"], 0.005, rot=(0, 15, 0))
-    text("BinderText", "INSTRUKCJA", (0.4, 0.972, -0.48), 0.03, M["black"], flat=True, yaw=15, depth=0.002)
+    text("BinderText", "MANUAL", (0.4, 0.972, -0.48), 0.03, M["black"], flat=True, yaw=15, depth=0.002)
     box("Spoiler", (1.7, 0.035, 0.26), (0, 1.2, -1.1), M["black"], 0.01, rot=(-6, 0, 0))
     for x in (-0.6, 0.6):
         box("Strut", (0.04, 0.17, 0.08), (x, 1.1, -1.08), M["dsteel"])
@@ -2222,10 +2222,10 @@ def shelf():
     box("Header", (2.6, 0.26, 0.05), (0, 2.2, 0.0), M["black"], 0.01)
     z_letter("HeaderZ", -1.05, 2.2, 0.03, 0.16, M["yellow"], depth=0.01)
     text("HeaderText", "Z-MART", (-0.2, 2.2, 0.03), 0.15, M["yellow"])
-    text("HeaderSub", "ABONAMENT AKTYWNY", (0.85, 2.2, 0.03), 0.045, M["nw"])
+    text("HeaderSub", "SUBSCRIPTION ACTIVE", (0.85, 2.2, 0.03), 0.045, M["nw"])
     box("EndBoard", (0.012, 1.3, 0.44), (1.276, 1.2, 0), M["black"])  # promo board on the end the camera sees
     text("EndText", "-40%", (1.284, 1.5, 0), 0.16, M["yellow"], yaw=90, depth=0.004)
-    text("EndSub", "Z ABONAMENTEM", (1.284, 1.3, 0), 0.035, M["nw"], yaw=90, depth=0.004)
+    text("EndSub", "WITH A SUBSCRIPTION", (1.284, 1.3, 0), 0.035, M["nw"], yaw=90, depth=0.004)
 
 
 def checkout():
@@ -2388,7 +2388,7 @@ def console():
     box("Keyboard", (0.5, 0.012, 0.1), (-0.15, 0.8154 + 0.006, 0.2184 + 0.002), M["black"], rot=(20, 0, 0))
     cyl("Button", 0.08, 0.06, (0.4, 0.9, 0.08), M["yellow"], verts=24)
     torus("ButtonGuard", 0.1, 0.012, (0.4, 0.89, 0.08), M["steel"], seg=24, mseg=4)
-    text("ButtonText", "AKCEPTUJĘ", (0.4, 0.823, 0.22), 0.035, M["nw"], flat=True, pitch=20, depth=0.003)
+    text("ButtonText", "I ACCEPT", (0.4, 0.823, 0.22), 0.035, M["nw"], flat=True, pitch=20, depth=0.003)
     for k in range(4):
         box("PanelLed", (0.015, 0.006, 0.015), (0.25 + k * 0.05, 0.84, -0.1), M["ledr" if k == 0 else "led_c"],
             rot=(20, 0, 0))
@@ -2427,7 +2427,7 @@ def service_cabinet():
         for y, hh in ((1.15, 0.8), (0.4, 0.06)):
             parts.append(box(name + "Rib", (0.5, 0.012, 0.006), (xc, y + hh / 2, 0.318), d))
         if s > 0:
-            parts.append(text("Tag", "K//", (xc, 1.2, 0.317), 0.14, M["paint_c"], depth=0.002))
+            parts.append(text("Tag", "R//", (xc, 1.2, 0.317), 0.14, M["paint_c"], depth=0.002))
         else:
             parts.append(box("Hasp", (0.06, 0.08, 0.02), (-0.03, 1.15, 0.325), M["steel"]))
         door_ = join(parts, name)
@@ -2445,7 +2445,7 @@ def bomb():
             box("Corner", (0.06, 0.5, 0.06), (x, 0.25, z), M["dsteel"], 0.01)
         box("Handle", (0.02, 0.04, 0.2), (x * 1.06, 0.38, 0), M["dsteel"])
     tbox("Tape", (0.86, 0.08, 0.004), (0, 0.37, 0.272), "hazard", 0.4)
-    text("Stencil", "NIE OTWIERAĆ", (0, 0.17, 0.274), 0.05, M["paint_w"], depth=0.002)
+    text("Stencil", "DO NOT OPEN", (0, 0.17, 0.274), 0.05, M["paint_w"], depth=0.002)
     box("Dent", (0.2, 0.08, 0.004), (0.3, 0.1, 0.271), M["olive2"], rot=(0, 0, 8))
     for i in range(3):
         cyl(f"Slot{i}", 0.05, 0.03, (-0.25 + i * 0.25, 0.515, -0.08), M["black"], verts=20)
@@ -2735,7 +2735,7 @@ def npc3():
     pivot("Head", (0, 1.58, 0), *parts)
 
 
-# ---------- Kruk's van (front +x, origin at the ground centre) ----------
+# ---------- Raven's van (front +x, origin at the ground centre) ----------
 
 def van():
     rng = random.Random(17)
@@ -2772,7 +2772,7 @@ def van():
             cyl("HubCap", 0.08, 0.28, (x, 0.38, s * 0.95), M["ochre"], axis="z", verts=8)
             box("Arch", (0.95, 0.12, 0.12), (x, 0.82, s * 1.02), M["mud"], 0.03)
             box("Flap", (0.22, 0.3, 0.02), (x - 0.5, 0.32, s * 0.95), M["rubber"])
-        text("Paint", "KRUK", (-1.0, 1.95, s * 1.04), 0.32, M["paint_w"], yaw=0 if s > 0 else 180, depth=0.004,
+        text("Paint", "RAVEN", (-1.0, 1.95, s * 1.04), 0.32, M["paint_w"], yaw=0 if s > 0 else 180, depth=0.004,
              pitch=0)
         for k in range(4):
             box("Tally", (0.025, 0.22, 0.004), (0.35 + k * 0.07, 1.45, s * 1.038), M["paint_w"], rot=(0, 0, 8))

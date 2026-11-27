@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cgn4nctgakdqj"
-path="res://.godot/imported/room_pietro_PanelLab.png-9c82eec6b20e056367e4dad7dc9b0b33.ctex"
+uid="uid://dxbc3yo4p4ya5"
+path="res://.godot/imported/room_habit_PlatesN.png-d33eeb73920eed99294941440e8a6ec0.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "63de543250858e191618561cf0feed4f"
+"md5": "887bbb343163fbc9d9daecc19ff1f25b"
 }
 
 [deps]
 
-source_file="res://assets/room_pietro_PanelLab.png"
-dest_files=["res://.godot/imported/room_pietro_PanelLab.png-9c82eec6b20e056367e4dad7dc9b0b33.ctex"]
+source_file="res://assets/room_habit_PlatesN.png"
+dest_files=["res://.godot/imported/room_habit_PlatesN.png-d33eeb73920eed99294941440e8a6ec0.ctex"]
 
 [params]
 

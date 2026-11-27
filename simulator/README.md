@@ -1,23 +1,23 @@
-# Symulator Jądra
+# The Core simulator
 
-Izometryczny symulator pokoju „Jądro” (scenariusz: [docs/scenariusz-jadro.md](../docs/scenariusz-jadro.md)) w Godot 4.7,
-uruchamiany w przeglądarce. Pięcioro symulowanych Nomadów przechodzi grę, a reżyser AI losuje wariant, podpowiada
-i dokłada zwroty akcji tak, jak opisuje scenariusz.
+An isometric simulator of the room "The Core" (scenario: [docs/scenario-the-core.md](../docs/scenario-the-core.md)) in Godot 4.7,
+running in the browser. Five simulated Nomads play through the game, and the AI director draws a variant, gives hints
+and adds twists the way the scenario describes.
 
-## Z czego się składa
+## What it is made of
 
-| Ścieżka | Co to jest |
+| Path | What it is |
 | --- | --- |
-| `godot/layout.json` | plan pokoi: wymiary, drzwi, rekwizyty, zagadki i miejsca pracy; czytają go Blender i Godot |
-| `blender/build_assets.py` | buduje modele pokoi, rekwizytów i postaci → `godot/assets/*.glb` |
-| `music/compose.py` | syntezuje muzykę i efekty z kodu → `godot/audio/*.mp3` |
-| `godot/scripts/sim.gd` | zegar, graf zagadek, wariant gry, reżyser AI (podpowiedzi, zwroty akcji) |
-| `godot/scripts/npc.gd` | symulowani gracze: chodzenie po siatce A*, praca, animacja |
-| `godot/scripts/main.gd` | składa scenę, światła, ekrany, kamerę i muzykę |
-| `godot/scripts/atmosphere.gd` | miasto w tle (osobny świat 3D z kamerą perspektywiczną), platforma, deszcz |
-| `godot/scripts/mqtt.gd` | klient MQTT 3.1.1 po WebSocket: symulator udaje sprzęt pokoju na tym samym brokerze co prawdziwe urządzenia |
+| `godot/layout.json` | the floor plan: dimensions, doors, props, puzzles and work spots; read by both Blender and Godot |
+| `blender/build_assets.py` | builds the models of the rooms, props and characters → `godot/assets/*.glb` |
+| `music/compose.py` | synthesises the music and effects from code → `godot/audio/*.mp3` |
+| `godot/scripts/sim.gd` | the clock, the puzzle graph, the game's variant, the AI director (hints, twists) |
+| `godot/scripts/npc.gd` | simulated players: walking on an A* grid, working, animation |
+| `godot/scripts/main.gd` | assembles the scene, lights, screens, camera and music |
+| `godot/scripts/atmosphere.gd` | the city in the background (a separate 3D world with a perspective camera), the platform, the rain |
+| `godot/scripts/mqtt.gd` | an MQTT 3.1.1 client over WebSocket: the simulator poses as the room's hardware on the same broker as real devices |
 
-## Przebudowa i uruchomienie
+## Rebuilding and running
 
 ```bash
 /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python simulator/blender/build_assets.py
@@ -35,14 +35,14 @@ cd simulator/godot && godot --headless --path . --import && godot --headless --p
 python3 -m http.server 8060 --bind 127.0.0.1 --directory simulator/web
 ```
 
-Potem `http://localhost:8060`. Sterowanie: LPM/PPM przesuwa, kółko przybliża, 1/2/3 pokoje, F śledzi drużynę,
-H ukrywa panele, spacja pauzuje.
+Then `http://localhost:8060`. Controls: LMB/RMB pans, the wheel zooms, 1/2/3 jump to the rooms, F follows the team,
+H hides the panels, space pauses.
 
-## Z silnikiem i mistrzem gry AI (wirtualny sprzęt)
+## With the engine and the AI game master (virtual hardware)
 
-Gdy broker MQTT jest osiągalny, symulator przestaje sam rozstrzygać zagadki: wysyła wejścia (`sim/jadro/...`) jak
-czujniki w pokoju, a o wszystkim decyduje silnik i agent mistrza gry. Ekrany, drzwi, kwestie KRUKA, podpowiedzi
-i zwroty akcji przychodzą z silnika. Bez brokera działa lokalny reżyser offline.
+When the MQTT broker is reachable, the simulator stops deciding the puzzles itself: it sends inputs (`sim/the-core/...`) like
+the sensors in a room, and the engine and the game master agent decide everything. The screens, the doors, RAVEN's lines, hints
+and twists come from the engine. Without a broker the local offline director runs.
 
 ```bash
 docker compose up -d
@@ -53,19 +53,19 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run --project src/EscapeRoom
 ```
 
 ```bash
-curl -X PUT localhost:5201/rooms/jadro --data-binary @examples/jadro.json -H 'Content-Type: application/json'
+curl -X PUT localhost:5201/rooms/the-core --data-binary @examples/the-core.json -H 'Content-Type: application/json'
 ```
 
-Adres brokera: `?mqtt=ws://host:9001` w URL strony (`?mqtt=off` wyłącza silnik); domyślnie `ws://localhost:9001`
-na localhost i `wss://<host>/mqtt` gdzie indziej. Mistrz gry używa modelu Claude przez OpenRouter, gdy jest ustawione
-`OPENROUTER_API_KEY`, a w przeciwnym razie bezpośrednio przez Anthropic (`ANTHROPIC_API_KEY` albo profil `ant auth login`).
-Bez danych logowania gra prowadzi się na regułach; `GameMaster:RulesOnly=true` wymusza reguły. Jako briefu mistrz gry
-używa [scenariusza pokoju](../docs/scenariusz-jadro.md), więc zmiany w scenariuszu od razu zmieniają jego wiedzę o pokoju.
+Broker address: `?mqtt=ws://host:9001` in the page URL (`?mqtt=off` turns the engine off); by default `ws://localhost:9001`
+on localhost and `wss://<host>/mqtt` elsewhere. The game master uses a Claude model through OpenRouter when
+`OPENROUTER_API_KEY` is set, and otherwise directly through Anthropic (`ANTHROPIC_API_KEY` or the `ant auth login` profile).
+Without credentials the game runs on rules; `GameMaster:RulesOnly=true` forces the rules. As its brief the game master
+uses the [room's scenario](../docs/scenario-the-core.md), so changes to the scenario change what it knows about the room at once.
 
-Test bez okna (cała gra w ~70 s, dziennik na wyjściu):
+A test without a window (a whole game in ~70 s, the log on standard output):
 
 ```bash
 cd simulator/godot && godot --headless --path . --fixed-fps 60 --quit-after 4300 -- --autostart --speed=60
 ```
 
-Zrzut klatki z prawdziwym renderem: `godot --path . -- --autostart --zoom=22 --shot=/ścieżka/kadr.png`.
+A frame capture with real rendering: `godot --path . -- --autostart --zoom=22 --shot=/path/frame.png`.

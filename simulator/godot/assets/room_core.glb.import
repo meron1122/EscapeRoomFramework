@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bg48xs3lif5x3"
-path="res://.godot/imported/room_pietro.glb-34f2d6f51dbead576572265d2cf8341e.scn"
+uid="uid://nant3oshmkfb"
+path="res://.godot/imported/room_core.glb-ede9ae71c61cfce89eb7fc1fa3f04202.scn"
 
 [deps]
 
-source_file="res://assets/room_pietro.glb"
-dest_files=["res://.godot/imported/room_pietro.glb-34f2d6f51dbead576572265d2cf8341e.scn"]
+source_file="res://assets/room_core.glb"
+dest_files=["res://.godot/imported/room_core.glb-ede9ae71c61cfce89eb7fc1fa3f04202.scn"]
 
 [params]
 

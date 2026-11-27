@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ytkdaujcuy1p"
-path="res://.godot/imported/room_jadro_DiamondN.png-b15a286b4c13890fd2edd0ebf2ef447c.ctex"
+uid="uid://dmqhncqq4r46s"
+path="res://.godot/imported/room_core_GratingN.png-d9ef7276bfeb712fdb5e22391b2387ab.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "92580ed0adec13fa8b1901f26b6e4319"
+"md5": "d2ff720fe0e0b0b8d1c544a10172d001"
 }
 
 [deps]
 
-source_file="res://assets/room_jadro_DiamondN.png"
-dest_files=["res://.godot/imported/room_jadro_DiamondN.png-b15a286b4c13890fd2edd0ebf2ef447c.ctex"]
+source_file="res://assets/room_core_GratingN.png"
+dest_files=["res://.godot/imported/room_core_GratingN.png-d9ef7276bfeb712fdb5e22391b2387ab.ctex"]
 
 [params]
 

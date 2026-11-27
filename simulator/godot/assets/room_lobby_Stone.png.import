@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://d17btlkv8um0g"
-path="res://.godot/imported/room_pietro_BrushedLab.png-ce6669cd8e232a0d5908165adadef8a5.ctex"
+uid="uid://dkiax8pvq44sh"
+path="res://.godot/imported/room_lobby_Stone.png-152024b2d82d7be4bb90ebae8419f691.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "1887b5f4789215d78c96ff5445b3d330"
+"md5": "09d706c0fdaae641be5c2a9cdffb4ec5"
 }
 
 [deps]
 
-source_file="res://assets/room_pietro_BrushedLab.png"
-dest_files=["res://.godot/imported/room_pietro_BrushedLab.png-ce6669cd8e232a0d5908165adadef8a5.ctex"]
+source_file="res://assets/room_lobby_Stone.png"
+dest_files=["res://.godot/imported/room_lobby_Stone.png-152024b2d82d7be4bb90ebae8419f691.ctex"]
 
 [params]
 

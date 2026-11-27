@@ -3,7 +3,7 @@ extends Node3D
 ## Everything outside the rooms.
 ## - A night city in its own 3D world, seen through a perspective camera and drawn as the background
 ##   (an orthographic iso camera would show distant towers at room scale). It pans a little with the iso view.
-## - The rooms stand on a floating platform with railings, a landing pad and Kruk's hovering van, in the rain.
+## - The rooms stand on a floating platform with railings, a landing pad and Raven's hovering van, in the rain.
 
 const CITY_SHADER := """
 shader_type spatial;
@@ -74,7 +74,7 @@ void fragment() {
 }
 """
 
-const ADS := ["Z", "Z-PHONE", "Z-DRIVE", "Z-MART", "ZALOGUJ SIĘ", "ABONAMENT NA ŻYCIE", "STREFA Z", "Z-ID"]
+const ADS := ["Z", "Z-PHONE", "Z-DRIVE", "Z-MART", "LOG IN", "A SUBSCRIPTION FOR LIFE", "Z ZONE", "Z-ID"]
 const PINK := Color("#ff3ca6")
 const CYAN := Color("#00f0ff")
 const TEAL := Color("#19f0c8")
