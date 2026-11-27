@@ -197,7 +197,7 @@ The AI runs the game in three steps: before the start it picks the variant, duri
 1. The host enters the team name and the number of players, then starts the game.
 2. The AI sets the variables of all the puzzles: the shape of the gesture, the duty guard and the shift hours, the numbers in the report, the service values, the customer's profile, the scanners, the sensors and the order in ZETA's slogan.
 3. The screens show the matching clues, and the AI checks through MCP that every puzzle has its clue.
-4. Raven starts the briefing, addressing the team by name.
+4. The room plays its two opening recordings by itself: Raven's "You're in. You've got an hour before security seals the floors." and ZETA's "Welcome to Z. Please wait for assistance." The AI does not greet the team again; its first line comes when there is something new to say.
 
 ### During the game
 
@@ -208,8 +208,9 @@ Every half a minute the AI reads the game state and compares the pace with the p
 | The team is 3 minutes behind the plan | Raven nudges them, e.g. "Check what the ad in the lobby is drawing." |
 | 6 minutes behind the plan | Raven gives a direct hint for the puzzle the team is stuck on |
 | 10 minutes behind the plan | "Raven hacks": the AI solves one step, and Raven explains it in the story |
-| The team is 5 minutes ahead of the plan | the AI fires one twist |
-| 5 minutes without any event | ZETA needles the team without giving away the solution |
+| The team is on the plan or ahead of it, and this room has had no twist yet | the AI fires one twist |
+| A puzzle was just solved | ZETA reacts in one line, in her tone for that room |
+| 2 minutes without any event | ZETA needles the team without giving away the solution |
 
 ### Twists
 
@@ -222,7 +223,7 @@ The modules are installed in the room. The AI only decides whether and when to f
 
 ### Voices
 
-- **ZETA** never lies about the puzzles and never gives away solutions. Apart from reactions to a solved puzzle, she speaks at most once every two minutes. Her tone changes with the room: polite, mocking, tempting.
+- **ZETA** never lies about the puzzles and never gives away solutions. Apart from reactions to a solved puzzle, she speaks at most once every two minutes. She has a face on every floor: a hologram over the reception desk, over the Z-Drive and over her console in The Core, which moves when she speaks. Her tone changes with the room: polite, mocking, tempting.
 - **Raven** speaks only when helping or when something important happens, short and street-wise.
 - The lines are written live and go through speech synthesis to the room's speakers.
 

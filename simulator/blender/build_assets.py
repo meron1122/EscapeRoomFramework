@@ -3,9 +3,9 @@
 Run: /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python simulator/blender/build_assets.py
 Append `-- room_lobby npc ...` to rebuild only those assets.
 Coordinates below are Godot's (x right, y up, z towards the camera); `bl()` converts them for Blender.
-Objects that Godot drives (Screen, Headlights, LegL, Door, ...) keep fixed names (KEEP and the npc pivots); so do the
-Jacket, Skin and Visor materials. Everything else in a model is merged into one mesh per parent when it is exported,
-so a room or prop is a handful of draw calls in WebGL.
+Objects that Godot drives (Screen, Headlights, LegL, Door, ...) keep fixed names (KEEP and the npc pivots).
+Everything else in a model is merged into one mesh per parent when it is exported, so a room or prop is a handful
+of draw calls in WebGL.
 """
 import json
 import math
@@ -310,23 +310,34 @@ def mats():
         "wall_core": tex_material("WallConcrete", tex_concrete(), 0.8, 0.0),
         "hazard": tex_material("Hazard", tex_hazard(), 0.6),
         "rug": tex_material("Rug", tex_rug(), 0.95),
-        # characters (Godot tints Jacket per character and drives the Visor colour)
-        "jacket": material("Jacket", "#4a4f57", 0.75),
-        "skin": material("Skin", "#b8987e", 0.6),
-        "visor": material("Visor", "#7fc8cf", 0.25, emit="#5fd0da", strength=0.6),
-        "pants": material("Pants", "#3a3e44", 0.85),
-        "boots": material("Boots", "#3a332d", 0.55),
-        "leather": material("Leather", "#5a4636", 0.5),
-        "webbing": material("Webbing", "#4a4f44", 0.9),
-        "canvas": material("Canvas", "#6b6a58", 0.9),
-        "canvas2": material("CanvasDark", "#55574a", 0.9),
-        "cloth": material("Scarf", "#8a7a66", 0.95),
-        "armor": material("Armor", "#5a6068", 0.45, 0.3),
-        "glove": material("Glove", "#2e2f31", 0.6),
-        "hair": material("Hair", "#2a2a2c", 0.7),
-        "hair_m": material("HairDyed", "#7a4a3c", 0.55),
+        # characters: people of today, one subculture each; nothing on them glows
+        "skin_spark": material("SkinOlive", "#c69a78", 0.6),
+        "skin_rust": material("SkinRuddy", "#bd8566", 0.6),
+        "skin_mouse": material("SkinPale", "#f1e6e0", 0.6),
+        "skin_thunder": material("SkinDeep", "#6b452f", 0.55),
+        "skin_fox": material("SkinFair", "#e6b796", 0.6),
+        "ink": material("FaceInk", "#15110f", 0.3),
+        "hair_k": material("HairBlack", "#141418", 0.55),
+        "stubble": material("Stubble", "#6a5648", 0.8),
+        "hair_b": material("HairBrown", "#33221a", 0.6),
+        "ginger": material("HairGinger", "#c9591d", 0.6),
+        "cloth_k": material("BlackCloth", "#1c1d21", 0.85),
+        "leather_k": material("BlackLeather", "#15161a", 0.35),
+        "silver": material("Silver", "#c9ced3", 0.3, 0.2),
+        "lace": material("WhiteLace", "#ffffff", 0.8),
+        "tee": material("TeeGrey", "#8f9296", 0.85),
+        "tartan": tex_material("Tartan", tex_tartan(), 0.85),
+        "denim": material("Denim", "#3d5d86", 0.8),
+        "cyan": material("PrintCyan", "#00f0ff", 0.5),
+        "violet": material("ReflectiveViolet", "#b06bff", 0.4),
+        "green": material("BeanieGreen", "#9dff5c", 0.7),
+        "hoodie": material("HoodieOlive", "#5c7340", 0.9),
+        "hoodie_d": material("HoodieOliveDark", "#465a30", 0.9),
+        "khaki": material("Khaki", "#9c8c69", 0.85),
         "core": material("Core", "#00f0ff", 0.1, emit="#00f0ff", strength=3.0),
         # van: gritty on purpose
+        "webbing": material("Webbing", "#4a4f44", 0.9),
+        "canvas": material("Canvas", "#6b6a58", 0.9),
         "van": material("VanPaint", "#4f5a5a", 0.6, 0.2),
         "van2": material("VanPaintFaded", "#5f6a66", 0.75, 0.15),
         "primer": material("Primer", "#7a7f80", 0.85, 0.1),
@@ -2556,183 +2567,428 @@ def badge():
 
 
 # ---------- characters (pivots LegL/LegR at the hips, ArmL/ArmR at the shoulders, Head at the neck) ----------
+# Five people of today, one subculture each. They share one rig and the tube profiles below; build, clothes and hair
+# tell them apart. At 90 px only the silhouette and two or three colours survive, so the geometry goes there first.
 
-def leg(x, boot_h=0.18, knee=True, holster=False, cargo=False, bulk=1.0):
-    s, b = (1 if x > 0 else -1), bulk
-    parts = [box("Hip", (0.18 * b, 0.2, 0.2 * b), (x, 0.77, 0), M["pants"], 0.06, seg=2),
-             box("Thigh", (0.16 * b, 0.24, 0.18 * b), (x, 0.58, 0.005), M["pants"], 0.055, seg=2),
-             box("Shin", (0.14 * b, 0.34, 0.155 * b), (x, 0.3, -0.005), M["pants"], 0.05, seg=2),
-             box("Boot", (0.155 * b, boot_h, 0.2), (x, 0.04 + boot_h / 2, 0.01), M["boots"], 0.045, seg=2),
-             box("Toe", (0.15 * b, 0.1, 0.13), (x, 0.07, 0.11), M["boots"], 0.045, seg=2),
-             box("Sole", (0.17 * b, 0.045, 0.31), (x, 0.0225, 0.035), M["rubber"], 0.015),
-             box("BootCuff", (0.165 * b, 0.04, 0.21), (x, 0.04 + boot_h, 0.01), M["leather"], 0.015)]
-    for k in range(3):
-        parts.append(box("Lace", (0.09, 0.012, 0.012), (x, 0.11 + k * 0.035, 0.122), M["webbing"]))
-    if knee:
-        parts.append(box("Knee", (0.13 * b, 0.13, 0.05), (x, 0.46, 0.085 * b), M["armor"], 0.025, seg=2))
-    if cargo:
-        parts.append(box("Cargo", (0.04, 0.15, 0.13), (x + s * 0.09 * b, 0.6, 0.0), M["pants"], 0.015))
-        parts.append(box("CargoFlap", (0.045, 0.04, 0.135), (x + s * 0.092 * b, 0.665, 0.0), M["webbing"], 0.01))
-    if holster:
-        parts += [box("Holster", (0.06, 0.18, 0.14), (x + s * 0.11, 0.62, 0.0), M["webbing"], 0.02),
-                  box("LegStrap", (0.18, 0.03, 0.19), (x, 0.58, 0.005), M["webbing"])]
-    pivot(f"Leg{'R' if x > 0 else 'L'}", (x, 0.88, 0), *parts)
+ARM = [(0.875, 0.034, 0.038), (1.02, 0.046, 0.05), (1.14, 0.045, 0.05), (1.3, 0.056, 0.062), (1.455, 0.062, 0.068),
+       (1.48, 0.05, 0.055), (1.49, 0.03, 0.034)]
+LEG = [(0.1, 0.046, 0.052), (0.3, 0.06, 0.068), (0.5, 0.064, 0.072), (0.76, 0.088, 0.098), (0.9, 0.088, 0.1)]
 
 
-def arm(x, sleeve="jacket", pad="jacket", pad_size=1.0, glove="glove", device=False, bracer=False):
-    s = 1 if x > 0 else -1
-    parts = [ball("Shoulder", 0.075, (x, 1.43, 0), M[sleeve], 1),
-             box("Upper", (0.125, 0.3, 0.13), (x, 1.28, 0), M[sleeve], 0.055, seg=2),
-             box("Fore", (0.11, 0.27, 0.115), (x, 1.0, 0.012), M[sleeve], 0.05, seg=2),
-             box("Cuff", (0.12, 0.05, 0.125), (x, 0.875, 0.012), M["leather"], 0.02),
-             box("Hand", (0.085, 0.1, 0.1), (x, 0.8, 0.015), M[glove], 0.035, seg=2),
-             box("Fingers", (0.08, 0.07, 0.065), (x, 0.735, 0.03), M[glove], 0.028, seg=2),
-             box("Thumb", (0.03, 0.06, 0.035), (x - s * 0.048, 0.79, 0.05), M[glove], 0.012)]
-    if pad:
-        p = pad_size
-        parts.append(box("ShoulderPad", (0.17 * p, 0.08 * p, 0.18 * p), (x + s * 0.015, 1.48 + 0.02 * (p - 1), 0),
-                         M[pad], 0.035, rot=(0, 0, -s * 14), seg=2))
-        if p > 1.2:
-            parts.append(box("PadPlate", (0.14 * p, 0.03, 0.15 * p), (x + s * 0.035, 1.41, 0), M[pad], 0.012,
-                             rot=(0, 0, -s * 28)))
-            parts.append(box("PadStrap", (0.13, 0.025, 0.14), (x, 1.36, 0), M["webbing"]))
-    if device:
-        parts += [box("WristComp", (0.06, 0.05, 0.1), (x + s * 0.055, 0.95, 0.012), M["graphite"], 0.012),
-                  box("WristGlow", (0.004, 0.03, 0.065), (x + s * 0.086, 0.95, 0.012), M["led_c"])]
-    if bracer:
-        parts.append(box("Bracer", (0.125, 0.15, 0.135), (x, 0.97, 0.012), M["armor"], 0.03, seg=2))
-    pivot(f"Arm{'R' if x > 0 else 'L'}", (x, 1.46, 0), *parts)
+def tex_tartan():
+    """Red tartan for the punk's trousers: dark bands, darker where they cross, thin yellow lines; two setts per image."""
+    g = np.arange(64)
+    bx, by = np.meshgrid((g % 32 < 10) * 1.0, (g % 32 < 10) * 1.0)
+    lx, ly = np.meshgrid((g + 12) % 32 < 1, (g + 12) % 32 < 1)
+    rgb = srgb("#b3202a") * ((1 - 0.6 * bx) * (1 - 0.6 * by))[..., None]
+    rgb[lx | ly] = srgb("#e6d040")
+    return image("Tartan", rgb)
 
 
-def head_base():
-    """Neck, head, jaw, nose, brows and ears; returns the parts for the Head pivot."""
-    return [cyl("Neck", 0.055, 0.12, (0, 1.6, 0), M["skin"], verts=12),
-            ball("HeadMesh", 0.118, (0, 1.695, 0.0), M["skin"], 2, scale=(0.95, 1.08, 1.0)),
-            box("Jaw", (0.15, 0.08, 0.14), (0, 1.63, 0.03), M["skin"], 0.035, seg=2),
-            box("Nose", (0.026, 0.045, 0.04), (0, 1.68, 0.118), M["skin"], 0.012),
-            box("Brow", (0.17, 0.018, 0.03), (0, 1.735, 0.105), M["hair"], 0.006),
-            box("EarL", (0.022, 0.05, 0.04), (-0.112, 1.69, -0.005), M["skin"], 0.01),
-            box("EarR", (0.022, 0.05, 0.04), (0.112, 1.69, -0.005), M["skin"], 0.01)]
+def _oval(rx, rz, a, e=1.0):
+    """A point (x, z) of a superellipse at angle a; e < 1 makes it boxier."""
+    c, s = math.cos(a), math.sin(a)
+    return math.copysign(abs(c) ** e, c) * rx, math.copysign(abs(s) ** e, s) * rz
 
 
-def torso(width=0.44, jacket_len=0.1):
-    """Pelvis, V-shaped torso and collar base shared by the three nomads."""
-    box("Pelvis", (0.36, 0.16, 0.22), (0, 0.9, 0), M["pants"], 0.05, seg=2)
-    box("Waist", (0.38, 0.24, 0.23), (0, 1.1, 0), M["jacket"], 0.07, seg=2)
-    box("Chest", (width, 0.3, 0.26), (0, 1.33, 0.005), M["jacket"], 0.09, seg=2)
-    box("Hem", (0.4, jacket_len, 0.25), (0, 1.0 - jacket_len / 2 + 0.05, 0), M["jacket"], 0.04, seg=2)
+def loft(name, rings, mat, n=8, e=0.9, at=(0.0, 0.0), cap=True):
+    """A tube through oval rings (y, rx, rz[, dx, dz]) listed bottom to top: limbs, torsos, skirts, hair, hats."""
+    assert rings[0][0] < rings[-1][0], f"{name}: rings go bottom to top"
+    verts, faces = [], []
+    for y, rx, rz, *off in rings:
+        dx, dz = off or (0.0, 0.0)
+        for k in range(n):
+            px, pz = _oval(rx, rz, math.tau * (k + 0.5) / n, e)
+            verts.append(bl(at[0] + dx + px, y, at[1] + dz + pz))
+    for i in range(len(rings) - 1):
+        for k in range(n):
+            a, b = i * n + k, i * n + (k + 1) % n
+            faces.append((b, a, a + n, b + n))
+    if cap:
+        faces += [tuple(range(n)), tuple(range(len(verts) - 1, len(verts) - n - 1, -1))]
+    me = bpy.data.meshes.new(name)
+    me.from_pydata(verts, [], faces)
+    o = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(o)
+    return finish(o, mat, 0)
+
+
+def _flat(n, e):
+    """How far the flat front, back and side faces of a loft sit from its axis, as a fraction of the ring's radius."""
+    return math.cos(math.pi / n) ** e
+
+
+def fat(prof, k):
+    """A profile with its radii scaled by k: builds, sleeves over arms, garments over the body."""
+    return [(y, rx * k, rz * k, *off) for y, rx, rz, *off in prof]
+
+
+def _ring_at(prof, y):
+    """The ring of a profile at height y, linear between its neighbours."""
+    for a, b in zip(prof, prof[1:]):
+        if a[0] <= y <= b[0]:
+            t = (y - a[0]) / (b[0] - a[0])
+            return tuple(p + (q - p) * t for p, q in zip(a, b))
+    raise ValueError(f"no ring at {y}")
+
+
+def band(name, prof, y0, y1, mat, at=(0.0, 0.0), k=1.1, n=8, e=0.9):
+    """A strip of cloth hugging a profile between two heights: belts, cuffs, wristbands, stripes, sock tops."""
+    return loft(name, fat([_ring_at(prof, y0), _ring_at(prof, y1)], k), M[mat], n, e, at)
+
+
+def studs(name, prof, y, count, mat, at=(0.0, 0.0), k=1.0, size=0.016, e=0.65, roll=0):
+    """Small square studs around a profile at height y (roll 45 makes them diamonds: lace); returns them for a pivot."""
+    _, rx, rz, *off = _ring_at(prof, y)
+    dx, dz = off or (0.0, 0.0)
+    out = []
+    for i in range(count):
+        a = math.tau * (i + 0.5) / count
+        px, pz = _oval(rx * k, rz * k, a, e)
+        out.append(box(name, (size, size, size), (at[0] + dx + px, y, at[1] + dz + pz), mat,
+                       rot=(0, -math.degrees(a), roll)))
+    return out
+
+
+def tilt(o, pos, rot):
+    """Turns a part built upright around the origin by rot (pitch, yaw, roll) and moves it to pos."""
+    o.rotation_euler = _euler(rot)
+    o.location = bl(*pos)
+    _active(o)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    return o
+
+
+def shoe(x, upper, sole, sole_h=0.04, top=0.16, w=0.14, toe=None, lace=None, trim=None):
+    """A shoe under a leg at x: sole, heel and toe, a boot shaft when it is taller than 0.2, laces and a welt.
+    The rounded uppers sink 2 cm into the sole, so no wide flange of sole shows around them."""
+    h = min(top, 0.2) - sole_h
+    parts = [box("Sole", (w + 0.006, sole_h, 0.275), (x, sole_h / 2, 0.03), M[sole], 0.012, seg=1),
+             box("Heel", (w, h + 0.02, 0.19), (x, sole_h + h / 2 - 0.01, -0.01), M[upper], 0.04, seg=2),
+             box("Toe", (w, 0.1, 0.14), (x, sole_h + 0.03, 0.095), M[toe or upper], 0.04, seg=2)]
+    if top > 0.2:
+        parts.append(loft("Shaft", [(0.15, 0.07, 0.092), (top, 0.068, 0.088)], M[upper], at=(x, -0.01)))
+    if lace:
+        ys = [sole_h + 0.115 + 0.04 * k for k in range(int((top - sole_h - 0.1) / 0.04))]
+        parts += [box("Lace", (0.07, 0.012, 0.02), (x, y, 0.08), M[lace]) for y in ys]
+        parts += [box("Lace", (0.07, 0.012, 0.02), (x, sole_h + 0.082, z), M[lace]) for z in (0.09, 0.12)]
+    if trim:  # a stitched welt: a coloured line around the top of the sole
+        parts += [box("Welt", (w + 0.012, 0.007, 0.281), (x, sole_h + 0.002, 0.03), M[trim]),
+                  box("WeltTop", (w + 0.002, 0.006, 0.271), (x, sole_h + 0.006, 0.03), M[sole])]
+    return parts
+
+
+def leg(x, *parts):
+    """Hangs a leg's parts (trouser tubes, socks, the shoe) on its hip pivot."""
+    pivot(f"Leg{'R' if x > 0 else 'L'}", (math.copysign(0.11, x), 0.88, 0), *parts)
+
+
+def arm_rings(x, r=1.0):
+    """The arm's rings relative to its pivot at +-0.3: the shoulder sits at x (slight and broad builds differ), the
+    wrist under the pivot, so whatever the game puts in the hand is in the hand."""
+    lean = x - math.copysign(0.3, x)
+    return [(y, rx * r, rz * r, lean * min((y - 0.875) / 0.58, 1.0), 0.0) for y, rx, rz in ARM]
+
+
+def arm(x, skin, sleeve=None, to=0.875, r=1.0, extra=()):
+    """An arm on its shoulder pivot: a sleeve down to height `to`, bare skin below it and the hand."""
+    px, prof = math.copysign(0.3, x), arm_rings(x, r)
+    cut = _ring_at(prof, to)
+    bare = [p for p in prof if p[0] < to] + [cut] if sleeve else prof
+    parts = list(extra)
+    if sleeve:
+        parts.append(loft("Sleeve", fat([cut] + [p for p in prof if p[0] > to], 1.12), M[sleeve], at=(px, 0)))
+    if len(bare) > 1:
+        parts.append(loft("Arm", bare, M[skin], at=(px, 0)))
+    h = r ** 0.5
+    hand = [(0.73, 0.016, 0.03), (0.765, 0.026, 0.046), (0.82, 0.028, 0.048), (0.875, 0.03, 0.036)]
+    parts += [loft("Hand", fat(hand, h), M[skin], at=(px, 0.01)),
+              box("Thumb", (0.024, 0.055, 0.028), (px, 0.8, 0.055 * h), M[skin], 0.01, seg=1)]
+    pivot(f"Arm{'R' if x > 0 else 'L'}", (px, 1.46, 0), *parts)
+
+
+def head_base(skin, brow, eye=1.0, lips="ink"):
+    """Neck, head, nose, ears and a face (two dark eyes, brows, a mouth line); returns the Head pivot's parts."""
+    parts = [loft("Neck", [(1.5, 0.052, 0.055), (1.64, 0.05, 0.052)], M[skin]),
+             ball("HeadMesh", 0.118, (0, 1.695, 0.0), M[skin], 2, scale=(0.95, 1.08, 1.0)),
+             box("Nose", (0.026, 0.045, 0.04), (0, 1.68, 0.118), M[skin], 0.012),
+             box("Mouth", (0.052, 0.009, 0.012), (0, 1.636, 0.102), M[lips])]
+    for s in (-1, 1):
+        parts += [box("Ear", (0.022, 0.05, 0.04), (s * 0.112, 1.69, -0.005), M[skin], 0.01),
+                  ball("Eye", 0.017 * eye, (s * 0.045, 1.705, 0.104), M["ink"], 2, scale=(1, 1.15, 0.5)),
+                  box("Brow", (0.05, 0.011, 0.014), (s * 0.046, 1.74, 0.101), M[brow], rot=(0, 0, -s * 6))]
+    return parts
+
+
+def head(parts, k=1.12):
+    """Hangs the head's parts on the neck pivot, enlarged a little about it: face and hair have to read at 90 px."""
+    for o in parts:
+        o.location = [p + (c - p) * k for c, p in zip(o.location, bl(0, 1.58, 0))]
+        o.scale = (k, k, k)
+    pivot("Head", (0, 1.58, 0), *parts)
+
+
+def body(w=1.0, d=1.0, hem=0.97):
+    """Rings of the upper body from the hem to the neck base. Lofted with n=12, e=0.65 the front and the back are
+    flat at z = +-0.122 * d * _flat(12, 0.65) from the hem to the shoulders: prints, patches and zips lie on them."""
+    return [(hem, 0.185 * w, 0.122 * d), (1.1, 0.185 * w, 0.122 * d), (1.32, 0.225 * w, 0.122 * d),
+            (1.465, 0.228 * w, 0.122 * d), (1.505, 0.13 * w, 0.085 * d), (1.53, 0.06, 0.06)]
+
+
+def torso(top, pants, w=1.0, d=1.0, hem=0.97):
+    """The upper body in one cloth and the pelvis in the trouser cloth; returns the pelvis (Spark's is textured)."""
+    loft("Torso", body(w, d, hem), M[top], 12, 0.65)
+    return loft("Pelvis", [(0.83, 0.15 * w, 0.105 * d), (0.87, 0.18 * w, 0.118 * d), (hem + 0.02, 0.18 * w, 0.118 * d)],
+                M[pants], 12, 0.65)
 
 
 def npc():
-    """Nomad 1: hooded scout with goggles, scarf, layered jacket and a big pack with an antenna."""
-    leg(-0.11, holster=True)
-    leg(0.11, cargo=True)
-    torso()
-    box("Belt", (0.38, 0.06, 0.24), (0, 0.96, 0), M["leather"], 0.02)
-    box("Buckle", (0.06, 0.045, 0.01), (0, 0.96, 0.123), M["steel"])
-    for x in (-0.14, 0.14):
-        box("Pouch", (0.08, 0.09, 0.05), (x, 0.94, 0.12), M["webbing"], 0.02)
-    box("SidePouch", (0.05, 0.1, 0.1), (0.2, 0.93, -0.02), M["webbing"], 0.02)
-    box("Flap", (0.2, 0.4, 0.014), (0.07, 1.22, 0.135), M["jacket"], 0.006)
-    box("Zip", (0.012, 0.38, 0.008), (-0.03, 1.21, 0.137), M["steel"])
-    for x in (-0.1, 0.1):
-        box("Strap", (0.05, 0.48, 0.014), (x, 1.24, 0.142), M["webbing"])
-    box("ChestStrap", (0.3, 0.035, 0.014), (0, 1.33, 0.148), M["webbing"])
-    box("ChestLight", (0.04, 0.02, 0.01), (-0.1, 1.33, 0.155), M["led_c"])
-    box("CollarBack", (0.3, 0.15, 0.06), (0, 1.54, -0.09), M["jacket"], 0.025, rot=(10, 0, 0))
+    """Spark, punk: tall yellow mohawk, studded black leather jacket with patches, red tartan trousers, heavy boots."""
+    w, d = 0.98, 0.95
+    f = 0.122 * d * _flat(12, 0.65) + 0.003  # just proud of the jacket's flat front; -f is its back
+    for x in (-0.11, 0.11):
+        leg(x, uvw(loft("Trouser", fat(LEG, 0.9), M["tartan"], at=(x, 0)), 0.14),
+            *shoe(x, "leather_k", "rubber", 0.055, 0.36, 0.15, lace="yellow", trim="yellow"))
+    uvw(torso("leather_k", "tartan", w, d), 0.14)
+    hips = body(w, d, 0.9)
+    band("Belt", hips, 0.915, 0.955, "leather_k", k=1.03, n=12, e=0.65)
+    studs("BeltStud", hips, 0.935, 14, M["silver"], k=1.05)
+    band("Hem", hips, 0.97, 1.01, "leather_k", k=1.04, n=12, e=0.65)
+    box("Buckle", (0.04, 0.035, 0.012), (0.045, 0.99, f + 0.006), M["silver"])
+    box("Tee", (0.1, 0.2, 0.006), (0, 1.35, f), M["tee"])
+    box("Zip", (0.007, 0.24, 0.006), (0, 1.12, f), M["silver"])
     for s in (-1, 1):
-        box("CollarSide", (0.06, 0.13, 0.17), (s * 0.13, 1.53, -0.01), M["jacket"], 0.025, rot=(0, 0, -s * 10))
-        box("PackStrap", (0.05, 0.06, 0.3), (s * 0.12, 1.47, -0.05), M["webbing"])
-    box("Scarf", (0.22, 0.08, 0.2), (0, 1.51, 0.02), M["cloth"], 0.035, seg=2)
-    box("Pack", (0.34, 0.42, 0.16), (0, 1.2, -0.21), M["canvas"], 0.05, seg=2)
-    box("PackFlap", (0.35, 0.14, 0.17), (0, 1.38, -0.215), M["canvas2"], 0.035)
-    for x in (-0.1, 0.1):
-        box("PackPocket", (0.12, 0.14, 0.05), (x, 1.08, -0.3), M["canvas2"], 0.02)
-    box("PackStripe", (0.35, 0.03, 0.01), (0, 1.25, -0.293), M["ochre"])
-    cyl("Bedroll", 0.07, 0.4, (0, 1.47, -0.22), M["cloth"], axis="x", verts=12)
-    for x in (-0.13, 0.13):
-        cyl("BedrollTie", 0.073, 0.02, (x, 1.47, -0.22), M["leather"], axis="x", verts=12)
-    cyl("Antenna", 0.007, 0.55, (0.13, 1.68, -0.27), M["dsteel"], verts=6)
-    ball("AntennaTip", 0.016, (0.13, 1.96, -0.27), M["led_c"], 1)
-    arm(-0.3, device=True)
-    arm(0.3)
-    parts = head_base()
-    parts += [box("Visor", (0.22, 0.045, 0.03), (0, 1.715, 0.11), M["visor"], 0.014),
-              box("GoggleFrame", (0.25, 0.07, 0.03), (0, 1.715, 0.096), M["graphite"], 0.018),
-              torus("GoggleStrap", 0.118, 0.01, (0, 1.715, 0.0), M["graphite"], seg=20, mseg=4),
-              box("MouthScarf", (0.19, 0.07, 0.07), (0, 1.625, 0.09), M["cloth"], 0.03),
-              ball("Hood", 0.158, (0, 1.725, -0.075), M["jacket"], 2, scale=(1.0, 1.1, 1.04)),
-              torus("HoodRim", 0.13, 0.028, (0, 1.71, 0.055), M["jacket"], axis="z", seg=20, mseg=6, rot=(-12, 0, 0))]
-    pivot("Head", (0, 1.58, 0), *parts)
+        box("Lapel", (0.085, 0.21, 0.012), (s * 0.07, 1.345, f + 0.006), M["leather_k"], rot=(0, 0, -s * 15))
+        for k in range(3):
+            box("Stud", (0.014, 0.014, 0.014), (s * (0.085 + 0.014 * k), 1.29 + 0.06 * k, f + 0.014), M["silver"])
+        box("Epaulette", (0.085, 0.012, 0.05), (s * 0.172, 1.491, 0), M["leather_k"], rot=(0, 0, -s * 23))
+        for k in range(3):
+            box("Stud", (0.014, 0.014, 0.014), (s * (0.147 + 0.025 * k), 1.507 - 0.0105 * k, 0), M["silver"])
+    box("CollarBack", (0.2, 0.05, 0.035), (0, 1.52, -0.07), M["leather_k"], 0.012, rot=(-14, 0, 0), seg=1)
+    box("Patch", (0.055, 0.04, 0.008), (-0.125, 1.3, f - 0.012), M["red"], rot=(0, -17, 0))
+    cyl("Pin", 0.014, 0.008, (0.14, 1.37, f - 0.014), M["yellow"], axis="z", verts=8)
+    cyl("Pin", 0.011, 0.008, (0.15, 1.33, f - 0.017), M["lace"], axis="z", verts=8)
+    for dx, dy in ((0.025, 0.06), (-0.025, -0.06)):  # a lightning bolt across the back
+        box("Bolt", (0.045, 0.15, 0.008), (dx, 1.28 + dy, -f), M["yellow"], rot=(0, 0, -25))
+    box("Bolt", (0.075, 0.035, 0.008), (0, 1.28, -f), M["yellow"])
+    box("BackPatch", (0.15, 0.05, 0.008), (0, 1.08, -f), M["red"])
+    box("BackPatchBar", (0.11, 0.012, 0.006), (0, 1.08, -f - 0.003), M["lace"])
+    for k in range(5):
+        box("Stud", (0.016, 0.016, 0.016), ((k - 2) * 0.045, 1.415, -f + 0.004), M["silver"])
+    for s in (-1, 1):
+        x, px = s * 0.275, s * 0.3
+        sleeve = arm_rings(x, 0.95 * 1.12)
+        extra = studs("Stud", sleeve, 0.9, 6, M["silver"], (px, 0), size=0.012, e=0.9)
+        if s < 0:
+            extra.append(box("SleevePatch", (0.008, 0.055, 0.055), (px + _ring_at(sleeve, 1.3)[3] - 0.058, 1.3, 0),
+                             M["lace"]))
+        arm(x, "skin_spark", "leather_k", r=0.95, extra=extra)
+    parts = head_base("skin_spark", "hair_k")
+    parts.append(ball("Stubble", 0.12, (0, 1.715, -0.012), M["stubble"], 2, scale=(0.96, 0.95, 1.02)))
+    for k in range(7):
+        t = k / 6
+        z, h = 0.085 - 0.19 * t, 0.15 + 0.06 * math.sin(math.pi * (0.2 + 0.6 * t))
+        spike = loft("Mohawk", [(0, 0.03, 0.045), (h * 0.55, 0.022, 0.034), (h, 0.004, 0.006)], M["yellow"], 6, 1.0)
+        parts.append(tilt(spike, (0, 1.67 + 0.127 * math.sqrt(1 - (z / 0.118) ** 2), z), (30 - 62 * t, 0, 0)))
+    parts += [torus("Earring", 0.014, 0.0035, (-0.122, 1.662 + 0.024 * k, 0.0), M["silver"], axis="x", seg=8, mseg=3)
+              for k in range(2)]
+    parts.append(ball("NoseStud", 0.006, (0.016, 1.672, 0.134), M["silver"], 1))
+    head(parts)
 
 
 def npc2():
-    """Nomad 2: long coat, tall boots, dyed mohawk, a monocle visor and one heavy pauldron."""
-    leg(-0.11, boot_h=0.42, knee=False)
-    leg(0.11, boot_h=0.42, knee=False)
-    torso(width=0.42)
-    box("Sash", (0.4, 0.07, 0.25), (0, 0.98, 0), M["leather"], 0.02)
-    box("Buckle", (0.07, 0.05, 0.01), (0.05, 0.98, 0.128), M["brass"])
-    box("CoatBack", (0.42, 0.58, 0.04), (0, 0.68, -0.17), M["jacket"], 0.018, rot=(14, 0, 0))
+    """Rust, metalhead: long dark hair and a beard, a patched denim battle vest over a black band tee, studded belt."""
+    w, d = 1.12, 1.3
+    fv = 0.122 * d * 1.05 * _flat(12, 0.65) + 0.003  # just proud of the vest's flat front; -fv is its back
+
+    def logo(cy, z, k, mat):  # the band's mark: five jagged bars and a crossbar
+        for i, h in enumerate((0.55, 1.0, 0.7, 1.0, 0.55)):
+            box("Logo", (0.016 * k, 0.085 * k * h, 0.004), ((i - 2) * 0.026 * k, cy, z), M[mat])
+        box("Logo", (0.14 * k, 0.014 * k, 0.004), (0, cy, z), M[mat])
+
+    for x in (-0.11, 0.11):
+        leg(x, loft("Jeans", fat(LEG, 1.25), M["cloth_k"], at=(x, 0)),
+            *shoe(x, "cloth_k", "lace", 0.035, 0.2, 0.155, toe="lace", lace="lace"))
+    torso("cloth_k", "cloth_k", w, d, 1.0)
+    loft("Vest", fat(body(w, d, 1.04)[:5], 1.05), M["denim"], 12, 0.65)
+    box("TeeFront", (0.19, 0.4, 0.006), (0, 1.25, fv), M["cloth_k"])
+    logo(1.32, fv + 0.005, 1.25, "cyan")
+    box("BackPatch", (0.22, 0.19, 0.006), (0, 1.19, -fv), M["cyan"])
+    logo(1.19, -fv - 0.005, 1.4, "cloth_k")
+    for y in (1.1, 1.2, 1.3):
+        box("Button", (0.014, 0.014, 0.008), (0.108, y, fv - 0.003), M["silver"])
     for s in (-1, 1):
-        box("CoatSide", (0.04, 0.56, 0.28), (s * 0.225, 0.68, -0.03), M["jacket"], 0.018, rot=(0, 0, s * 9))
-        box("CoatTail", (0.13, 0.24, 0.035), (s * 0.15, 0.85, 0.13), M["jacket"], 0.012, rot=(-6, 0, s * 6))
-        box("Lapel", (0.1, 0.24, 0.022), (s * 0.08, 1.37, 0.14), M["jacket"], 0.01, rot=(0, 0, s * 18))
-        for y in (1.06, 1.16, 1.26):
-            cyl("Button", 0.012, 0.01, (s * 0.06, y, 0.125), M["brass"], axis="z", verts=8)
-    box("CollarBack", (0.42, 0.22, 0.06), (0, 1.6, -0.1), M["jacket"], 0.025, rot=(18, 0, 0))
-    box("Satchel", (0.22, 0.2, 0.08), (-0.17, 1.0, -0.17), M["leather"], 0.03, seg=2)
-    box("SatchelStrap", (0.05, 0.62, 0.014), (0.0, 1.26, 0.14), M["leather"], rot=(0, 0, 38))
-    arm(-0.3, pad="armor", pad_size=1.55, bracer=True)
-    arm(0.3, pad=None, device=True)
-    parts = head_base()
-    parts += [box("Visor", (0.1, 0.04, 0.02), (0.045, 1.705, 0.113), M["visor"], 0.008),
-              box("MonocleRim", (0.12, 0.06, 0.02), (0.045, 1.705, 0.1), M["dsteel"], 0.012),
-              box("Implant", (0.02, 0.07, 0.09), (0.111, 1.7, 0.02), M["steel"], 0.006),
-              ball("Stubble", 0.12, (0, 1.715, -0.012), M["hair"], 2, scale=(0.96, 0.95, 1.02))]
-    for k in range(7):
-        h = 0.12 + 0.05 * math.sin(k * 0.6 + 0.4)
-        parts.append(box("Mohawk", (0.035, h, 0.055), (0, 1.79 + h / 2 - 0.02, 0.09 - k * 0.04), M["hair_m"], 0.012,
-                         rot=(-15 + k * 6, 0, 0)))
-    for k in range(3):
-        parts.append(torus("Piercing", 0.012, 0.003, (-0.12, 1.675 + k * 0.02, 0.0), M["steel"], axis="x", seg=8, mseg=2))
-    pivot("Head", (0, 1.58, 0), *parts)
+        box("Collar", (0.08, 0.04, 0.012), (s * 0.125, 1.43, fv + 0.002), M["denim"], rot=(0, 0, s * 22))
+    box("Patch", (0.055, 0.035, 0.006), (0.155, 1.34, fv - 0.012), M["lace"], rot=(0, 17, 0))
+    box("Patch", (0.045, 0.045, 0.006), (-0.155, 1.33, fv - 0.012), M["red"], rot=(0, -17, 0))
+    box("Patch", (0.07, 0.022, 0.006), (-0.145, 1.15, fv - 0.018), M["yellow"], rot=(0, -20, 0))
+    hips = body(w, d, 0.9)
+    band("Belt", hips, 0.93, 0.975, "leather_k", k=1.03, n=12, e=0.65)
+    studs("BeltStud", hips, 0.9525, 16, M["silver"], k=1.05, size=0.018)
+    box("Buckle", (0.06, 0.05, 0.012), (0, 0.9525, 0.122 * d * 1.03 * _flat(12, 0.65) + 0.006), M["silver"])
+    cable("Chain", [(0.09, 0.95, 0.165), (0.16, 0.84, 0.155), (0.235, 0.84, 0.07), (0.24, 0.94, -0.02)], 0.006,
+          M["silver"], res=3, sides=0)
+    for s in (-1, 1):
+        x, px = s * 0.335, s * 0.3
+        forearm = arm_rings(x, 1.18)
+        arm(x, "skin_rust", "cloth_k", 1.3, 1.18,
+            [band("Wristband", forearm, 0.895, 0.955, "leather_k", (px, 0), 1.12)]
+            + studs("Stud", forearm, 0.925, 6, M["silver"], (px, 0), 1.14, e=0.9))
+    parts = head_base("skin_rust", "hair_b")
+    parts += [ball("Hair", 0.127, (0, 1.722, -0.022), M["hair_b"], 2, scale=(1.0, 0.95, 1.02)),
+              loft("HairBack", [(1.33, 0.125, 0.02, 0, -0.178), (1.48, 0.14, 0.03, 0, -0.18), (1.53, 0.135, 0.04, 0, -0.15),
+                                (1.62, 0.13, 0.06, 0, -0.09), (1.76, 0.115, 0.06, 0, -0.065)], M["hair_b"], 8, 0.8),
+              box("Beard", (0.15, 0.09, 0.09), (0, 1.585, 0.07), M["hair_b"], 0.03, seg=2),
+              box("Moustache", (0.085, 0.02, 0.02), (0, 1.654, 0.112), M["hair_b"], 0.006, seg=1)]
+    for s in (-1, 1):
+        parts += [box("Sideburn", (0.025, 0.1, 0.05), (s * 0.1, 1.645, 0.035), M["hair_b"], 0.008, seg=1),
+                  loft("HairFront", [(1.44, 0.03, 0.014, s * 0.115, 0.16), (1.5, 0.036, 0.018, s * 0.118, 0.13),
+                                     (1.56, 0.036, 0.025, s * 0.118, 0.085), (1.65, 0.03, 0.04, s * 0.112, 0.04),
+                                     (1.76, 0.025, 0.045, s * 0.1, 0.015)], M["hair_b"], 6, 1.0)]
+    head(parts)
 
 
 def npc3():
-    """Nomad 3: heavy armour vest, cap, respirator, big pads and a radio pack."""
-    leg(-0.115, boot_h=0.24, cargo=True, bulk=1.1)
-    leg(0.115, boot_h=0.24, cargo=True, bulk=1.1)
-    torso()
-    box("Belt", (0.42, 0.07, 0.27), (0, 0.97, 0), M["webbing"], 0.02)
-    for x in (-0.16, -0.05, 0.06):
-        box("MagPouch", (0.09, 0.12, 0.06), (x, 0.97, 0.14), M["webbing"], 0.02)
-    box("VestFront", (0.44, 0.38, 0.07), (0, 1.27, 0.12), M["armor"], 0.04, seg=2)
-    box("VestBack", (0.44, 0.42, 0.07), (0, 1.25, -0.12), M["armor"], 0.04, seg=2)
+    """Mouse, goth: black bob with a blunt fringe, very pale skin, a long black dress with white lace collar and cuffs,
+    a silver pendant and platform boots. The dress hangs from the body; the legs swing inside its bell."""
+    dress = [(0.3, 0.3, 0.35), (0.6, 0.25, 0.275), (0.88, 0.2, 0.18), (1.06, 0.145, 0.1), (1.3, 0.19, 0.112),
+             (1.455, 0.215, 0.1), (1.5, 0.11, 0.072), (1.53, 0.055, 0.055)]
+    collar = [(1.43, 0.19, 0.125), (1.478, 0.168, 0.108), (1.527, 0.07, 0.066)]
+
+    def front(y):  # just proud of the dress front at height y
+        return _ring_at(dress, y)[2] * _flat(12, 0.85) + 0.003
+
+    loft("Dress", dress, M["cloth_k"], 12, 0.85)
+    loft("Petticoat", [(0.262, 0.29, 0.34), (0.31, 0.29, 0.34)], M["lace"], 12, 0.85)
+    band("Sash", dress, 1.03, 1.09, "leather_k", k=1.05, n=12, e=0.85)
+    box("Buckle", (0.045, 0.04, 0.01), (0, 1.06, front(1.06) + 0.008), M["silver"])
+    loft("Collar", collar, M["lace"], 12, 0.85)
+    studs("LacePoint", collar, 1.432, 18, M["lace"], k=0.99, size=0.026, e=0.85, roll=45)
     for s in (-1, 1):
-        box("VestSide", (0.05, 0.3, 0.2), (s * 0.225, 1.2, 0), M["armor"], 0.02)
-    box("VestInsert", (0.24, 0.16, 0.01), (0, 1.32, 0.158), M["jacket"], 0.004)
-    box("VestStripe", (0.3, 0.025, 0.01), (0, 1.17, 0.158), M["ochre"])
-    for x in (-0.12, 0.0, 0.12):
-        box("VestPouch", (0.1, 0.1, 0.05), (x, 1.12, 0.165), M["webbing"], 0.02)
-    box("NeckGuard", (0.34, 0.1, 0.28), (0, 1.5, -0.01), M["armor"], 0.045, seg=2)
-    box("RadioPack", (0.3, 0.36, 0.14), (0, 1.22, -0.22), M["graphite"], 0.04, seg=2)
-    box("RadioFace", (0.2, 0.1, 0.01), (0, 1.3, -0.292), M["dsteel"])
-    box("RadioLed", (0.03, 0.015, 0.006), (0.06, 1.3, -0.298), M["ledr"])
-    cyl("Whip", 0.006, 0.8, (-0.1, 1.75, -0.24), M["black"], verts=6)
-    ball("WhipTip", 0.014, (-0.1, 2.15, -0.24), M["ledr"], 1)
-    arm(-0.31, pad="armor", pad_size=1.45, bracer=True)
-    arm(0.31, pad="armor", pad_size=1.45, bracer=True)
-    parts = head_base()
-    parts += [box("Visor", (0.24, 0.05, 0.03), (0, 1.72, 0.106), M["visor"], 0.016),
-              box("VisorFrame", (0.26, 0.075, 0.03), (0, 1.72, 0.092), M["dsteel"], 0.018),
-              box("Respirator", (0.13, 0.09, 0.07), (0, 1.625, 0.105), M["rubber"], 0.035, seg=2),
-              ball("CapCrown", 0.13, (0, 1.765, -0.005), M["jacket"], 2, scale=(1.0, 0.62, 1.06)),
-              box("CapBrim", (0.2, 0.018, 0.13), (0, 1.77, 0.165), M["jacket"], 0.009, rot=(-6, 0, 0)),
-              box("CapButton", (0.03, 0.015, 0.03), (0, 1.846, -0.005), M["graphite"])]
+        box("Chain", (0.005, 0.13, 0.005), (s * 0.029, 1.42, front(1.42) + 0.004), M["silver"], rot=(0, 0, -s * 25))
+    box("Pendant", (0.032, 0.032, 0.008), (0, 1.345, front(1.345) + 0.004), M["silver"], rot=(0, 0, 45))
+    ball("Gem", 0.008, (0, 1.345, front(1.345) + 0.009), M["red"], 1)
+    for y in (1.27, 1.21, 1.15):
+        box("Button", (0.014, 0.014, 0.008), (0, y, front(y)), M["silver"])
+    for x in (-0.11, 0.11):
+        leg(x, loft("Tights", fat(LEG, 0.8), M["cloth_k"], at=(x, 0)), *shoe(x, "leather_k", "rubber", 0.09, 0.38),
+            *[box("BootBuckle", (0.012, 0.022, 0.04), (x + math.copysign(0.07, x), y, -0.01), M["silver"])
+              for y in (0.17, 0.24)])
     for s in (-1, 1):
-        parts.append(cyl("Filter", 0.032, 0.05, (s * 0.075, 1.61, 0.13), M["dsteel"], axis="x", verts=12))
-    pivot("Head", (0, 1.58, 0), *parts)
+        arm(s * 0.265, "skin_mouse", "cloth_k", r=0.8,
+            extra=[loft("Cuff", [(0.865, 0.052, 0.058), (0.93, 0.04, 0.044)], M["lace"], at=(s * 0.3, 0))])
+    parts = head_base("skin_mouse", "hair_k", eye=1.1, lips="red")
+    # the bob: open around the face below the brows, and stepping forward above them into a blunt fringe
+    parts.append(loft("Bob", [(1.605, 0.14, 0.11, 0, -0.025), (1.68, 0.143, 0.14), (1.744, 0.14, 0.135),
+                              (1.746, 0.14, 0.1415, 0, 0.0065), (1.79, 0.128, 0.135), (1.83, 0.085, 0.09),
+                              (1.85, 0.02, 0.02)], M["hair_k"], 10, 0.9, (0, -0.035)))
+    head(parts)
+
+
+def npc4():
+    """Thunder, cyber raver: violet tubular falls in two high bunches, goggles pushed up on the forehead, a black top,
+    very wide trousers with reflective violet stripes and chunky platform trainers; a big, strong build."""
+    w, d = 1.15, 1.12
+    for s in (-1, 1):
+        x = s * 0.11
+        hem, hip = (0.14, 0.17, 0.2, s * 0.06, -0.03), (0.9, 0.1, 0.115, 0.0, 0.0)
+        phat, side = [hem, hip], _flat(10, 0.9)  # a straight cone from hip to hem, so the stripes lie on it
+        mid = _ring_at(phat, 0.53)
+        lean = math.degrees(math.atan((abs(hem[3]) + (hem[1] - hip[1]) * side) / (hip[0] - hem[0])))
+        leg(x, loft("Trouser", phat, M["cloth_k"], 10, 0.9, (x, 0)),
+            band("Stripe", phat, 0.19, 0.25, "violet", (x, 0), 1.02, 10, 0.9),
+            band("Stripe", phat, 0.5, 0.54, "violet", (x, 0), 1.02, 10, 0.9),
+            box("SideStripe", (0.01, 0.58, 0.05), (x + mid[3] + s * (mid[1] * side + 0.003), 0.53, mid[4]), M["violet"],
+                rot=(0, 0, s * lean)),
+            *shoe(x + s * 0.045, "cloth_k", "lace", 0.075, 0.2, 0.175, lace="violet", trim="violet"))
+    torso("cloth_k", "cloth_k", w, d)
+    band("ChestStripe", body(w, d), 1.25, 1.29, "violet", k=1.02, n=12, e=0.65)
+    band("Waistband", body(w, d, 0.9), 0.95, 0.99, "violet", k=1.04, n=12, e=0.65)
+    for s in (-1, 1):
+        x, px = s * 0.325, s * 0.3
+        warmer = fat([_ring_at(arm_rings(x, 1.3), y) for y in (0.885, 1.12)], 1.25)
+        arm(x, "skin_thunder", r=1.3,
+            extra=[loft("Warmer", warmer, M["cloth_k"], at=(px, 0))]
+            + [band("WarmerStripe", warmer, y, y + 0.03, "violet", (px, 0), 1.04) for y in (0.92, 0.995, 1.07)])
+    parts = head_base("skin_thunder", "hair_k")
+    parts += [ball("Hair", 0.12, (0, 1.715, -0.012), M["hair_k"], 2, scale=(0.96, 0.95, 1.02)),
+              ball("LipStud", 0.006, (0.014, 1.626, 0.106), M["silver"], 1),
+              tilt(loft("GoggleStrap", [(-0.011, 0.106, 0.11), (0.011, 0.106, 0.11)], M["cloth_k"], 10, 1.0),
+                   (0, 1.765, -0.03), (-13, 0, 0))]
+    for s in (-1, 1):
+        parts += [tilt(cyl("GoggleRim", 0.036, 0.03, (0, 0, 0), M["silver"], axis="z", verts=10),
+                       (s * 0.042, 1.785, 0.082), (-40, 0, 0)),
+                  tilt(cyl("GoggleLens", 0.027, 0.036, (0, 0, 0), M["ink"], axis="z", verts=10),
+                       (s * 0.042, 1.785, 0.082), (-40, 0, 0)),
+                  ball("Bunch", 0.045, (s * 0.1, 1.83, -0.03), M["hair_k"], 1),
+                  ball("FallKnot", 0.058, (s * 0.105, 1.875, -0.03), M["violet"], 1)]
+        # each fall: direction (degrees from straight out to the side, + forwards), reach and the height it ends at;
+        # none crosses the middle, covers the face or hangs inside a shoulder
+        for phi, reach, end in ((-100, 0.16, 1.3), (-72, 0.16, 1.38), (-44, 0.2, 1.33), (-16, 0.23, 1.57),
+                                (14, 0.2, 1.57), (62, 0.17, 1.4)):
+            ux, uz = s * math.cos(math.radians(phi)), math.sin(math.radians(phi))
+            pts = [(s * 0.1 + r * ux, y, -0.03 + r * uz)
+                   for r, y in ((0, 1.85), (0.3 * reach, 1.93), (0.8 * reach, 1.91), (reach, 1.75), (reach, end))]
+            parts.append(cable("Fall", pts, 0.027, M["violet"], res=3, sides=1))
+    head(parts)
+
+
+def npc5():
+    """Fox, skater: green beanie over ginger hair, an oversized olive hoodie, baggy knee-length shorts, long socks,
+    flat skate shoes and a skateboard strapped across the back; a lanky build."""
+    hoodie = [(0.84, 0.195, 0.14), (0.9, 0.215, 0.152), (1.12, 0.212, 0.15), (1.32, 0.222, 0.146), (1.465, 0.225, 0.13),
+              (1.505, 0.14, 0.095), (1.54, 0.075, 0.07)]
+    shin = fat(LEG, 0.85)
+
+    def front(y):  # just proud of the hoodie's front at height y
+        return _ring_at(hoodie, y)[2] * _flat(12, 0.7) + 0.003
+
+    for x in (-0.11, 0.11):
+        leg(x, loft("Shorts", [(0.46, 0.105, 0.118), (0.9, 0.1, 0.112)], M["khaki"], at=(x, 0)),
+            loft("Knee", [_ring_at(shin, 0.34), shin[2], _ring_at(shin, 0.6)], M["skin_fox"], at=(x, 0)),
+            loft("Sock", fat([shin[0], shin[1], _ring_at(shin, 0.38)], 1.1), M["lace"], at=(x, 0)),
+            *[band("SockStripe", shin, y, y + 0.018, "green", (x, 0), 1.13) for y in (0.31, 0.345)],
+            *([box("Plaster", (0.04, 0.02, 0.006), (x, 0.42, 0.058), M["lace"])] if x < 0 else []),
+            *shoe(x, "cloth_k", "lace", 0.03, 0.13, lace="lace"))
+    loft("Pelvis", [(0.83, 0.15, 0.105), (0.87, 0.17, 0.115), (0.9, 0.17, 0.115)], M["khaki"], 12, 0.65)
+    loft("Hoodie", hoodie, M["hoodie"], 12, 0.7)
+    band("HemRib", hoodie, 0.84, 0.885, "hoodie_d", k=1.02, n=12, e=0.7)
+    box("Pocket", (0.25, 0.13, 0.02), (0, 1.0, front(1.0)), M["hoodie_d"], 0.008, seg=1)
+    ball("Hood", 0.11, (0, 1.5, -0.1), M["hoodie"], 2, scale=(1.3, 0.7, 0.75))
+    for s in (-1, 1):
+        box("Drawstring", (0.008, 0.13, 0.008), (s * 0.035, 1.385, front(1.385) + 0.004), M["lace"])
+    cyl("Logo", 0.03, 0.006, (-0.085, 1.3, front(1.3)), M["green"], axis="z", verts=10)
+    with Made() as made:  # the board, flat and upright at the origin, wheels to the back
+        box("Deck", (0.2, 0.56, 0.016), (0, 0, 0), M["green"])
+        box("Grip", (0.18, 0.56, 0.004), (0, 0, 0.01), M["rubber"])
+        box("DeckStripe", (0.05, 0.6, 0.004), (0, 0, -0.01), M["ink"])
+        for end in (-1, 1):
+            cyl("Deck", 0.1, 0.016, (0, end * 0.28, 0), M["green"], axis="z", verts=12)
+            box("Truck", (0.15, 0.04, 0.03), (0, end * 0.22, -0.023), M["silver"])
+            for side in (-1, 1):
+                cyl("Wheel", 0.028, 0.034, (side * 0.09, end * 0.22, -0.042), M["lace"], axis="x", verts=10)
+    tilt(join(made.objs, "Board"), (0.03, 1.26, -0.215), (0, 0, -35))
+    tilt(loft("Strap", [(-0.022, 0.343, 0.18), (0.022, 0.343, 0.18)], M["cloth_k"], 12, 0.7, cap=False),
+         (-0.035, 1.225, -0.02), (0, 0, 53))
+    for s in (-1, 1):
+        x, px = s * 0.285, s * 0.3
+        cuff = band("Cuff", arm_rings(x, 1.05 * 1.12), 0.875, 0.93, "hoodie_d", (px, 0), 1.08)
+        arm(x, "skin_fox", "hoodie", r=1.05, extra=[cuff])
+    parts = head_base("skin_fox", "ginger")
+    parts += [ball("Hair", 0.125, (0, 1.69, -0.025), M["ginger"], 2, scale=(1.0, 0.95, 1.0)),
+              tilt(loft("Beanie", [(0, 0.132, 0.14), (0.05, 0.134, 0.142), (0.11, 0.115, 0.12), (0.155, 0.07, 0.075),
+                                   (0.172, 0.02, 0.02)], M["green"], 10, 1.0), (0, 1.742, -0.012), (-10, 0, 0)),
+              tilt(loft("BeanieCuff", [(-0.004, 0.14, 0.148), (0.042, 0.14, 0.148)], M["green"], 10, 1.0),
+                   (0, 1.742, -0.012), (-10, 0, 0)),
+              box("Fringe", (0.09, 0.035, 0.03), (0.025, 1.748, 0.1), M["ginger"], 0.01, rot=(0, 0, 12), seg=1)]
+    parts += [box("Tuft", (0.05, h, 0.02), (dx, 1.63 - h / 2, -0.118), M["ginger"], 0.008, rot=(30, 0, dx * 250), seg=1)
+              for dx, h in ((-0.07, 0.06), (-0.02, 0.085), (0.035, 0.065), (0.08, 0.075))]
+    for s in (-1, 1):
+        parts.append(box("Tuft", (0.03, 0.07, 0.07), (s * 0.127, 1.69, -0.01), M["ginger"], 0.01, rot=(0, 0, -s * 18),
+                         seg=1))
+        parts += [box("Freckle", (0.005, 0.005, 0.004), (s * fx, fy, fz), M["ginger"])
+                  for fx, fy, fz in ((0.05, 1.672, 0.104), (0.066, 1.679, 0.096), (0.058, 1.661, 0.098))]
+    head(parts)
 
 
 # ---------- Raven's van (front +x, origin at the ground centre) ----------
@@ -2831,7 +3087,7 @@ PROPS = {
     "shelf": shelf, "checkout": checkout, "kiosk": kiosk, "scanner": scanner, "rack": rack,
     "core_tower": core_tower, "console": console, "service_cabinet": service_cabinet, "bomb": bomb,
     "emitter": emitter, "mirror": mirror, "sensor_stand": sensor_stand, "door": door, "npc": npc, "npc2": npc2,
-    "npc3": npc3, "rod": rod, "badge": badge, "van": van,
+    "npc3": npc3, "npc4": npc4, "npc5": npc5, "rod": rod, "badge": badge, "van": van,
 }
 
 
@@ -2844,7 +3100,8 @@ def main():
         if not ONLY or f"room_{r['id']}" in ONLY:
             ROOMS[r["id"]]()
             export(f"room_{r['id']}")
-    used = {p["model"] for p in LAYOUT["props"]} | {"bomb", "door", "npc", "npc2", "npc3", "rod", "badge", "van"}
+    used = {p["model"] for p in LAYOUT["props"]} | {"bomb", "door", "npc", "npc2", "npc3", "npc4", "npc5", "rod", "badge",
+                                                   "van"}
     missing = used - PROPS.keys()
     assert not missing, f"layout uses models with no builder: {missing}"
     for name in sorted(used):

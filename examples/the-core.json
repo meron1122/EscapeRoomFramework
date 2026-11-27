@@ -137,11 +137,11 @@
   ],
   "characters": [
     {
-      "name": "RAVEN", "output": "voice", "voice": "N2lVS1w4EtoT3dr4eOWO",
+      "name": "RAVEN", "output": "voice", "voice": "harry",
       "about": "A Nomad from the crew in the van below the tower, talks over the radio. Short, street-wise, always on the players' side. Gives hints."
     },
     {
-      "name": "ZETA", "output": "voice", "screen": "screen_zeta", "voice": "XB0fDUnXU5powFXDhCwa",
+      "name": "ZETA", "output": "voice", "screen": "screen_zeta", "voice": "sarah",
       "about": "Z Corporation's artificial intelligence, the antagonist. Polite as a reception desk in the Lobby, mocking on the Habit Floor, tempting in The Core. Never lies about the puzzles."
     }
   ],

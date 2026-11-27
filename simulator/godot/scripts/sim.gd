@@ -55,6 +55,7 @@ var pending_twist := {}  # {kind, at}
 var team_pace := 1.0  # how quick this team is at puzzles, drawn per game
 var engine_mode := false  # true: the engine owns puzzle states and the AI game master directs; false: offline
 var boosts := {}  # task id -> game time until which a hint speeds the team up
+const WORK := 0.82  # people walk at a human pace on screen, which costs game minutes: the puzzles give them back
 const ENGINE_TO_TASK := {"detonation": "choice", "deal": "choice"}
 
 
@@ -70,7 +71,7 @@ func new_game(seed_value: int) -> void:
 	team_pace = rng.randf_range(0.75, 1.25)
 	for d in layout.tasks:
 		tasks[d.id] = {"def": d.duplicate(true), "state": "locked", "progress": 0.0,
-			"need": d.work * rng.randf_range(0.8, 1.25), "workers": []}
+			"need": d.work * WORK * rng.randf_range(0.8, 1.25), "workers": []}
 	_make_variant()
 	_enter_stage("lobby")
 	_refresh()

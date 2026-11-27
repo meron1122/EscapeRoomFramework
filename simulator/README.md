@@ -10,7 +10,7 @@ and adds twists the way the scenario describes. Without the engine a small local
 | --- | --- |
 | `godot/layout.json` | the floor plan: dimensions, doors, props, puzzles and work spots; read by both Blender and Godot |
 | `blender/build_assets.py` | builds the models of the rooms, props and characters → `godot/assets/*.glb` |
-| `music/compose.py` | synthesises the music and effects from code → `godot/audio/*.mp3` |
+| `music/compose.py` | synthesises the sound from code → `godot/audio/*.mp3`: a calm bed per room, accents for what happens in it, a loud finale |
 | `godot/scripts/sim.gd` | the clock, the puzzle graph, the game's variant, the offline stand-in for Shadowman (hints, twists) |
 | `godot/scripts/npc.gd` | simulated players: walking on an A* grid, working, animation |
 | `godot/scripts/main.gd` | assembles the scene, lights, screens, camera and music |
@@ -36,7 +36,41 @@ python3 -m http.server 8060 --bind 127.0.0.1 --directory simulator/web
 ```
 
 Then `http://localhost:8060`. Controls: LMB/RMB pans, the wheel zooms, 1/2/3 jump to the rooms, F follows the team,
-H hides the panels, space pauses.
+V shows this game's answers, H hides the panels, space pauses (PAUSE then covers the whole picture).
+
+The game opens with a few pages of story over slow shots of the tower (it may be opened without the landing page),
+one of them introducing the crew: five ordinary people from five scenes (Spark the punk, Rust the metalhead, Mouse
+the goth, Thunder the cyber raver, Fox the skater), each with a portrait and a colour that is also their ring on the
+floor. For the first seconds of a game their names float over their heads. Then comes the start screen. It runs at ×10 by default: a whole night in about six minutes. People walk at a human pace
+at any speed up to ×10, so a faster game makes puzzles go faster, not legs.
+
+## Reading the screen
+
+| Where | What it tells |
+|---|---|
+| top left | the clock, the room in play, one mark per puzzle of the game (yellow: solved, cyan: in play) and what the team is on now |
+| top right, pink | Shadowman: whether he is watching or thinking and why he woke up, how long the last decision took and on which model, his last note, his last moves |
+| the banner under the buttons | whatever just happened: a puzzle solved, a move of his, something the visitor did |
+| labels in the room | cyan over the puzzle in play, with its progress; pink over a lamp he has lit |
+| ZETA's hologram | her face over the reception desk, the Z-Drive and her console, lit in the room the team is in; it moves when she speaks |
+| a speech bubble in the room | the line being said, at the place its voice comes from: under ZETA's face, or over the players RAVEN talks to; the players stop and listen |
+| subtitles | every spoken line; "SHADOWMAN, AS RAVEN" marks a line he chose to say through one of the room's characters |
+
+Colour carries the roles: cyan is the team, pink is Shadowman, white is the visitor. The camera follows the team and
+goes to a solved puzzle or a lamp he lights, until the visitor takes it with the mouse (F gives it back).
+
+### Voices
+
+Two kinds of line are heard. The room's own fixed announcements (ZETA's greeting, the patrol warning, RAVEN's last
+words) are recordings in `godot/audio/lines/`, as they would be in a real room; `voice/lines.py` lists them from
+`sim.gd` and `voice/record.py` speaks them through a speech gateway. The lines Shadowman writes during a game are
+synthesised live by the engine and fetched by URL. Neither sounds like a studio: RAVEN goes through a narrow,
+overdriven radio, ZETA through a doubled, slightly metallic chain with the echo of a hard, empty hall.
+The voices themselves are the `voice` of each character in the room's data (`examples/the-core.json`).
+
+The music is a calm bed per room, and the room plays the action over it: a note when a player settles at a puzzle,
+a rising figure for a solved one, a dull pair for a wrong answer, a call for the help button, a swell for a door,
+and one low, dark note that belongs only to Shadowman's moves. All of them share one scale, so they fit any room.
 
 ## Messing with the team
 

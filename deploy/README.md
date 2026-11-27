@@ -13,8 +13,7 @@ flowchart LR
     engine --> mqtt
     engine --> pg[(Postgres)]
   end
-  engine -->|gateway| c1[Connector: OpenRouter]
-  engine -->|gateway| c2[Connector: ElevenLabs]
+  engine -->|gateway: model and voice| c1[Connector: OpenRouter]
 ```
 
 ## What is public and what is not
@@ -51,15 +50,19 @@ so it always matches the room's real input topics.
    sprite create shadowman --label escaperoom --skip-console
    ```
 
-3. Create two Connectors in the dashboard (Sprites → Connectors → Add connector), both as **custom API**
-   connectors so the forwarded path is known, and both limited to the label `escaperoom` instead of "Allow all sprites":
+3. Create one Connector in the dashboard (Sprites → Connectors → Add connector): the built-in **OpenRouter** one,
+   limited to the label `escaperoom` instead of "Allow all sprites". It carries both the model and the voice
+   (OpenRouter serves ElevenLabs speech models on `/v1/audio/speech` and takes ElevenLabs voice ids).
 
-   | Name | Base API URL | Auth method | Header |
-   |---|---|---|---|
-   | `openrouter-gm` | `https://openrouter.ai/api` | header | `Authorization: Bearer <OpenRouter key>` |
-   | `elevenlabs-voice` | `https://api.elevenlabs.io` | custom header | `xi-api-key: <ElevenLabs key>` |
+   Note its gateway URL, `https://api.sprites.dev/v1/gateway/openrouter/<connection_id>`, and put it in `env` as
+   both `GAMEMASTER_GATEWAY` and `VOICE_GATEWAY`. The voice model is `VOICE_MODEL` (default `elevenlabs/eleven-v3`).
 
-   Note each connector's gateway URL: `https://api.sprites.dev/v1/gateway/<provider>/<connection_id>`.
+   A character's `voice` in the room's data is what the speech service calls it: through OpenRouter one of its
+   voice names (`harry`, `sarah`, ...) or an ElevenLabs voice id; through ElevenLabs directly, a voice id only.
+
+   To speak through ElevenLabs directly instead, `VOICE_GATEWAY` can be a **Custom API** Connector that forwards to
+   `https://api.elevenlabs.io` with the custom header `xi-api-key`. The built-in ElevenLabs Connector does not work:
+   it refuses text to speech.
 
    The model is set in `env` as `GAMEMASTER_MODEL` (default `deepseek/deepseek-v4-flash`, about $0.09 per million
    input tokens: a full sixty-minute game costs roughly ten cents). Any OpenRouter model with tool calling works.
@@ -83,10 +86,10 @@ so it always matches the room's real input topics.
    empty Shadowman runs on rules only and the characters' lines stay text. It installs Postgres, Mosquitto and Caddy,
    registers the services, loads the room and its brief, and prints the public checks.
 
-5. Check the Connectors from inside the Sprite before opening it up (both should answer with JSON, not 401/403):
+5. Check the Connector from inside the Sprite before opening it up (both should answer with JSON, not 401/403):
 
    ```bash
-   sprite exec -s shadowman -- bash -c '. /home/sprite/app/env; curl -s $GAMEMASTER_GATEWAY/v1/models | head -c 200; echo; curl -s $VOICE_GATEWAY/v1/models | head -c 200'
+   sprite exec -s shadowman -- bash -c '. /home/sprite/app/env; curl -s $GAMEMASTER_GATEWAY/v1/models | head -c 200; echo; curl -s $VOICE_GATEWAY/v1/audio/speech/models | head -c 200'
    ```
 
 6. Make the URL public and open it.
@@ -105,7 +108,7 @@ The Free plan covers $5 of usage a month. A running Sprite is billed for CPU ($0
 ($0.021875 per GB-hour); a paused one only for storage (about $0.02 per GB a month). A Sprite pauses after about
 30 seconds without activity and wakes on the next request, so the demo costs money only while someone watches.
 At roughly 0.2 CPU and 1 GB of memory that is about $0.03 an hour: around 150 hours of watched demo a month fit
-in the Free plan. Model and voice calls are billed by OpenRouter and ElevenLabs, not by Fly; the two caps above
+in the Free plan. Model and voice calls are billed by OpenRouter, not by Fly; the two caps above
 bound them.
 
 ## Verified on a real Sprite (27 Nov 2026)
@@ -117,8 +120,14 @@ bound them.
 
 - The model runs through the built-in OpenRouter Connector: `deepseek/deepseek-v4-flash` answers in two to five
   seconds through the gateway, with no key on the Sprite.
-- The built-in ElevenLabs Connector refuses text to speech ("endpoint is not supported"): the voice needs a
-  **Custom API** Connector (`https://api.elevenlabs.io`, custom header `xi-api-key`, a key with Text to Speech access).
+- The voice runs through the same OpenRouter Connector: `elevenlabs/eleven-v3` on `/v1/audio/speech` returns an
+  mp3 in about three seconds for the ElevenLabs voice ids in the room's data.
+- The built-in ElevenLabs Connector refuses text to speech ("endpoint is not supported").
+- A whole flow on the public URL: the game opens with its story, the team's answers reach the engine and puzzles get
+  solved, Shadowman (DeepSeek) lights cues and answers the help button with a spoken line fetched from `/voice`.
+- Mosquitto's `message_size_limit` is the broker's, not a listener's: at 8 kB it silently dropped the engine's room
+  definition (about 35 kB), the browser never learned what an answer looks like, and no puzzle was ever solved by
+  the team. It is 256 kB now.
 
 ## Not verified yet
 

@@ -12,8 +12,27 @@ const GESTURES := {
 	"U": [1, 4, 7, 8, 9, 6, 3], "L": [1, 4, 7, 8, 9], "7": [1, 2, 3, 5, 7],
 }
 
+class Face extends Control:
+	## ZETA as the building shows her: an iris of rings that opens when she speaks, and the level of her voice.
+	var talk := 0.0  # 0 silent, 1 speaking
+	var t := 0.0
+
+	func _draw() -> void:
+		var c := Vector2(size.y * 0.5, size.y * 0.5)
+		var r := size.y * 0.36
+		var tint := Screens.YELLOW if talk > 0.0 else Screens.CYAN
+		draw_arc(c, r, 0, TAU, 48, Screens.CYAN, 4.0)
+		draw_arc(c, r * 0.74, t * 0.6, t * 0.6 + 4.6, 32, Color(Screens.CYAN, 0.7), 3.0)
+		draw_arc(c, r * (0.36 + 0.14 * talk * (0.5 + 0.5 * sin(t * 9.0))), 0, TAU, 32, tint, 8.0)
+		draw_circle(c, r * 0.13, Screens.WHITE)
+		for i in 12:  # her voice
+			var h := 8.0 + 70.0 * talk * absf(sin(t * (5.0 + i * 0.7) + i))
+			draw_rect(Rect2(size.y + 10 + i * 20, size.y * 0.72 - h / 2.0, 12, h), tint)
+
+
 var fonts: Dictionary
 var _frames := 0
+var _talk_until := 0
 var parts := {}  # kind -> {name: Control}
 
 
@@ -108,6 +127,13 @@ func _fill(kind: String, root: Control, px: Vector2i, sim: Sim) -> void:
 			_label(root, "Z-MART\nLOYALTY", "display", 40 * s, BLACK, Vector2(20, 18) * s)
 			_label(root, "/// TODAY'S CUSTOMER_", "mono", 14 * s, BLACK, Vector2(22, 140) * s)
 			p.body = _label(root, v.customer.replace(", ", "\n"), "text", 26 * s, BLACK, Vector2(22, 170) * s)
+		"zeta_face":
+			# Her hologram: a black page drawn additively, so only the lines glow in the air.
+			_bg(root, BLACK)
+			p.face = Face.new()
+			p.face.set_anchors_preset(Control.PRESET_FULL_RECT)
+			root.add_child(p.face)
+			_label(root, "ZETA", "display", 110 * s, CYAN, Vector2(px.y + 8, 10 * s))  # her words are in the subtitles
 		"zeta":
 			_bg(root, BLACK)
 			_label(root, "ZETA//CORE", "display", 40 * s, CYAN, Vector2(22, 16) * s)
@@ -152,6 +178,16 @@ func update(sim: Sim, zeta_line: String) -> void:
 	if parts.has("zeta") and zeta_line != "" and parts.zeta.line.text != zeta_line:
 		parts.zeta.line.text = zeta_line
 		touch("zeta")
+	if parts.has("zeta_face") and _frames % 3 == 0:  # her face moves, at a third of the frame rate
+		var f: Face = parts.zeta_face.face
+		f.t = _frames / 30.0
+		f.talk = 1.0 if Time.get_ticks_msec() < _talk_until else 0.0
+		f.queue_redraw()
+		touch("zeta_face")
+
+
+func zeta_says(seconds: float) -> void:
+	_talk_until = Time.get_ticks_msec() + int(seconds * 1000.0)
 
 
 func _bg(root: Control, c: Color) -> void:

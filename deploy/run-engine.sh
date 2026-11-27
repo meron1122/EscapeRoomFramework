@@ -16,6 +16,9 @@ else
   export GameMaster__RulesOnly=true
 fi
 [ -z "${VOICE_GATEWAY:-}" ] || export Voice__BaseUrl="$VOICE_GATEWAY"
+# The OpenRouter Connector also speaks (ElevenLabs models on /v1/audio/speech); a gateway to ElevenLabs itself needs no provider.
+case "${VOICE_GATEWAY:-}" in */gateway/openrouter/*) export Voice__Provider=openrouter;; esac
+[ -z "${VOICE_MODEL:-}" ] || export Voice__Model="$VOICE_MODEL"
 export Voice__PublicUrl="$PUBLIC_URL"
 export Voice__Cache="$APP/voice"
 export Limits__GameStartsPerHour="$GAME_STARTS_PER_HOUR"

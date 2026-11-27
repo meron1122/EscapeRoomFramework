@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Composes the simulator's soundtrack from code: one seamless loop per room, a finale and two effects.
+"""Composes the simulator's soundtrack from code: a calm seamless bed per room, accents for what the players and the
+game master do, a loud finale and an alarm.
 
 Run: python3 simulator/music/compose.py   (needs numpy and ffmpeg with libmp3lame)
-Everything is synthesised here (darksynth / EBM / industrial), so the music is original and free of licences.
+Everything is synthesised here (ambient beds; a darksynth finale), so the music is original and free of licences.
 Every loop is circular: reverb, delay, filter, chorus and limiter state wrap around the loop end, so it loops
 without a seam.
 """
@@ -311,15 +312,6 @@ def snare(tone=190.0, gate=0.0, seed=2):
 
 
 @cache
-def tom(f0, gate=0.3):
-    n = int(0.45 * SR)
-    t = tv(n)
-    body = np.sin(2 * np.pi * np.cumsum(f0 * (1 + 0.7 * np.exp(-t / 0.03))) / SR) * np.exp(-t / 0.2)
-    x = np.tanh(2.5 * (body + 0.15 * spectral(rng(12).standard_normal(n), lo=600) * np.exp(-t / 0.03)))
-    return edges(gated(x, gate, 0.8), a=0.0003)
-
-
-@cache
 def clap(seed=3):
     n = int(0.35 * SR)
     t = tv(n)
@@ -403,21 +395,6 @@ def sub_note(m, dur):
 
 
 @cache
-def reese_note(m, dur):
-    """Reese: saws a few cents apart beating against each other, plus a square for body."""
-    n = int(dur * SR)
-    f = hz(m)
-    x = osc(f * 2 ** (-0.14 / 12), n) + osc(f * 2 ** (0.14 / 12), n, ph0=0.37) + 0.6 * osc(f, n, "pulse", ph0=0.11)
-    return edges(x / 2, a=0.004, r=0.015)
-
-
-@cache
-def pluck(m, dur, shape="pulse", decay=0.12, pw=0.3):
-    n = int(dur * SR)
-    return edges(osc(hz(m), n, shape, pw=pw) * np.exp(-tv(n) / decay), a=0.0008, r=0.008)
-
-
-@cache
 def stab(chord, dur, detune=0.15, seed=0, decay=None):
     """Short supersaw chord."""
     n = int(dur * SR)
@@ -440,25 +417,6 @@ def fm_bell(m, dur, index=3.0, ratio=3.5):
     n = int(dur * SR)
     t, f = tv(n), hz(m)
     return edges(np.sin(2 * np.pi * f * t + index * np.exp(-t / 0.2) * np.sin(2 * np.pi * ratio * f * t)) * np.exp(-t / (dur / 3)))
-
-
-@cache
-def digital_stab(chord, dur):
-    """Sterile digital chord stab: thin pulses and FM, bit-crushed and sample-rate reduced."""
-    n = int(dur * SR)
-    t = tv(n)
-    x = sum(0.5 * osc(hz(m), n, "pulse", pw=0.2) + np.sin(2 * np.pi * hz(m) * t + 2 * np.exp(-t / 0.05)
-                                                          * np.sin(2 * np.pi * 4 * hz(m) * t)) for m in chord)
-    return edges(spectral(crush(x * np.exp(-t / 0.08) / len(chord), 5, 3), lo=400), a=0.0005)
-
-
-@cache
-def lead_note(m, dur, bend=0.0, detune=0.3):
-    """Distorted supersaw note; bend drags the pitch (semitones) down over the note like a tape stop."""
-    n = int(dur * SR)
-    u = np.arange(n) / n
-    x = drive(supersaw(hz(m + bend * u ** 2), n, detune), 2.0)
-    return edges(spectral(x, lo=150, hi=7000) * (1 - 0.3 * u), a=0.002, r=0.04)
 
 
 VOWELS = {"ah": ((750, 1.0, 90), (1150, 0.6, 110), (2600, 0.25, 160)),
@@ -550,196 +508,48 @@ def rolls(bars, at=3.0):
                                         (bar * 4 + at + 0.75, 0.25, 0.03125))]
 
 
-def lobby():
-    """Room 1, the corporation's lobby: cold corporate menace. F minor, 127 bpm, 32 bars.
-    A (bars 0-15): Fm Db Bbm C. B (16-31): Fm Gb Db C, open hats, cold pad and the Z jingle on a supersaw."""
-    tr = Track(127, 32)
-    q = tr.beat / 4
-    A = [(41, (65, 68, 72, 77)), (37, (65, 68, 73, 77)), (46, (65, 70, 73, 77)), (36, (64, 67, 72, 76))]
-    B = [(41, (65, 68, 72, 77)), (42, (66, 70, 73, 78)), (37, (65, 68, 73, 77)), (36, (64, 67, 72, 76))]
-    steps = (0, 2, 1, 3, 2, 0, 3, 1, 0, 2, 1, 3, 2, 3, 1, 2)
-    jingle = ((72, 0.5), (68, 0.5), (78, 1.5))  # the corporate "Z" (once G E C, bright) turned to 5, b3, b9
-    for bar in range(32):
-        b0, late = bar * 4, bar >= 16
-        root, chord = (B if late else A)[bar // 2 % 4]
-        for k in range(3 if bar in (15, 31) else 4):
-            tr.add("kick", b0 + k, kick(44.0, 210.0, 0.22, 3.0))
-        for k in (1, 3):
-            tr.add("clap", b0 + k, clap(), pan=0.0)
-            tr.add("clap", b0 + k, snare(205.0), pan=0.0, gain=0.5)
-        for s in range(16):
-            tr.add("hat", b0 + s / 4, hat(seed=4 + s % 3), pan=0.3, gain=(0.5, 0.25, 0.9, 0.3)[s % 4])
-            if s % 4:
-                tr.add("bass", b0 + s / 4, bass_note(root + 12 * (s % 4 == 3), 0.9 * q, 0.5), gain=1.0 if s % 4 == 1 else 0.7)
-            tr.add("arp", b0 + s / 4, pluck(chord[steps[s]] + 12 * (late and s % 8 >= 4), 0.95 * q, "pulse", 0.09),
-                   gain=1.0 if s % 4 == 0 else 0.8)
-            if bar >= 8 and s % 8 in (3, 6):
-                tr.add("tick", b0 + s / 4, blip(103, 0.02, "pulse", 4), pan=-0.6 if s % 8 == 3 else 0.6)
-        tr.add("sub", b0, sub_note(root - 12, 4 * tr.beat))
-        if late:
-            for k in range(4):
-                tr.add("hat", b0 + k + 0.5, hat(0.1, 7), pan=-0.25, gain=0.6)
-            if bar % 2 == 0:
-                tr.add("pad", b0, pad(chord, 8 * tr.beat, seed=bar))
-        if bar >= 8:
-            for b in (0.75, 2.5, 3.25) if late else (0.75, 2.5):
-                tr.add("stab", b0 + b, digital_stab(tuple(m + 12 for m in chord[1:]), 0.4 * tr.beat), pan=0.0)
-        if bar in (0, 8) or (late and bar % 4 == 0):
-            for i, (m, l) in enumerate(jingle):
-                tr.add("jingle", b0 + 2 + i * 0.5, crush(fm_bell(m + 12, l * tr.beat + 0.3), 6, 2), pan=0.25)
-                if late:
-                    tr.add("lead", b0 + 2 + i * 0.5, lead_note(m - 12, l * tr.beat, -12.0 if bar == 28 and i == 2 else 0.0))
-    tr.add("fx", 56, riser(8 * tr.beat))
-    tr.add("fx", 120, riser(8 * tr.beat))
-    for b in (0, 64):
-        tr.add("fx", b, impact(), pan=0.0)
-
-    open_ = tr.curve([(0, 1.0), (32, 1.4), (64, 2.0), (112, 2.4), (128, 1.0)])  # filters open towards B
-    duck, soft = tr.duck("kick", 0.8, 0.12), tr.duck("kick", 0.45, 0.12)
-    bass = drive(svf(tr.buses["bass"], 110 * open_ * 2 ** (4 * tr.env("bass", 0.07)), q=2.5) * 3, 1.0)
-    bass = spectral(bass, hi=4500) * duck
-    arp = svf(tr.buses["arp"], 450 * open_ ** 1.5 * 2 ** (2.5 * tr.env("arp", 0.06)), q=3.0)
-    arp = reverb(echo(arp, tr.at(0.75), 0.4, 0.35, hi=3000), 1.8, 0.25) * soft
-    mix = mixdown({
-        "kick": tr.buses["kick"] * 0.32, "bass": bass * 0.3, "sub": tr.buses["sub"] * duck * 0.19,
-        "clap": reverb(tr.buses["clap"], 1.2, 0.3) * 1.15, "hat": tr.buses["hat"] * 1.5, "arp": arp * 0.18,
-        "tick": tr.buses["tick"] * 0.9, "stab": reverb(echo(tr.buses["stab"], tr.at(0.75), 0.45, 0.4), 2.0, 0.3) * 1.0 * soft,
-        "pad": reverb(tr.buses["pad"], 2.5, 0.4) * 0.62 * duck,
-        "jingle": reverb(echo(tr.buses["jingle"], tr.at(0.5), 0.4, 0.3), 2.5, 0.4) * 0.56,
-        "lead": reverb(echo(tr.buses["lead"], tr.at(0.75), 0.35, 0.3), 2.5, 0.35) * 0.57,
-        "fx": reverb(tr.buses["fx"], 2.5, 0.4) * 0.36})
-    tr.edit(mix, [(7 * 4 + 3.5, 0.5, 0.125), (23 * 4 + 3.5, 0.5, 0.125)] + rolls((15, 31)))
-    write("lobby", master(mix))
+@cache
+def swell(chord, dur, fade, hi, seed=0):
+    """A chord that breathes in and out: a low-passed supersaw with raised-cosine fades `fade` seconds long."""
+    n, k = int(dur * SR), int(fade * SR)
+    x = sum(supersaw(hz(m), n, 0.14, seed=seed + i) for i, m in enumerate(chord)) / len(chord)
+    env = np.ones(n)
+    env[:k] = 0.5 - 0.5 * np.cos(np.pi * np.arange(k) / k)
+    env[-k:] = env[:k][::-1]
+    return spectral(x, hi=hi, slope=6) * env
 
 
-def habit():
-    """Room 2, the addiction lab: EBM / industrial groove. G minor, 125 bpm, 32 bars.
-    A: squelchy 16th bass riff (G G G G Eb Eb F F), rumble kick, metal percussion, notification glitches.
-    B: new riff (G G Bb Bb Eb Eb D D), gritty supersaw stabs and a square-wave hook."""
-    tr = Track(125, 32)
-    q = tr.beat / 4
-    roots = ((31, 31, 31, 31, 27, 27, 29, 29), (31, 31, 34, 34, 27, 27, 26, 26))
-    riffs = ((0, 0, 12, 0, 0, 12, 0, 0, 12, 0, 0, 12, 0, 10, 12, 7), (0, 12, 0, 0, 12, 0, 0, 12, 0, 0, 12, 0, 15, 12, 10, 12))
-    triad = {31: (0, 3, 7), 34: (0, 4, 7), 27: (0, 4, 7), 29: (0, 4, 7), 26: (0, 4, 7)}
-    hook = ((0, 0.5, 7), (0.75, 0.25, 10), (1, 0.5, 14), (1.75, 0.25, 12), (2.5, 0.5, 10), (3, 0.75, 8))
-    pings = (79, 82, 84, 86, 89, 91, 94)
-    r = rng(21)
-    for bar in range(32):
-        b0, late = bar * 4, bar >= 16
-        root, riff = roots[late][bar % 8], riffs[late]
-        for k in range(4):
-            tr.add("kick", b0 + k, kick(50.0, 160.0, 0.25, 5.0))
-        if bar >= 8:
-            for k in (1, 3):
-                tr.add("snare", b0 + k, clap(), pan=0.0)
-                tr.add("snare", b0 + k, metal(540.0, 0.05, 6), pan=0.1, gain=0.5)
-                tr.add("snare", b0 + k, snare(220.0), pan=0.0, gain=0.5)
-        for s in range(16):
-            if bar >= 4 or s % 2 == 0:
-                tr.add("hat", b0 + s / 4, crush(hat(seed=8 + s % 2), 6, 2), pan=-0.3, gain=(0.7, 0.3, 0.5, 0.3)[s % 4])
-            tr.add("bass", b0 + s / 4, bass_note(root + riff[s], 0.8 * q, 0.6), gain=1.0 if riff[s] else 0.65)
-            if bar >= 4 and s in ((2, 7, 10, 13, 15) if late else (2, 7, 10, 13)):
-                tr.add("metal", b0 + s / 4, metal(330.0 if s % 2 else 495.0, 0.06, s), pan=-0.6 if s % 2 else 0.6, gain=0.5)
-        if bar % 2:
-            tr.add("metal", b0 + 3.75, metal(880.0, 0.22, 3), pan=0.4, gain=0.6)
-        tr.add("sub", b0, sub_note(root, 4 * tr.beat))
-        if late:
-            for k in range(4):
-                tr.add("hat", b0 + k + 0.5, hat(0.08, 9), pan=0.3, gain=0.5)
-            for b in (0.5, 2.5):
-                tr.add("stab", b0 + b, stab(tuple(root + 36 + i for i in triad[root]), 0.35 * tr.beat, 0.1), gain=0.8)
-            for b, l, iv in hook:
-                tr.add("hook", b0 + b, pluck(root + 36 + iv + 12 * (bar >= 24 and bar % 2 == 1), l * tr.beat, "pulse", 0.25, 0.5))
-        for _ in range(r.integers(1, 4 if late else 3)):  # notification glitches, some stuttering
-            pos, m, pan = r.integers(0, 16) / 4, int(pings[r.integers(len(pings))]), r.uniform(-0.7, 0.7)
-            for j in range(6 if r.random() < 0.3 else 1):
-                tr.add("blip", b0 + pos + j * 0.125, blip(m, 0.05), pan=pan, gain=0.85 ** j)
-            tr.add("blip", b0 + pos + 0.18, blip(m + 5, 0.07), pan=pan)
-    tr.add("fx", 56, riser(8 * tr.beat))
-    tr.add("fx", 120, riser(8 * tr.beat))
-    tr.add("fx", 64, impact(), pan=0.0)
-
-    duck = tr.duck("kick", 0.45, 0.1)
-    swell = 0.5 - 0.5 * lfo(tr.n, 4 * SR / tr.n, np.pi / 2)  # filter opens and closes every 8 bars
-    bass = drive(svf(tr.buses["bass"], (170 + 280 * swell) * 2 ** (4.5 * tr.env("bass", 0.05)), q=4.0) * 2.5, 1.0)
-    bass = (0.6 * bass + 0.4 * crush(bass, 7, 2)) * duck
-    k = tr.buses["kick"]
-    rumble = drive(spectral(reverb(k, 2.0, 1.0)[0] - k, hi=150) * 3, 1.0) * tr.duck("kick", 0.95, 0.22)
-    hook = reverb(echo(chorus(spectral(tr.buses["hook"], hi=5000)), tr.at(0.75), 0.4, 0.35, hi=3500), 2.0, 0.3)
-    mix = mixdown({
-        "kick": k * 0.29, "rumble": rumble * 0.18, "bass": bass * 0.28, "sub": tr.buses["sub"] * duck * 0.14,
-        "snare": reverb(tr.buses["snare"], 0.9, 0.3, hi=6000) * 1.5, "hat": tr.buses["hat"] * 1.85,
-        "metal": reverb(tr.buses["metal"], 1.2, 0.3) * 0.67, "blip": reverb(echo(tr.buses["blip"], tr.at(0.5), 0.35, 0.3), 1.5, 0.3) * 0.6,
-        "stab": reverb(drive(tr.buses["stab"] * 2, 1.0), 1.5, 0.3) * 1.9 * duck, "hook": hook * 0.17,
-        "fx": reverb(tr.buses["fx"], 2.5, 0.4) * 0.5})
-    tr.edit(mix, [(b * 4 + 3.5, 0.5, 0.125) for b in (3, 7, 11, 19, 23, 27)] + rolls((15, 31)))
-    write("habit", master(mix))
+# The three rooms share the notes of F minor, so the accents (F minor pentatonic) fit every one of them:
+# the lobby rests on F (cold), the habit floor on A flat (sweet, a little too sweet), the core on C (Phrygian, dark).
+CALM = {  # drone root, four chords of 16 s each, how bright the pad is
+    "lobby": (41, ((53, 56, 60, 67), (49, 56, 60, 65), (46, 53, 56, 61), (48, 55, 58, 63)), 1100),
+    "habit": (44, ((56, 60, 63, 67), (53, 56, 60, 63), (49, 56, 60, 65), (51, 58, 60, 65)), 1500),
+    "core": (36, ((48, 55, 60, 63), (49, 56, 60, 67), (46, 53, 58, 61), (48, 55, 61, 63)), 800),
+}
 
 
-def core():
-    """Room 3, the server core: heavy darksynth. D minor, 112 bpm, 32 bars.
-    A (0-15): Dm Bb Gm A, 3-3-2 reese bass, gated snare, dark choir; arp from bar 8.
-    B (16-31): Bb C Dm A, four-on-the-floor, galloping reese, screaming supersaw lead."""
-    tr = Track(112, 32)
-    q = tr.beat / 4
-    A = [(38, (50, 57, 62, 65)), (34, (50, 58, 62, 65)), (31, (50, 58, 62, 67)), (33, (49, 57, 61, 64))]
-    B = [(34, (50, 58, 62, 65)), (36, (48, 55, 60, 64)), (38, (50, 57, 62, 65)), (33, (49, 57, 61, 64))]
-    melody = ((0, 3, 74), (3, 1, 72), (4, 2, 70), (6, 1, 72), (7, 1, 74), (8, 3, 76), (11, 1, 77), (12, 2, 79),
-              (14, 2, 76), (16, 2, 77), (18, 1, 76), (19, 1, 74), (20, 4, 81), (24, 2, 73), (26, 2, 76), (28, 3.5, 74))
-    arp_steps = (0, 1, 2, 3, 2, 1)
-    for bar in range(32):
-        b0, late = bar * 4, bar >= 16
-        root, chord = (B if late else A)[bar // 2 % 4]
-        for k in ((0, 1, 2, 3, 3.5) if bar % 2 else (0, 1, 2, 3)) if late else (0, 2, 2.75):
-            tr.add("kick", b0 + k, kick(46.0, 230.0, 0.28, 3.5))
-        for k in (1, 3):
-            tr.add("snare", b0 + k, snare(185.0, 0.32), pan=0.0)
-        for s in range(16 if bar >= 8 else 8):
-            tr.add("hat", b0 + s * (0.25 if bar >= 8 else 0.5), hat(seed=13 + s % 2), pan=0.35, gain=(0.8, 0.35)[s % 2])
-        if bar % 2 == 0:
-            tr.add("choir", b0, choir(chord, 8 * tr.beat, "oh" if late else "ah"))
-        tr.add("sub", b0, sub_note(root - 12, 4 * tr.beat))
-        if late:
-            for s in range(16):
-                if s % 4:
-                    tr.add("reese", b0 + s / 4, reese_note(root, 0.9 * q), gain=1.0 if s % 4 == 1 else 0.75)
-            for k in range(4):
-                tr.add("ride", b0 + k, metal(1250.0, 0.18, 4), pan=-0.4)
-        else:
-            for b, l in ((0, 1.5), (1.5, 1.0), (2.5, 1.5)):
-                tr.add("reese", b0 + b, reese_note(root, l * tr.beat - 0.01))
-        if bar >= 8:
-            for s in range(16):
-                tr.add("arp", b0 + s / 4, pluck(chord[arp_steps[(bar * 16 + s) % 6]] + 12, 0.9 * q, "pulse", 0.1, 0.35))
-    for i, f in enumerate((170.0, 140.0, 115.0, 95.0)):
-        tr.add("snare", 15 * 4 + 3 + i * 0.25, tom(f), pan=0.5 - 0.33 * i, gain=0.5)
-    for b in (0, 64, 96):
-        tr.add("ride", b, hat(0.6, 14), pan=0.3, gain=2.0)
-    tr.add("fx", 56, riser(8 * tr.beat))
-    tr.add("fx", 120, riser(8 * tr.beat))
-    for b in (0, 64):
-        tr.add("fx", b, impact(55.0), pan=0.0)
-    pitch, gate, d = tr.line([(64 + b, l, m) for b, l, m in melody]
-                             + [(96 + b, l, m + 12 * (16 <= b < 24)) for b, l, m in melody], glide=0.05)
-
-    duck = tr.duck("kick", 0.6, 0.18)
-    wob = 0.5 + 0.5 * lfo(tr.n, 16 * SR / tr.n)  # one filter wobble per 2 bars
-    fc = tr.curve([(0, 320), (64, 600), (64.01, 800), (128, 1000)]) * (1 + 1.2 * wob) * 2 ** (1.5 * tr.env("reese", 0.08))
-    reese = spectral(drive(svf(tr.buses["reese"], fc, q=1.6) * 4, 1.0), lo=30, hi=4000) * duck
-    arp = svf(tr.buses["arp"], tr.curve([(0, 400), (32, 400), (64, 2200), (128, 3000)]) * 2 ** (2 * tr.env("arp", 0.05)), q=2.5)
-    vib = 0.3 * np.clip((d / SR - 0.3) / 0.4, 0, 1) * lfo(tr.n, 5.5)
-    f = hz(pitch + vib)
-    lead = drive(supersaw(f, tr.n, 0.35, seed=5) + 0.4 * st(osc(f / 2, tr.n, "pulse", pw=0.35)), 2.5)
-    lead = reverb(echo(spectral(lead, lo=180, hi=8000) * gate, tr.at(0.75), 0.35, 0.3, hi=4000), 2.8, 0.35)
-    mix = mixdown({
-        "kick": tr.buses["kick"] * 0.35, "reese": reese * 0.35, "sub": tr.buses["sub"] * duck * 0.19,
-        "snare": reverb(tr.buses["snare"], 1.0, 0.15) * 0.73, "hat": tr.buses["hat"] * 1.95,
-        "ride": reverb(tr.buses["ride"], 1.5, 0.3) * 0.43,
-        "choir": reverb(chorus(tr.buses["choir"]), 3.5, 0.5) * 0.47 * tr.duck("kick", 0.35, 0.2),
-        "arp": reverb(echo(arp, tr.at(0.75), 0.4, 0.35, hi=3000), 2.0, 0.3) * 0.2 * duck, "lead": lead * 0.25,
-        "fx": reverb(tr.buses["fx"], 2.5, 0.4) * 0.45})
-    tr.edit(mix, [(15 * 4 + 2.5, 0.5, 0.0625), (23 * 4 + 3.5, 0.5, 0.125)] + rolls((31,)))
-    write("core", master(mix))
+def calm(name):
+    """A room's bed, 64 s: a drone, four chords that breathe into each other and a few far bells. No drums and no
+    melody: the rhythm of a game is what the players do, and the game plays that as accents (see accents())."""
+    root, chords, hi = CALM[name]
+    tr, r = Track(60, 16), rng(sum(name.encode()))  # a beat is a second
+    for i, chord in enumerate(chords):
+        tr.add("pad", i * 16 - 3, swell(chord, 22, 6, hi, seed=10 * i))  # 6 s of each chord lie over the next
+        for k in range(3):
+            m = chord[r.integers(1, 4)] + 12 * (1 + (r.random() < 0.3))
+            tr.add("bell", i * 16 + 2 + k * 5 + r.uniform(-1.5, 1.5), fm_bell(m, 3.0, 1.2, 2.0),
+                   pan=r.uniform(-0.6, 0.6), gain=r.uniform(0.5, 1.0))
+    n = tr.n
+    whole = lambda m: round(float(hz(m)) * n / SR) * SR / n  # whole cycles per loop: the drone meets itself at the seam
+    t = tv(n)
+    drone = (np.sin(2 * np.pi * whole(root) * t) + 0.5 * np.sin(2 * np.pi * whole(root + 7) * t) * (0.5 + 0.5 * lfo(n, 1 / 32))
+             + 0.35 * np.sin(2 * np.pi * whole(root + 12) * t) * (0.5 + 0.5 * lfo(n, 1 / 21, 1.0))) * (0.75 + 0.25 * lfo(n, 1 / 16))
+    mix = mixdown({"pad": reverb(tr.buses["pad"], 5.0, 0.5, hi=3000),
+                   "bell": reverb(echo(tr.buses["bell"], tr.at(1.5), 0.5, 0.4, hi=2500), 6.0, 0.7, hi=3500) * 0.4,
+                   "drone": drone * 0.12})
+    mix = mix - mix.mean(axis=1, keepdims=True)
+    # A bed, not a track: no limiter, well under the finale; the bells' peaks stay 3 dB under full scale for the encoder.
+    write(name, mix * min(10 ** (-17 / 20) / rms(mix), 0.7 / np.abs(mix).max()))
 
 
 def final():
@@ -812,25 +622,34 @@ def final():
         "gate": reverb(spectral(tr.buses["gate"], lo=150, hi=6000), 1.8, 0.3) * 1.35 * duck, "sirens": sirens * 0.13,
         "beep": reverb(tr.buses["beep"], 1.0, 0.2) * 1.2, "fx": reverb(tr.buses["fx"], 2.5, 0.4) * 0.4})
     tr.edit(mix, [(7 * 4 + 3.5, 0.5, 0.0625), (23 * 4 + 3.5, 0.5, 0.0625), (15 * 4 + 3.5, 0.5, 0.03125), (31 * 4 + 3.5, 0.5, 0.03125)])
-    write("final", master(mix))
+    write("final", master(mix, rms_db=-13.0))  # the game plays music 3 dB hotter since the beds went calm
 
 
-def effects():
-    # solve: a crushed zap and rising blips into a bright supersaw stab with a thump (1.8 s)
-    tr = Track(120, 2)  # 4 s of room so the reverb tail doesn't wrap; cut to 1.8 s below
-    s = 1 / tr.beat  # beats per second
-    n = int(0.09 * SR)
-    zap = osc(300 * (4000 / 300) ** (np.arange(n) / n), n, "pulse", pw=0.3) * np.linspace(1, 0.4, n)
-    tr.add("x", 0, edges(crush(zap * 0.5, 5, 2), 0.0005, 0.005), pan=0.0, gain=0.6)
-    for i, m in enumerate((81, 88, 93, 100)):
-        tr.add("x", i * 0.045 * s, blip(m, 0.07, "pulse", 6), pan=-0.6 + 0.4 * i, gain=0.9)
-    tr.add("x", 0.18 * s, drive(stab((57, 64, 69, 73, 76, 81), 0.7, 0.22, seed=3), 2.0), gain=0.8)
-    tr.add("x", 0.18 * s, kick(60.0, 300.0, 0.15, 2.0), pan=0.0, gain=0.7)
-    for i, m in enumerate((93, 97, 100, 105, 100, 105)):
-        tr.add("x", (0.26 + i * 0.05) * s, blip(m, 0.05, "pulse", 5), pan=0.6 if i % 2 else -0.6, gain=0.5 * 0.85 ** i)
-    solve = reverb(tr.buses["x"], 1.0, 0.25)[:, : int(1.8 * SR)]
-    solve[:, -int(0.3 * SR):] *= np.linspace(1, 0, int(0.3 * SR))
-    write("solve", solve * (0.7 / np.abs(solve).max()))
+def accents():
+    """What happens in the room, as notes over the calm beds (all on F minor pentatonic, so they fit any room):
+    solve, work (a player starts on a puzzle; the game varies its pitch), wrong, door, help; and `his`, lower and
+    darker than anything the players make, for a move of the game master."""
+    def out(name, sec, notes, wet=0.35):
+        tr = Track(60, 2)  # 8 s of room, so the reverb tail never wraps; cut to `sec` below
+        for at, sig, pan, gain in notes:
+            tr.add("x", at, sig, pan=pan, gain=gain)
+        x = reverb(tr.buses["x"], 2.2, wet, hi=4000)[:, : int(sec * SR)]
+        x[:, -int(0.3 * SR):] *= np.linspace(1, 0, int(0.3 * SR))
+        write(name, x * (0.7 / np.abs(x).max()))
+
+    bell = lambda m, dur=1.6: fm_bell(m, dur, 1.5, 2.0)
+    dull = lambda m, dur: spectral(fm_bell(m, dur, 2.5, 1.41), hi=1800)  # an inharmonic clang
+    out("solve", 2.6, [(0.11 * i, bell(m), -0.5 + 0.25 * i, 0.7) for i, m in enumerate((72, 75, 77, 80))]
+        + [(0.46, bell(84, 2.0), 0.0, 1.0), (0.1, swell((53, 60, 68), 2.2, 0.7, 1400), None, 0.5)])
+    out("work", 0.9, [(0.0, fm_bell(65, 0.7, 0.8, 1.0), 0.0, 1.0)], wet=0.25)
+    out("wrong", 1.0, [(0.0, dull(61, 0.35), -0.2, 1.0), (0.16, dull(60, 0.6), 0.2, 0.9)], wet=0.2)
+    out("door", 2.4, [(0.0, riser(1.2, 300.0, 3000.0), None, 0.12), (0.0, swell((53, 60), 2.2, 0.8, 1200), None, 1.0),
+                      (0.9, bell(65), -0.3, 0.5), (1.1, bell(72), 0.3, 0.6)])
+    out("help", 1.6, [(0.0, bell(72, 1.0), -0.3, 0.9), (0.22, bell(77, 1.2), 0.3, 1.0), (0.66, bell(77, 0.8), 0.0, 0.3)])
+    n = int(1.6 * SR)
+    boom = edges(np.sin(2 * np.pi * np.cumsum(38 + 60 * np.exp(-tv(n) / 0.05)) / SR) * np.exp(-tv(n) / 0.5), r=0.05)
+    out("his", 3.2, [(0.0, dull(53, 0.8)[::-1].copy(), 0.0, 0.5), (0.8, boom, 0.0, 0.5),
+                     (0.8, fm_bell(53, 2.4, 3.0, 1.41), -0.2, 0.9), (0.86, fm_bell(54, 2.0, 2.0, 1.41), 0.3, 0.3)], wet=0.5)
 
     # alarm: two whooping sweeps plus a pulsing tritone horn, 4.8 s; every rate is a whole number of cycles per loop
     n = int(4.8 * SR)
@@ -848,7 +667,7 @@ def effects():
 
 
 if __name__ == "__main__":
-    for part in (lobby, habit, core, final, effects):
+    for part in (*(functools.partial(calm, room) for room in CALM), final, accents):
         t0 = time.time()
         part()
         print(f"       ({time.time() - t0:.1f} s to render)")

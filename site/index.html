@@ -32,10 +32,30 @@
   #veil.black { background: rgba(3,4,5,1); }
   #veil.dark { background: radial-gradient(ellipse at 50% 45%, rgba(3,4,5,.76), rgba(3,4,5,.97) 70%); }
 
-  /* The story's last twelve seconds: a countdown over the room, a flash, then the dark. */
-  #flash { position: fixed; inset: 0; pointer-events: none; background: #fff; opacity: 0; }
-  body.flash #flash { animation: flash 3s ease-out forwards; }
-  @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+  /* The story's last seconds: a countdown over the room, the picture starts to tremble, then the blast: a fireball
+     that burns from white through orange, a shock ring, the whole picture thrown about, embers, and the dark. */
+  #flash { position: fixed; inset: 0; pointer-events: none; opacity: 0;
+           background: radial-gradient(circle at 50% 46%, #fff 0, #fff 16%, #ffe3a0 34%, #ff8a2a 58%, #c2260a 82%, #3a0500 100%); }
+  body.flash #flash { animation: flash 3.4s ease-out forwards; }
+  @keyframes flash { 0%, 6% { opacity: 1; filter: brightness(3); } 22% { opacity: .92; filter: brightness(1.2); } 55% { opacity: .38; } 100% { opacity: 0; } }
+  #shock { position: fixed; left: 50%; top: 46%; width: 24vmax; height: 24vmax; margin: -12vmax; border-radius: 50%; pointer-events: none;
+           border: 3px solid rgba(255, 240, 210, .95); opacity: 0; transform: scale(.04);
+           box-shadow: 0 0 70px 24px rgba(255, 150, 50, .6), inset 0 0 70px 14px rgba(255, 210, 140, .4); }
+  body.flash #shock { animation: shock 1.2s cubic-bezier(.08, .6, .2, 1) forwards; }
+  @keyframes shock { 0% { opacity: 1; transform: scale(.04); } 65% { opacity: .65; } 100% { opacity: 0; transform: scale(9); } }
+  #embers { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  body.tremble #stage, body.tremble #count { animation: tremble .11s linear infinite; }
+  @keyframes tremble { 0% { transform: translate(1px, -1px); } 25% { transform: translate(-2px, 1px); } 50% { transform: translate(2px, 2px); } 75% { transform: translate(-1px, -2px); } 100% { transform: translate(1px, 1px); } }
+  body.quake #stage { animation: quake 1.3s cubic-bezier(.3, .5, .3, 1); }
+  @keyframes quake { 0% { transform: translate(0, 0) scale(1.12); } 8% { transform: translate(-26px, 18px) rotate(-1.4deg) scale(1.12); }
+    16% { transform: translate(24px, -20px) rotate(1.2deg) scale(1.1); } 26% { transform: translate(-18px, -12px) rotate(-.9deg) scale(1.08); }
+    38% { transform: translate(14px, 12px) rotate(.7deg) scale(1.06); } 52% { transform: translate(-9px, 6px) rotate(-.4deg) scale(1.04); }
+    68% { transform: translate(6px, -4px) rotate(.2deg) scale(1.02); } 84% { transform: translate(-3px, 2px) scale(1.01); } 100% { transform: none; } }
+  body.ash #stage video { filter: saturate(.3) brightness(.72) contrast(1.15); transition: filter 2s ease 1s, opacity 1.2s ease; }
+  body.alarm.last #count { color: var(--red); animation: pulse .5s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.08); } }
+  .blast.over .after { animation: slam .7s cubic-bezier(.2, 1.5, .3, 1) 1.1s both; }
+  @keyframes slam { 0% { opacity: 0; transform: scale(1.5); filter: blur(10px); } 100% { opacity: 1; transform: none; filter: none; } }
   #count { position: fixed; left: 0; right: 0; top: 15vh; text-align: center; pointer-events: none; opacity: 0;
            font: 700 clamp(34px, 6vw, 84px)/1 "Chakra Petch", sans-serif; color: var(--accent); letter-spacing: .02em;
            font-variant-numeric: tabular-nums; transition: opacity .4s; }
@@ -181,6 +201,8 @@
 <div id="veil" class="black"></div>
 <div id="count" aria-hidden="true"></div>
 <div id="flash"></div>
+<div id="shock"></div>
+<canvas id="embers" aria-hidden="true"></canvas>
 <audio id="music" loop preload="none"></audio>
 
 <div id="gate" role="dialog" aria-label="Enter">
@@ -514,29 +536,122 @@
     mix();
     if (i === sections.length - 1) note("you stayed until the end. he noticed.");
   }
-  // The story ends the way the players chose: a countdown that follows the clip, a flash, and the dark.
-  let fuse = null;
+  // The story ends the way the players chose: a countdown that follows the clip and tightens (a beep a second,
+  // the picture trembling, a rising tone), then the blast and the dark.
+  let fuse = null, ticked = -1;
   function arm(s) {
     const v = videos[front], at = +s.dataset.blast, started = performance.now();
     s.classList.remove("over");
     document.body.classList.add("alarm");
+    ticked = -1;
     fuse = setInterval(() => {
       const t = Math.max(v.currentTime || 0, saving || v.paused ? (performance.now() - started) / 1000 : 0);
       const left = Math.ceil(at - t);
       $("#count").textContent = "DETONATION  00:" + String(Math.max(0, left)).padStart(2, "0");
+      if (left !== ticked && left > 0) {
+        ticked = left;
+        beep(left <= 3 ? 1760 : 1320);
+        if (left === 3) { rise(at - t); document.body.classList.add("last"); if (!calm) document.body.classList.add("tremble"); }
+      }
       if (left > 0) return;
       clearInterval(fuse);
-      document.body.classList.remove("alarm");
-      if (!calm) document.body.classList.add("flash");
+      document.body.classList.remove("alarm", "last", "tremble");
       s.classList.add("over");
       veil.className = "dark";
       bpm = 0; mix();
+      blast();
     }, 100);
+  }
+  function blast() {
+    boom();
+    if (navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) navigator.vibrate([220, 60, 120]);
+    if (calm) return;  // those who asked for less motion get the sound and the dark, not the fire
+    document.body.classList.add("flash", "quake", "ash");
+    setTimeout(() => document.body.classList.remove("quake"), 1400);
+    embers();
   }
   function disarm() {
     clearInterval(fuse);
-    document.body.classList.remove("alarm", "flash");
+    document.body.classList.remove("alarm", "flash", "last", "tremble", "quake", "ash");
     sections.forEach(x => x.classList.remove("over"));
+  }
+  // Sound of the last seconds. Everything goes through the page's one limiter, so the blast is loud, not harmful.
+  const audible = () => soundOn && ac && ac.state === "running";
+  function beep(f) {
+    if (!audible()) return;
+    const t = ac.currentTime + 0.01, o = ac.createOscillator(), a = ac.createGain();
+    o.type = "square"; o.frequency.value = f;
+    a.gain.setValueAtTime(0.0001, t); a.gain.exponentialRampToValueAtTime(0.12, t + 0.005); a.gain.setTargetAtTime(0.0001, t + 0.05, 0.02);
+    o.connect(a).connect(out); o.start(t); o.stop(t + 0.3);
+  }
+  function hiss(seconds) {
+    const b = ac.createBuffer(1, Math.ceil(ac.sampleRate * seconds), ac.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const n = ac.createBufferSource(); n.buffer = b; return n;
+  }
+  function rise(seconds) {  // air being pulled in: a tone and a band of noise climbing into the blast, then cut dead
+    if (!audible()) return;
+    const t = ac.currentTime + 0.01, end = t + seconds, a = ac.createGain();
+    a.gain.setValueAtTime(0.0001, t); a.gain.exponentialRampToValueAtTime(0.5, end); a.gain.setValueAtTime(0.0001, end + 0.01);
+    const o = ac.createOscillator(); o.type = "sawtooth";
+    o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(880, end);
+    const band = ac.createBiquadFilter(); band.type = "bandpass"; band.Q.value = 3;
+    band.frequency.setValueAtTime(300, t); band.frequency.exponentialRampToValueAtTime(6000, end);
+    const n = hiss(seconds + 0.1), soft = ac.createGain(); soft.gain.value = 0.25;
+    o.connect(soft).connect(a); n.connect(band).connect(a); a.connect(out);
+    o.start(t); o.stop(end + 0.05); n.start(t); n.stop(end + 0.05);
+  }
+  function boom() {
+    if (!audible()) return;
+    const t = ac.currentTime + 0.02, bus = ac.createGain();
+    bus.connect(out);
+    glide(tune.gain, 0, 0.15); glide(heart.gain, 0, 0.15);  // nothing else is heard through it
+    const drop = (type, from, to, gain, hold) => {  // the body of it: a tone falling through the floor
+      const o = ac.createOscillator(), a = ac.createGain();
+      o.type = type; o.frequency.setValueAtTime(from, t); o.frequency.exponentialRampToValueAtTime(to, t + 1.5);
+      a.gain.setValueAtTime(0.0001, t); a.gain.exponentialRampToValueAtTime(gain, t + 0.012); a.gain.setTargetAtTime(0.0001, t + 0.2, hold);
+      o.connect(a).connect(bus); o.start(t); o.stop(t + 5);
+    };
+    drop("sine", 96, 26, 1.0, 0.6);
+    drop("triangle", 190, 52, 0.5, 0.35);  // an octave up, so laptop speakers carry it too
+    const n = hiss(5);
+    const crack = ac.createBiquadFilter(), ca = ac.createGain();  // the crack
+    crack.type = "highpass"; crack.frequency.value = 1500;
+    ca.gain.setValueAtTime(0.9, t); ca.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    const rumble = ac.createBiquadFilter(), ra = ac.createGain();  // and the building coming down after it
+    rumble.type = "lowpass"; rumble.frequency.setValueAtTime(1400, t); rumble.frequency.exponentialRampToValueAtTime(110, t + 3.5);
+    ra.gain.setValueAtTime(0.0001, t); ra.gain.exponentialRampToValueAtTime(0.9, t + 0.03); ra.gain.setTargetAtTime(0.0001, t + 0.35, 1.0);
+    n.connect(crack).connect(ca).connect(bus); n.connect(rumble).connect(ra).connect(bus); n.start(t); n.stop(t + 5);
+    const ring = ac.createOscillator(), rg = ac.createGain();  // then the ears ring in the silence
+    ring.frequency.value = 3600;
+    rg.gain.setValueAtTime(0.0001, t + 0.2); rg.gain.exponentialRampToValueAtTime(0.045, t + 0.7); rg.gain.setTargetAtTime(0.0001, t + 1.2, 1.4);
+    ring.connect(rg).connect(bus); ring.start(t); ring.stop(t + 8);
+    setTimeout(() => mix(), 4500);  // the mix comes back by itself, as the scene has it
+  }
+  // Embers thrown out of the blast: a few seconds of sparks on a canvas, which then stops drawing.
+  function embers() {
+    const c = $("#embers"), g = c.getContext("2d"), w = c.width = innerWidth, h = c.height = innerHeight;
+    const sparks = Array.from({ length: 140 }, () => {
+      const a = Math.random() * Math.PI * 2, v = 3 + Math.random() * 16;
+      return { x: w / 2, y: h * 0.46, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 3, life: 1.2 + Math.random() * 2.6, size: 1 + Math.random() * 3 };
+    });
+    let last = performance.now(), age = 0;
+    (function draw(now) {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now; age += dt;
+      g.clearRect(0, 0, w, h);
+      g.globalCompositeOperation = "lighter";
+      let alive = 0;
+      for (const p of sparks) {
+        if (age > p.life) continue;
+        alive++;
+        p.vx *= 0.985; p.vy = p.vy * 0.985 + 4 * dt;  // they slow, and fall a little
+        p.x += p.vx * 60 * dt; p.y += p.vy * 60 * dt;
+        const k = 1 - age / p.life;
+        g.fillStyle = `rgba(255, ${Math.round(90 + 150 * k)}, ${Math.round(30 * k)}, ${k})`;
+        g.fillRect(p.x, p.y, p.size, p.size);
+      }
+      if (alive && document.body.classList.contains("flash")) requestAnimationFrame(draw); else g.clearRect(0, 0, w, h);
+    })(last);
   }
   const go = i => sections[Math.max(0, Math.min(sections.length - 1, i))].scrollIntoView({ behavior: calm ? "auto" : "smooth" });
   $("#next").addEventListener("click", () => go(current + 1));

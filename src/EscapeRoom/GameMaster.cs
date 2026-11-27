@@ -32,6 +32,8 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
           in the third person, naming players (who stalls, who is close, what the room will do about it). No "I",
           no greetings, no explanations, no brackets or labels, never a list of solutions or codes. One or two
           sentences, at most 25 words. The operator reads these notes live. Then call 0-3 tools.
+          A note is never a character's line and never a plan to speak ("ZETA should react"): the players hear
+          nothing you only write down. When a character should say something, call `say` or `hint` in this turn.
           Doing nothing is right when the team is flowing; don't act just to act.
         - At the start of a game ("reason": "started") the variants for this team are already drawn (see
           "alreadyDone"): open the game the way the brief describes.
@@ -123,6 +125,8 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
             // Two things never depend on a model's mood: a new team gets its own variants, and (in Finish) a help
             // button gets an answer.
             forced.Clear();
+            // The room's operator panel shows him waking up and why, before the decision arrives.
+            await Out(room, "gm", new { state = "thinking", reason });
             if (reason == "started" && def?.Variants is { Count: > 0 } variants)
             {
                 forced.Add(await Act(room, "reroll", S(new { variants = variants.Keys }), observation));
@@ -483,7 +487,7 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
     {
         done.InsertRange(0, forced);
         if (reason == "help" && !done.Any(d => d.StartsWith("hint ")) && await PreparedHint(room, observation) is { } hint) done.Add(hint);
-        await Report(room, thought, done, mode);
+        await Report(room, reason, thought, done, mode);
     }
 
     /// <summary>The venue's next prepared hint for a puzzle in play, spoken by the room's first character.</summary>
@@ -500,9 +504,9 @@ public class GameMaster(Engine engine, Voice voice, IConfiguration config, ILogg
         return result.StartsWith("hint ") ? result : null;
     }
 
-    async Task Report(string room, string thought, List<string> done, string mode)
+    async Task Report(string room, string reason, string thought, List<string> done, string mode)
     {
-        await Out(room, "gm", new { thought, actions = done, mode, model = mode == "model" ? Model : null });
+        await Out(room, "gm", new { reason, thought, actions = done, mode, model = mode == "model" ? Model : null });
         memory.Add($"{thought} → {(done.Count == 0 ? "nothing" : string.Join("; ", done))}");
         log.LogInformation("GM ({Mode}): {Thought} | {Actions}", mode, thought, string.Join(" | ", done));
     }

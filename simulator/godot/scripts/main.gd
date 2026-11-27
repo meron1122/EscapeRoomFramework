@@ -2,7 +2,8 @@ extends Node3D
 ## Builds the isometric simulator from layout.json and the Blender models, and plays a game of The Core with simulated people.
 
 const NAMES := ["Spark", "Rust", "Mouse", "Thunder", "Fox"]
-const COLORS := [Color("#fcee0a"), Color("#00f0ff"), Color("#ffffff"), Color("#ff5fd2"), Color("#9dff5c")]
+const COLORS := [Color("#fcee0a"), Color("#00f0ff"), Color("#ffffff"), Color("#b06bff"), Color("#9dff5c")]  # no pink: pink is Shadowman's
+const BUILDS := [1.02, 1.0, 0.9, 1.07, 0.97]  # the punk is tall, the goth small, the raver big
 const NEXT_ROOM := {"elevator": "habit", "descent": "core"}
 const ISO_PITCH := -35.264
 const CHAT := {
@@ -27,7 +28,7 @@ var room_lights := {}
 var atmosphere: Atmosphere
 var reached := {"lobby": true}
 var rng := RandomNumberGenerator.new()
-var speed := 5.0
+var speed := 10.0  # a whole night in about six minutes; people still walk at a human pace
 var paused := false
 var follow := true
 var cam: Camera3D
@@ -38,7 +39,9 @@ var music: Array[AudioStreamPlayer] = []
 var music_active := 0
 var music_on := true
 var track := ""
-var sfx: AudioStreamPlayer
+var accents := {}  # name -> player: the notes the game plays over the calm bed when something happens in the room
+var zeta_faces := {}  # room -> ZETA's hologram there, lit in the room the team is in
+const ZETA_AT := {"lobby": "reception_monitor", "habit": "zdrive", "core": "console"}  # the prop she floats over
 var lamps := {}  # puzzle id -> hint lamp the game master switches (engine output lamp_<id>)
 var markers := {}  # task id -> floor marks at its work spots, shown while the task is active
 var voice: AudioStreamPlayer  # the characters' spoken lines (engine mode, when the engine has a TTS voice)
@@ -69,6 +72,20 @@ var _clock := 0.0
 var link: MqttLink
 var engine_def := {}
 var gm_text := ""
+var _thinking_at := -1.0
+var _started_at := 0.0
+var _opening: Array = []
+var speech := {}  # the line being said in the room right now: speaker, text, until, to, his
+var zeta_quads := {}  # room -> the hologram's quad, which swells while she speaks
+var _zeta_talks_until := 0.0
+var zeta_head: Node3D  # her face is one live head in a little world of its own, shown in three places
+var zeta_halo: Node3D
+var zeta_eyes: StandardMaterial3D
+var zeta_skin: ShaderMaterial
+var zeta_at := {}  # room -> where her hologram hangs
+const WHY := {"started": "a new team walked in", "solved": "a puzzle was just solved", "help": "the help button",
+	"look": "something changed in the room", "tick": "a routine look"}
+const TWISTS := {"patrol": "PATROL: nobody may move", "blackout": "BLACKOUT: the lights go out", "lockdown": "LOCKDOWN: the way down is sealed again"}
 var _pending_start := false
 var _nonce := ""
 var _players_at := 0.0
@@ -106,13 +123,15 @@ func _ready() -> void:
 			hud.add_task(id, sim.tasks[id].def.name, sim.tasks[id].def.room)
 		hud.set_task(id, sim.tasks[id].state)
 	hud.set_variant(sim.variant_lines)
+	_progress()
 	hud.start_requested.connect(_start)
+	hud.intro_page.connect(_on_intro)
 	hud.speed_requested.connect(func(v):
 		speed = v
 		hud.set_speed(v)
 		if link and link.is_open:
 			link.publish("escaperoom/%s/control" % ROOM_ID, JSON.stringify({"speed": v})))
-	hud.pause_toggled.connect(func(): paused = not paused)
+	hud.pause_toggled.connect(func(): paused = sim.running and not paused)  # nothing to pause before the game runs
 	hud.meddled.connect(_on_meddle)
 	hud.new_game_requested.connect(func(): get_tree().reload_current_scene())
 	hud.music_toggled.connect(func(on): music_on = on; _fade_music())
@@ -121,6 +140,7 @@ func _ready() -> void:
 	_build_world()
 	_build_lights()
 	_build_screens()
+	_build_zeta()
 	_build_team()
 	_build_markers()
 	_calm(self, {})
@@ -205,7 +225,27 @@ func _shoot(path: String) -> void:
 	get_tree().quit()
 
 
+func _on_intro(page: int) -> void:
+	## The intro's pages each have their picture: the van below the tower, the crew at the door, the whole floor,
+	## The Core, and the team again for the start.
+	var shots := [[Vector3(-5.2, 0, 7.0), 9.0, 0.1, Vector3(0.12, 0, -0.03)], [Vector3(2.6, 0, 5.2), 8.0, 4.0, Vector3.ZERO],
+		[Vector3(21.0, 0, 5.2), 36.0, 7.0, Vector3.ZERO], [props.core_tower.position * Vector3(1, 0, 1), 13.0, 6.0, Vector3(-0.1, 0, 0.05)],
+		[Vector3(4.8, 0, 3.2), 17.0, 5.0, Vector3.ZERO]]
+	var shot: Array = shots[mini(page, shots.size() - 1)]
+	_dolly = {"t0": _clock, "dur": shot[2], "a": cam_target, "b": shot[0], "sa": cam.size, "sb": shot[1], "drift": shot[3]}
+	_hint_lamp("firewall", page == 3)  # the page about him: one pink lamp comes on in the dark of The Core
+	if page > 0:
+		_play("lobby")  # the first click lets the browser play sound
+
+
 func _start() -> void:
+	_dolly = {}
+	_started_at = _clock
+	for line in _opening:
+		_recording(line[0], line[1])
+	_opening.clear()
+	if lamps.has("firewall"):
+		_hint_lamp("firewall", false)
 	started_once = true
 	sim.running = true
 	_play(sim.stage)
@@ -229,7 +269,8 @@ func _connect_engine() -> void:
 			if (q !== null) return q;
 			return ['localhost', '127.0.0.1'].includes(location.hostname) ? 'ws://localhost:9001' : 'wss://' + location.host + '/mqtt'; })()"""))
 	if url == "" or url == "off":
-		hud.set_director("SHADOWMAN IS NOT HERE\nNo engine: the room runs on its own local rules.")
+		hud.set_status("NOT IN THE ROOM\nno engine: local rules stand in for him", false)
+		hud.set_mood("away")
 		return
 	link = MqttLink.new()
 	add_child(link)
@@ -242,7 +283,8 @@ func _connect_engine() -> void:
 
 func _on_engine_connected() -> void:
 	sim.engine_mode = true
-	gm_text = "SHADOWMAN IS CONNECTED\nWaiting for the team."
+	gm_text = "Waiting for the team."
+	hud.set_status("CONNECTED · THE AI GAME MASTER")
 	if _pending_start:
 		_pending_start = false
 		_engine_start()
@@ -252,9 +294,10 @@ func _on_engine_lost() -> void:
 	if not sim.engine_mode:
 		link = null  # never connected: stay offline
 		_pending_start = false
-		hud.set_director("SHADOWMAN IS NOT HERE\nNo connection to the engine: the room runs on its own local rules.")
+		hud.set_status("NOT IN THE ROOM\nno connection to the engine: local rules stand in for him", false)
 	else:
-		gm_text = "CONNECTION TO THE ENGINE LOST"
+		hud.set_status("CONNECTION TO THE ENGINE LOST", false)
+	hud.set_mood("away")
 
 
 func _engine_start() -> void:
@@ -265,8 +308,20 @@ func _engine_start() -> void:
 
 func _on_engine_message(topic: String, payload: String) -> void:
 	var leaf := topic.get_slice("/", topic.get_slice_count("/") - 1)
+	# The server plays one game at a time. Until this visitor's own game runs, whatever the room does belongs to
+	# somebody else's game: none of its lamps, doors, lines or twists is shown or heard behind the intro.
+	if not sim.running and not (leaf in ["definition", "state"] or topic.begins_with("sim/%s/screen/" % ROOM_ID)):
+		return
 	if topic.begins_with("sim/%s/lamp/" % ROOM_ID):
-		_hint_lamp(topic.get_slice("/", 3), payload == "ON")
+		var lamp_id := topic.get_slice("/", 3)
+		var was_on: bool = lamps.has(lamp_id) and lamps[lamp_id].on
+		_hint_lamp(lamp_id, payload == "ON")
+		if payload == "ON" and not was_on and sim.running and sim.ending == "":
+			# The room's own words for the cue ("A lamp above the planter in the lobby."), when the engine sent them.
+			var about := str(engine_def.get("cues", {}).get(lamp_id, {}).get("about", "A lamp for " + _task_name(lamp_id))).trim_suffix(".")
+			_his_move("SHADOWMAN · LIGHT CUE", "He switches on: " + about[0].to_lower() + about.substr(1), "light cue · " + about[0].to_lower() + about.substr(1))
+			if follow and not lamps[lamp_id].parts.is_empty():
+				_focus(lamps[lamp_id].parts[0].at, 11.0, 4.0)
 		return
 	if topic.begins_with("sim/%s/door/" % ROOM_ID):
 		_on_door(leaf, payload.strip_edges() == "open")
@@ -288,16 +343,22 @@ func _on_engine_message(topic: String, payload: String) -> void:
 		"escaperoom/%s/definition" % ROOM_ID:
 			engine_def = d
 		"escaperoom/%s/voice" % ROOM_ID:
-			_on_log(str(d.get("speaker", "ZETA")), str(d.get("text", "")))
-			if str(d.get("audio", "")) != "":
-				_queue_voice(str(d.get("speaker", "")), str(d.get("audio", "")))
+			var who := str(d.get("speaker", "ZETA"))
+			var line := str(d.get("text", ""))
+			_on_log(who, line, false)
+			hud.subtitle(who, line, 6.0, true)
+			_his_move("", "", "as %s: “%s”" % [who, line if line.length() <= 64 else line.left(61) + "…"])
 			var target := _npc_named(str(d.get("to", "")))
+			if str(d.get("audio", "")) != "":
+				_queue_voice(who, str(d.get("audio", "")), line, target)
+			else:
+				_say_in_room(who, line, 5.0, target, true)
 			if target:
-				target.emote("listen", 5.0)
 				get_tree().create_timer(1.2).timeout.connect(func(): target.bark(["Got it.", "I hear you.", "OK, checking."][rng.randi() % 3], 1.8))
 		"escaperoom/%s/hint" % ROOM_ID:
 			var id: String = Sim.ENGINE_TO_TASK.get(str(d.get("puzzle", "")), str(d.get("puzzle", "")))
 			sim.boosts[id] = sim.t + 150.0
+			hud.banner("SHADOWMAN · HINT", "A hint for “%s”" % _task_name(id), Hud.PINK)
 		"escaperoom/%s/twist" % ROOM_ID:
 			var secs := float(d.get("seconds", 0))
 			match str(d.get("kind", "")):
@@ -312,10 +373,31 @@ func _on_engine_message(topic: String, payload: String) -> void:
 							n.bark("She locked the door!", 2.0)
 			if not sim.twists_used.has(str(d.get("kind", ""))):
 				sim.twists_used.append(str(d.get("kind", "")))
+			var twist_text: String = TWISTS.get(str(d.get("kind", "")), str(d.get("kind", "")).to_upper())
+			_his_move("SHADOWMAN · TWIST", twist_text, "twist · " + twist_text.to_lower())
 		"escaperoom/%s/gm" % ROOM_ID:
-			var actions: Array = d.get("actions", [])
-			var mode := "HIS NOTES · " + str(d.get("model", "")) if d.get("mode", "") == "model" else "HIS NOTES · rules only, no model"
-			gm_text = "%s\n%s%s" % [mode, str(d.get("thought", "")), ("\n› " + "\n› ".join(PackedStringArray(actions.map(func(a): return str(a))))) if not actions.is_empty() else ""]
+			if not sim.running or sim.ending != "":
+				return  # the broker keeps the last word of an older game
+			var why: String = WHY.get(str(d.get("reason", "")), "a routine look")
+			if str(d.get("state", "")) == "thinking":
+				_thinking_at = _clock
+				hud.set_status("THINKING…\nwhy: %s" % why)
+				hud.set_mood("thinking")
+				return
+			var brain := str(d.get("model", "")).get_slice("/", 1) if d.get("mode", "") == "model" else "rules only, no model"
+			var took := " · %.1f s" % (_clock - _thinking_at) if _thinking_at >= 0.0 else ""
+			hud.set_status("WATCHING · %s\nlast look: %s%s" % [brain, why, took])
+			hud.set_mood("watching")
+			gm_text = str(d.get("thought", ""))
+			# Lamps, lines and twists show up when the room carries them out; the rest is only in his report.
+			for a in d.get("actions", []):
+				var act := str(a)
+				if act.begins_with("variant: "):
+					var n := act.count(";") + 1
+					_his_move("SHADOWMAN · NEW ANSWERS", "He redraws %d puzzles for this team" % n, "new answers for %d puzzles" % n)
+				elif act.begins_with("solved for the players: "):
+					var solved_id: String = Sim.ENGINE_TO_TASK.get(act.get_slice(": ", 1), act.get_slice(": ", 1))
+					_his_move("SHADOWMAN · STEPS IN", "He solves %s for them" % _task_name(solved_id), "solved %s for them" % _task_name(solved_id))
 		"sim/%s/fx/scanners" % ROOM_ID:
 			sim.variant.scanners = d.get("active", []).map(func(x): return str(x))
 			_aim_scanners_and_sensors()
@@ -325,6 +407,82 @@ func _on_engine_message(topic: String, payload: String) -> void:
 			if sim.tasks.has("firewall") and sim.tasks.firewall.state == "active":
 				_on_task("firewall", "active")
 			_refresh_variant()
+
+
+func _his_move(tag: String, text: String, short: String) -> void:
+	## One of Shadowman's moves, made visible: a banner (when it has a headline), a line in his list, a low note.
+	if tag != "":
+		hud.banner(tag, text, Hud.PINK)
+	hud.add_move(sim.clock(), short)
+	if tag != "":  # a line he speaks is its own sound
+		_accent("his")
+
+
+func _accent(name: String, pitch := 1.0) -> void:
+	## One accent of a kind at a time: his note at most every three seconds (he often makes two or three moves in
+	## one breath), the others every third of a second, so nothing is heard as a double.
+	var gap := 3.0 if name == "his" else 0.35
+	if sim.running and music_on and _clock - float(accents[name].get_meta("at", -10.0)) >= gap:
+		accents[name].set_meta("at", _clock)
+		accents[name].pitch_scale = pitch
+		accents[name].play()
+
+
+func _task_name(id: String) -> String:
+	return str(sim.tasks[id].def.name) if sim.tasks.has(id) else id
+
+
+func _progress() -> void:
+	## The strip under the clock: every puzzle of the game as a mark, and what the team is on right now.
+	var states: Array = []
+	var active: Array = []
+	for t in layout.tasks:
+		if sim.tasks.has(t.id):
+			states.append([t.room, sim.tasks[t.id].state])
+			if sim.tasks[t.id].state == "active":
+				active.append(String(t.name).to_upper())
+	hud.set_pips(states)
+	hud.set_now("ON IT › " + "  +  ".join(PackedStringArray(active)) if not active.is_empty() else "")
+
+
+func _tags() -> void:
+	## Labels over the room itself: the puzzle in play with its progress, and each lamp he has lit.
+	var items: Array = []
+	if not film and sim.running and _clock - _started_at < 14.0:  # the first seconds: who is who
+		for n in npcs:
+			items.append({"at": cam.unproject_position(n.position + Vector3(0, 2.25, 0)), "color": n.color, "progress": -1.0,
+				"text": n.display_name.to_upper()})
+	if not film and sim.running and sim.ending == "":
+		for id in sim.tasks:
+			var tk: Dictionary = sim.tasks[id]
+			if tk.state != "active" or tk.def.spots.is_empty():
+				continue
+			var s: Array = tk.def.spots[0]
+			var done: float = tk.progress / maxf(0.001, tk.need)
+			items.append({"at": cam.unproject_position(Vector3(s[0], 2.1, s[1])), "color": Hud.CYAN, "progress": done,
+				"text": String(tk.def.name).to_upper() if done < 1.0 else "TRYING THE ANSWER…"})
+		for id in lamps:
+			if lamps[id].on and not lamps[id].parts.is_empty():
+				items.append({"at": cam.unproject_position(lamps[id].parts[0].at + Vector3(0, 3.3, 0)), "color": Hud.PINK,
+					"progress": -1.0, "text": "SHADOWMAN'S LAMP"})
+	# The line being said, pinned to where its voice comes from.
+	var bubble := {}
+	if not film and not speech.is_empty() and _clock < speech.until:
+		var from_zeta: bool = speech.speaker == "ZETA" and zeta_at.has(sim.stage)
+		var where := Vector3.ZERO
+		if from_zeta:
+			where = zeta_at[sim.stage] - Vector3(0, 1.3, 0)
+		else:  # RAVEN is a voice in an ear: over the player he talks to, or over the middle of the team
+			var count := 0
+			for n in npcs:
+				if n.visible and (speech.to == null or n == speech.to):
+					where += n.position
+					count += 1
+			where = where / maxi(count, 1) + Vector3(0, 2.6, 0)
+		bubble = {"at": cam.unproject_position(where), "below": from_zeta, "text": speech.text, "his": speech.his,
+			"who": speech.speaker if from_zeta else "%s · IN THEIR EARS" % speech.speaker,
+			"color": Hud.CYAN if speech.speaker == "ZETA" else Hud.YELLOW}
+	hud.set_tags(items, bubble)
 
 
 func _engine_screen(kind: String, d: Dictionary) -> void:
@@ -430,12 +588,14 @@ func _on_meddle(what: String) -> void:
 				n.bark(["I don't get it.", "This makes no sense.", "We tried that.", "Wait, what?"][rng.randi() % 4], 3.0)
 				n.emote("shrug", 4.0)
 			_on_log("YOU", "The team is stuck. Nobody is getting anywhere.")
+			hud.banner("YOU · STALLED THE TEAM", "Nobody told him. Watch his panel.", Color.WHITE)
 		"rush":
 			sim.meddle = 4.0
 			sim.meddle_until = sim.t + 360.0
 			for n in working:
 				n.bark(["Got it!", "Faster!", "Next one!"][rng.randi() % 3], 2.0)
 			_on_log("YOU", "The team is on fire. Everything clicks.")
+			hud.banner("YOU · RUSHED THE TEAM", "They solve four times faster for a while.", Color.WHITE)
 		"wrong":
 			if working.is_empty() or not sim.engine_mode:
 				_on_log("YOU", "Nobody is at a lock right now." if working.is_empty() else "Wrong answers need the engine.")
@@ -444,8 +604,11 @@ func _on_meddle(what: String) -> void:
 			for i in 3:
 				get_tree().create_timer(0.5 * i).timeout.connect(func(): _wrong_attempt(n))
 			_on_log("YOU", "%s keeps entering the wrong answer." % n.display_name)
+			hud.banner("YOU · WRONG ANSWERS", "%s enters three wrong answers. He sees every one." % n.display_name, Color.WHITE)
 		"help":
 			_on_log("YOU", "The team presses the help button.")
+			_accent("help")
+			hud.banner("YOU · PRESSED THE HELP BUTTON", "He has to answer this one.", Color.WHITE)
 			for n in working:
 				n.emote("listen", 4.0)
 	if link and link.is_open:  # a real room has a help button; the rest only asks him to look now instead of in a while
@@ -465,6 +628,7 @@ func _wrong_attempt(n: Npc) -> void:
 			var pick: Array = pairs[rng.randi() % pairs.size()]
 			_send_input(pick[0], str(rng.randi_range(1, 9)) if pick[1].length() <= 1 else str(rng.randi_range(1000, 9999)))
 			n.bark(["Not that…", "Wrong!", "Again."][rng.randi() % 3], 1.6)
+			_accent("wrong")
 			return
 
 
@@ -603,9 +767,10 @@ func _hint_lamp(id: String, on: bool) -> void:
 			light.light_energy = 0.0
 			light.omni_range = 5.0
 			holder.add_child(light)
-			list.append({"mat": mat, "beam": bm, "light": light})
-		lamps[id] = {"parts": list, "tween": null}
+			list.append({"mat": mat, "beam": bm, "light": light, "at": holder.position})
+		lamps[id] = {"parts": list, "tween": null, "on": false}
 	var lamp: Dictionary = lamps[id]
+	lamp.on = on
 	if lamp.tween:
 		lamp.tween.kill()
 	lamp.tween = null
@@ -822,14 +987,122 @@ func _build_screens() -> void:
 		mesh.material_override = _glow(Color.BLACK, 0.0)
 
 
+func _build_zeta() -> void:
+	## ZETA has a face on every floor: a hologram over the reception desk, over the Z-Drive and over her console.
+	## It is one head, alive in a little world of its own and shown in three places: it watches the team, and its
+	## eyes pulse when she speaks.
+	var picture: Texture2D
+	var size := Vector2(2.2, 2.2)
+	if ResourceLoader.exists("res://assets/zeta.glb"):
+		picture = _zeta_world()
+	else:  # no model yet: the flat mark of her iris
+		var page := screens.make("zeta_face", Vector2i(520, 220), sim)
+		add_child(page)
+		picture = page.get_texture()
+		size = Vector2(3.3, 1.4)
+	for room in ZETA_AT:
+		var quad := MeshInstance3D.new()
+		var q := QuadMesh.new()
+		q.size = size
+		quad.mesh = q
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		m.albedo_texture = picture
+		m.albedo_color = Color(1, 1, 1, 0.0)
+		quad.material_override = m
+		quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		quad.position = props[ZETA_AT[room]].position * Vector3(1, 0, 1) + Vector3(0, 3.3, 0)
+		add_child(quad)
+		zeta_faces[room] = m
+		zeta_quads[room] = quad
+		zeta_at[room] = quad.position
+
+
+func _zeta_world() -> Texture2D:
+	var vp := SubViewport.new()
+	vp.size = Vector2i(384, 384)
+	vp.own_world_3d = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(vp)
+	var bust: Node3D = load("res://assets/zeta.glb").instantiate()
+	vp.add_child(bust)
+	zeta_head = bust.find_child("Head", true, false)
+	zeta_halo = bust.find_child("Halo", true, false)
+	# A face made of light: bright where the surface turns away from the eye, dim where it faces it, in scanlines.
+	var sh := Shader.new()
+	sh.code = """
+shader_type spatial;
+render_mode unshaded;
+uniform float talk = 0.0;
+void fragment() {
+	float rim = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 1.5);
+	float lines = 0.72 + 0.28 * step(0.5, fract(FRAGCOORD.y / 3.0));
+	ALBEDO = vec3(0.0, 0.94, 1.0) * (0.10 + 0.95 * rim) * lines * (1.0 + 0.35 * talk);
+}
+"""
+	zeta_skin = ShaderMaterial.new()
+	zeta_skin.shader = sh
+	for mi in bust.find_children("*", "MeshInstance3D", true, false):
+		for i in mi.mesh.get_surface_count():
+			var m: Material = mi.mesh.surface_get_material(i)
+			if m and m.resource_name == "Mask":
+				mi.set_surface_override_material(i, zeta_skin)
+			elif m and m.resource_name == "EyeGlow":
+				if zeta_eyes == null:
+					zeta_eyes = m.duplicate()
+				mi.set_surface_override_material(i, zeta_eyes)
+	var eye := Camera3D.new()
+	eye.fov = 26.0
+	eye.position = Vector3(0, 0.4, 1.9)
+	eye.environment = Environment.new()
+	eye.environment.background_mode = Environment.BG_COLOR
+	eye.environment.background_color = Color.BLACK
+	vp.add_child(eye)
+	eye.look_at(Vector3(0, 0.38, 0))
+	return vp.get_texture()
+
+
+func _zeta_says(seconds: float) -> void:
+	_zeta_talks_until = _clock + seconds
+	if screens:  # her first line comes before the room is built
+		screens.zeta_says(seconds)
+
+
+func _zeta(delta: float) -> void:
+	if zeta_head == null or not zeta_at.has(sim.stage):
+		return
+	var talking := _clock < _zeta_talks_until
+	# She watches the team: her head turns to where they are on the screen, seen from her own picture.
+	var team := Vector3.ZERO
+	var count := 0
+	for n in npcs:
+		if n.visible:
+			team += n.position
+			count += 1
+	var look := Vector2.ZERO
+	if count > 0:
+		look = (cam.unproject_position(team / count) - cam.unproject_position(zeta_at[sim.stage])) / get_viewport().get_visible_rect().size.y
+	var k := 1.0 - exp(-delta * 2.5)
+	zeta_head.rotation.y = lerpf(zeta_head.rotation.y, clampf(look.x * 1.6, -0.5, 0.5), k)
+	zeta_head.rotation.x = lerpf(zeta_head.rotation.x, clampf(look.y * 0.7, -0.1, 0.3), k)
+	if zeta_halo:
+		zeta_halo.rotation.y += delta * 0.5
+	if zeta_eyes:
+		zeta_eyes.emission_energy_multiplier = 2.0 + 2.5 * (0.5 + 0.5 * sin(_clock * 11.0)) if talking else 1.6 + 0.3 * sin(_clock * 1.5)
+	zeta_skin.set_shader_parameter("talk", 1.0 if talking else 0.0)
+
+
 func _build_team() -> void:
 	var variants: Array[PackedScene] = []
-	for name in ["npc", "npc2", "npc3"]:
+	for name in ["npc", "npc2", "npc3", "npc4", "npc5"]:  # Spark, Rust, Mouse, Thunder, Fox
 		if ResourceLoader.exists("res://assets/%s.glb" % name):
 			variants.append(load("res://assets/%s.glb" % name))
 	for i in NAMES.size():
 		var n := Npc.new()
-		n.setup(variants[i % variants.size()], NAMES[i], COLORS[i], rng.randf_range(0.8, 1.25), fonts.display)
+		n.setup(variants[i % variants.size()], NAMES[i], COLORS[i], rng.randf_range(0.8, 1.25), fonts.display, BUILDS[i])
 		n.position = Vector3(1.4 + (i % 2) * 0.7, 0, 4.8 + i * 0.35)
 		add_child(n)
 		npcs.append(n)
@@ -841,28 +1114,60 @@ func _build_audio() -> void:
 		p.volume_db = -80.0
 		add_child(p)
 		music.append(p)
-	sfx = AudioStreamPlayer.new()
-	sfx.stream = _mp3("solve", false)
-	sfx.volume_db = -7.0
-	add_child(sfx)
+	# The bed is calm; what the players do is the rhythm. `his` is Shadowman's own note, lower than anything of theirs.
+	for item in [["solve", -6.0], ["work", -12.0], ["wrong", -9.0], ["door", -8.0], ["help", -6.0], ["his", -3.0]]:
+		var p := AudioStreamPlayer.new()
+		p.stream = _mp3(item[0], false)
+		p.volume_db = item[1]
+		p.max_polyphony = 2 if item[0] == "work" else 1
+		add_child(p)
+		accents[item[0]] = p
 	alarm = AudioStreamPlayer.new()
 	alarm.stream = _mp3("alarm", true)
 	alarm.volume_db = -16.0
 	add_child(alarm)
-	# Raven talks over a radio from the van: band-limited and a little overdriven.
+	# Nobody in this building sounds like a studio. Raven talks over a cheap radio from the van: a narrow band,
+	# driven hard, with the grit of a bad link.
 	var radio := AudioServer.bus_count
 	AudioServer.add_bus(radio)
 	AudioServer.set_bus_name(radio, "Radio")
 	var hp := AudioEffectHighPassFilter.new()
-	hp.cutoff_hz = 380.0
+	hp.cutoff_hz = 480.0
 	var lp := AudioEffectLowPassFilter.new()
-	lp.cutoff_hz = 3200.0
+	lp.cutoff_hz = 2700.0
 	var drive := AudioEffectDistortion.new()
 	drive.mode = AudioEffectDistortion.MODE_OVERDRIVE
-	drive.drive = 0.3
-	drive.post_gain = -3.0
-	for fx in [hp, lp, drive]:
+	drive.drive = 0.5
+	drive.post_gain = -5.0
+	var grit := AudioEffectDistortion.new()
+	grit.mode = AudioEffectDistortion.MODE_LOFI
+	grit.drive = 0.25
+	for fx in [hp, lp, drive, grit]:
 		AudioServer.add_bus_effect(radio, fx)
+	# ZETA is the building speaking: slightly metallic, from ceiling speakers in a hard, empty hall. No echo tap and
+	# only a light double: a clear second copy of the voice reads as the line playing twice.
+	var hall := AudioServer.bus_count
+	AudioServer.add_bus(hall)
+	AudioServer.set_bus_name(hall, "Zeta")
+	var double := AudioEffectChorus.new()
+	double.voice_count = 2
+	double.dry = 0.9
+	double.wet = 0.2
+	for v in 2:
+		double.set_voice_delay_ms(v, 14.0 + 9.0 * v)
+		double.set_voice_depth_ms(v, 1.6)
+		double.set_voice_rate_hz(v, 0.5 + 0.3 * v)
+	var metal := AudioEffectPhaser.new()
+	metal.rate_hz = 0.25
+	metal.depth = 0.5
+	metal.feedback = 0.35
+	var room := AudioEffectReverb.new()
+	room.room_size = 0.5
+	room.damping = 0.5
+	room.wet = 0.18
+	room.dry = 0.9
+	for fx in [double, metal, room]:
+		AudioServer.add_bus_effect(hall, fx)
 	voice = AudioStreamPlayer.new()
 	voice.volume_db = 0.0
 	voice.finished.connect(_next_voice)
@@ -872,10 +1177,51 @@ func _build_audio() -> void:
 	add_child(voice_http)
 
 
-func _queue_voice(speaker: String, url: String) -> void:
-	voice_queue.append({"speaker": speaker, "url": url})
+func _say_in_room(speaker: String, text: String, seconds: float, to: Npc = null, his := false) -> void:
+	## A line is not only heard and subtitled: it happens in the room. A bubble hangs where the voice comes from
+	## (under ZETA's face, over the ears RAVEN speaks into), and the players stop to listen.
+	speech = {"speaker": speaker, "text": text, "until": _clock + seconds, "to": to, "his": his}
+	var at_zeta: bool = speaker == "ZETA" and zeta_at.has(sim.stage)
+	if speaker == "ZETA":
+		_zeta_says(seconds)
+	if not sim.running or sim.ending != "":
+		return
+	var team := Vector3.ZERO
+	var count := 0
+	for n in npcs:
+		if n.visible:
+			team += n.position
+			count += 1
+			if at_zeta or to == null or n == to:  # everyone looks up at her; RAVEN is in one ear or in all
+				n.emote("listen", seconds * 2.0, zeta_at[sim.stage] * Vector3(1, 0, 1) if at_zeta else Vector3.ZERO)
+	if at_zeta and follow and count > 0:  # the picture takes in both her and them
+		_focus((team / count).lerp(zeta_at[sim.stage] * Vector3(1, 0, 1), 0.5), 14.0, minf(seconds, 3.0))
+
+
+func _queue_voice(speaker: String, url: String, text := "", to: Npc = null) -> void:
+	## A line the game master wrote: the engine has synthesised it and sends where to fetch it.
+	voice_queue.append({"speaker": speaker, "url": url, "text": text, "his": true, "to": to})
 	if voice_queue.size() == 1 and not voice.playing:
-		voice_http.request(url)
+		_start_voice()
+
+
+func _recording(speaker: String, text: String) -> void:
+	## A fixed line of the room is a recording (audio/lines, named by what is said); one nobody recorded stays text.
+	var file := "res://audio/lines/%s.mp3" % ("%s|%s" % [speaker, text]).sha256_text().left(16)
+	if not ResourceLoader.exists(file):
+		_say_in_room(speaker, text, 4.5)
+		return
+	voice_queue.append({"speaker": speaker, "text": text, "stream": load(file), "his": false})
+	if voice_queue.size() == 1 and not voice.playing:
+		_start_voice()
+
+
+func _start_voice() -> void:
+	var line: Dictionary = voice_queue[0]
+	if line.has("stream"):
+		_speak(line, line.stream)
+	else:
+		voice_http.request(line.url)
 
 
 func _on_voice_loaded(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
@@ -888,9 +1234,16 @@ func _on_voice_loaded(result: int, code: int, _headers: PackedStringArray, body:
 		return
 	var stream := AudioStreamMP3.new()
 	stream.data = body
+	_speak(line, stream)
+
+
+func _speak(line: Dictionary, stream: AudioStream) -> void:
 	voice.stream = stream
-	voice.bus = "Radio" if line.speaker == "RAVEN" else "Master"
+	voice.bus = {"RAVEN": "Radio", "ZETA": "Zeta"}.get(line.speaker, "Master")
 	voice.play()
+	if line.text != "":  # the words stay up for as long as they are being spoken
+		hud.subtitle(line.speaker, line.text, stream.get_length() + 0.6, line.his)
+		_say_in_room(line.speaker, line.text, stream.get_length() + 0.4, line.get("to"), line.his)
 	create_tween().tween_property(music[music_active], "volume_db", _music_db() - 10.0, 0.3)  # duck the music
 
 
@@ -898,7 +1251,7 @@ func _next_voice() -> void:
 	if not voice_queue.is_empty():
 		voice_queue.pop_front()
 	if not voice_queue.is_empty():
-		voice_http.request(voice_queue[0].url)
+		_start_voice()
 	else:
 		_fade_music()
 
@@ -929,15 +1282,19 @@ func _aim_scanners_and_sensors() -> void:
 
 # ---------- game events ----------
 
-func _on_log(speaker: String, text: String) -> void:
+func _on_log(speaker: String, text: String, fixed := true) -> void:
+	## `fixed`: a line of the room's own script, which has a recording; false for one the game master wrote.
 	hud.add_log(speaker, text)
+	if fixed and speaker in ["RAVEN", "ZETA"]:
+		if sim.running:
+			_recording(speaker, text)
+		else:
+			_opening.append([speaker, text])  # said while the room loads: heard when the team walks in
 	if DisplayServer.get_name() == "headless":
 		print("[%s] %s> %s" % [sim.clock(), speaker, text])
 	if speaker == "ZETA":
 		last_zeta = text
 	if speaker == "RAVEN" and sim.running and not npcs.is_empty():
-		for n in npcs:
-			n.emote("listen", 4.0)
 		if rng.randf() < 0.4:
 			npcs[rng.randi() % npcs.size()].bark("Did you hear that?", 1.8)
 
@@ -946,11 +1303,17 @@ func _on_task(id: String, state: String) -> void:
 	if not hud._rows.has(id):
 		hud.add_task(id, sim.tasks[id].def.name, sim.tasks[id].def.room)
 	hud.set_task(id, state)
+	_progress()
 	for m in markers.get(id, []):
 		m.visible = state == "active"
-	if film and state == "solved" and sim.ending == "" and sim.tasks.has(id) and not sim.tasks[id].def.spots.is_empty():
+	if state == "solved" and sim.running and sim.ending == "":
+		var solved := 0
+		for tid in sim.tasks:
+			solved += int(sim.tasks[tid].state == "solved")
+		hud.banner("PUZZLE SOLVED · %d OF %d" % [solved, sim.tasks.size()], String(sim.tasks[id].def.name), Hud.YELLOW)
+	if (film or follow) and state == "solved" and sim.ending == "" and sim.tasks.has(id) and not sim.tasks[id].def.spots.is_empty():
 		var spot: Array = sim.tasks[id].def.spots[0]  # a solved puzzle gets a short close-up
-		_focus(Vector3(spot[0], 0, spot[1]), 9.5, 2.6)
+		_focus(Vector3(spot[0], 0, spot[1]), 9.5 if film else 11.0, 2.6)
 	if state == "active":
 		for n in npcs:
 			if n.mode == "explore":
@@ -978,8 +1341,7 @@ func _on_task(id: String, state: String) -> void:
 
 
 func _solved_effects(id: String, workers: Array) -> void:
-	if sim.running:
-		sfx.play()
+	_accent("solve")
 	var first: Npc = workers[0] if not workers.is_empty() else null
 	if first:
 		first.bark(sim.tasks[id].def.say.split(".")[0] + ".", 3.0)
@@ -1042,6 +1404,8 @@ func _on_door(id: String, open: bool) -> void:
 	var leaf: Node3D = doors[id]
 	var z: float = leaf.get_meta("closed_z") + (leaf.get_meta("width") if open else 0.0)
 	create_tween().tween_property(leaf, "position:z", z, 1.2).set_trans(Tween.TRANS_SINE)
+	if open and sim.t > 0.0:
+		_accent("door")
 	if open and NEXT_ROOM.has(id):
 		reached[NEXT_ROOM[id]] = true
 
@@ -1130,6 +1494,8 @@ func _on_stage(room: String) -> void:
 		get_tree().create_timer(float(_linger.get_slice(":", 1))).timeout.connect(func(): speed = fast)
 	if sim.running:
 		_play(room)
+		if sim.t > 1.0:
+			hud.banner("THE TEAM MOVES ON", Hud.ROOMS[room].replace(" · ", " OF 3 · "), Hud.CYAN)
 		if film:  # a new room opens with a wide shot of it
 			for r in layout.rooms:
 				if r.id == room:
@@ -1140,6 +1506,8 @@ func _on_twist(kind: String, _seconds: float) -> void:
 	for n in npcs:
 		if kind == "patrol":
 			n.bark("Nobody move!", 3.0)
+	if not sim.engine_mode:  # offline the local stand-in throws the twist; online the engine's message announces it
+		hud.banner("TWIST", TWISTS.get(kind, kind.to_upper()), Hud.PINK)
 
 
 func _on_finished(kind: String) -> void:
@@ -1213,12 +1581,21 @@ func _process(delta: float) -> void:
 	_clock += delta
 	var game_dt := delta * speed if sim.running and not paused and sim.ending == "" else 0.0
 	sim.tick(game_dt)
-	var move_dt := game_dt if sim.ending == "" else delta * 2.0
+	# People walk in real time up to ×10 and only start to hurry above it (a ×40 film needs them to get there);
+	# they run for the exit at the end, and a pause stops them.
+	var walk_dt := (delta * clampf(speed / 10.0, 1.0, 4.0) if game_dt > 0.0 else 0.0) if sim.ending == "" else delta * 2.0
 	for n in npcs:
 		n.set_frozen(sim.t < sim.freeze_until and sim.ending == "")
 		if game_dt > 0.0:
 			_think(n)
-		n.step(delta, move_dt)
+		n.step(delta, walk_dt)
+		# A player settling at a puzzle plays one soft note of the room's scale; five players make a slow melody.
+		var working: bool = n.at_spot and n.task_id != ""
+		if working and not n.get_meta("working", false):
+			_accent("work", [1.0, 1.189, 1.335, 1.498, 1.782][rng.randi() % 5])
+		n.set_meta("working", working)
+		if game_dt > 0.0:
+			_fidget(n)
 		if n.at_spot and n.task_id != "" and game_dt > 0.0:
 			n.stuck += game_dt
 			if n.stuck > 420.0:
@@ -1231,6 +1608,8 @@ func _process(delta: float) -> void:
 	hud.set_clock(sim.clock(), sim.stage, int(layout.plan[sim.stage]), paused)
 	hud.set_team(npcs)
 	hud.set_director(gm_text if sim.engine_mode else _director_text())
+	_tags()
+	_zeta(delta)
 	if sim.engine_mode and sim.running and sim.ending == "":
 		if _clock >= _players_at:
 			_players_at = _clock + 2.0
@@ -1254,7 +1633,7 @@ func _process(delta: float) -> void:
 func _think(n: Npc) -> void:
 	if n.emoting() and n.mode in ["idle", "explore"]:
 		return  # finish the reaction before picking the next thing to do
-	if n.mode == "explore" and sim.t > n.explore_until:
+	if n.mode == "explore" and _clock > n.explore_until:
 		n.mode = "idle"
 	if n.mode != "idle":
 		return
@@ -1287,18 +1666,42 @@ func _think(n: Npc) -> void:
 	if nav.is_open(p) and n.go(nav, p, p + Vector3(rng.randf_range(-1, 1), 0, -1)):
 		n.mode = "explore"
 		n.task_id = ""
-		n.explore_until = sim.t + rng.randf_range(20.0, 50.0)
+		n.explore_until = _clock + rng.randf_range(4.0, 9.0)
 		n.activity = "looking for clues"
 		if rng.randf() < 0.25:
 			n.bark(["There must be something here.", "Looking for clues.", "Watch the screens."][rng.randi() % 3])
 
 
+func _fidget(n: Npc) -> void:
+	## Nobody solves a puzzle standing still: now and then a player walks over to the clue, reads it and comes back.
+	if not n.at_spot or n.task_id == "" or not sim.tasks.has(n.task_id) or n.emoting():
+		return
+	if not n.has_meta("trip_at"):
+		n.set_meta("trip_at", _clock + rng.randf_range(5.0, 12.0))
+	if _clock < n.get_meta("trip_at"):
+		return
+	n.set_meta("trip_at", _clock + rng.randf_range(8.0, 16.0))
+	var idx: int = sim.tasks[n.task_id].workers.find(n)
+	var home := _spot(n.task_id, idx)
+	var clue: Array = LAMP_AT.get(n.task_id, [])
+	var to := home
+	var face := _face(n.task_id, idx)
+	if n.position.distance_to(home) < 0.6:  # at the puzzle: over to the clue, if it is not right here
+		if clue.is_empty() or not props.has(clue[0]) or (props[clue[0]].position * Vector3(1, 0, 1)).distance_to(home) < 1.6:
+			return
+		to = props[clue[0]].position * Vector3(1, 0, 1)
+		face = to
+		n.bark(["Let me check the clue.", "One more look.", "What did it say?"][rng.randi() % 3], 1.8)
+	n.go(nav, to, face)
+	n.at_spot = true  # still on the puzzle while walking: reading the clue again is part of solving it
+
+
 func _chat() -> void:
-	## Every few seconds two people looking around stop, face each other and trade a line.
+	## Every few seconds two people standing close stop, face each other and trade a line.
 	if _clock < _next_chat or not sim.running or sim.ending != "" or paused:
 		return
-	_next_chat = _clock + rng.randf_range(6.0, 14.0)
-	var free := npcs.filter(func(n): return n.mode == "explore" and not n.emoting())
+	_next_chat = _clock + rng.randf_range(4.0, 9.0)
+	var free := npcs.filter(func(n): return n.visible and not n.emoting() and (n.mode == "explore" or n.at_spot))
 	for a in free:
 		for b in free:
 			if a != b and a.position.distance_to(b.position) < 3.0:
@@ -1395,6 +1798,11 @@ func _update_lights(delta: float) -> void:
 				c = Color("#ff7a3a")
 			l.light_energy = lerpf(l.light_energy, target, minf(1.0, delta * 4.0))
 			l.light_color = l.light_color.lerp(c, minf(1.0, delta * 4.0))
+	for room in zeta_faces:  # her face is lit only where the team is, and goes out with the building
+		var m: StandardMaterial3D = zeta_faces[room]
+		m.albedo_color.a = lerpf(m.albedo_color.a, 0.95 if room == sim.stage and not blasted else 0.0, minf(1.0, delta * 3.0))
+		var swell := 1.2 if _clock < _zeta_talks_until and room == sim.stage else 1.0
+		zeta_quads[room].scale = zeta_quads[room].scale.lerp(Vector3.ONE * swell, minf(1.0, delta * 5.0))
 	core_mat.emission_energy_multiplier = (2.6 + 0.9 * sin(_clock * 2.2)) if reached.has("core") else 1.0
 	if red_alert:
 		core_mat.emission_energy_multiplier = 3.0 + 4.0 * pulse
@@ -1440,12 +1848,14 @@ func _place_camera() -> void:
 func _update_camera(delta: float) -> void:
 	if not _dolly.is_empty():
 		var k := clampf((_clock - float(_dolly.t0)) / float(_dolly.dur), 0.0, 1.0)
+		if k >= 1.0 and _dolly.has("drift"):  # an intro shot keeps creeping once it has arrived
+			_dolly.b += (_dolly.drift as Vector3) * delta
 		var e := k * k * (3.0 - 2.0 * k)  # ease in and out
 		cam_target = (_dolly.a as Vector3).lerp(_dolly.b, e)
 		cam.size = lerpf(_dolly.sa, _dolly.sb, e)
 		_place_camera()
 		atmosphere.follow(cam_target)
-		if k >= 1.0:
+		if k >= 1.0 and not _dolly.has("drift"):
 			_dolly = {}
 		return
 	var size := zoom
@@ -1496,10 +1906,12 @@ func _unhandled_input(e: InputEvent) -> void:
 				follow = not follow
 			KEY_H:
 				hud.visible = not hud.visible
+			KEY_V:
+				hud.toggle_variant()
 			KEY_C:
 				_set_film(not film)
 			KEY_SPACE:
-				paused = not paused
+				paused = sim.running and not paused
 
 
 # ---------- helpers ----------
@@ -1545,7 +1957,7 @@ func _play(name: String) -> void:
 
 
 func _music_db() -> float:
-	return -9.0 if music_on else -80.0
+	return -6.0 if music_on else -80.0
 
 
 func _fade_music() -> void:
