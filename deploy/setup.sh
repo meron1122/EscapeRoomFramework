@@ -14,7 +14,7 @@ if [ ! -f "$APP/env" ]; then
   cp "$APP/deploy/env.example" "$APP/env"
   echo "DB_PASSWORD=$(head -c 24 /dev/urandom | base64 | tr -dc A-Za-z0-9)" >> "$APP/env"
   chmod 600 "$APP/env"
-  echo "Created $APP/env. Fill in PUBLIC_URL and the two gateway URLs, then run this script again."
+  echo "Created $APP/env. Fill in PUBLIC_URL (and the gateway URLs once the Connectors exist), then run this script again."
   exit 0
 fi
 grep -q CHANGE-ME "$APP/env" && { echo "$APP/env still has CHANGE-ME values."; exit 1; }

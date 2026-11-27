@@ -48,7 +48,7 @@ so it always matches the room's real input topics.
 2. Create the Sprite with a label the Connectors can match.
 
    ```bash
-   sprite create the-core --label escaperoom --skip-console
+   sprite create shadowman --label escaperoom --skip-console
    ```
 
 3. Create two Connectors in the dashboard (Sprites → Connectors → Add connector), both as **custom API**
@@ -68,27 +68,28 @@ so it always matches the room's real input topics.
    ```
 
    ```bash
-   sprite file push -s the-core deploy/bundle.tgz /home/sprite/bundle.tgz
+   sprite file push -s shadowman deploy/bundle.tgz /home/sprite/bundle.tgz
    ```
 
    ```bash
-   sprite exec -s the-core -- bash -c "cd /home/sprite && tar xzf bundle.tgz && bundle/deploy/setup.sh"
+   sprite exec -s shadowman -- bash -c "cd /home/sprite && tar xzf bundle.tgz && bundle/deploy/setup.sh"
    ```
 
-   The first run creates `/home/sprite/app/env` and stops. Fill in `PUBLIC_URL` (from `sprite info the-core`)
-   and the two gateway URLs, then run the same command again. It installs Postgres, Mosquitto and Caddy,
+   The first run creates `/home/sprite/app/env` and stops. Fill in `PUBLIC_URL` (from `sprite info -s shadowman`)
+   and, once the Connectors exist, the two gateway URLs, then run the same command again. With the gateways left
+   empty Shadowman runs on rules only and the characters' lines stay text. It installs Postgres, Mosquitto and Caddy,
    registers the services, loads the room and its brief, and prints the public checks.
 
 5. Check the Connectors from inside the Sprite before opening it up (both should answer with JSON, not 401/403):
 
    ```bash
-   sprite exec -s the-core -- bash -c '. /home/sprite/app/env; curl -s $GAMEMASTER_GATEWAY/v1/models | head -c 200; echo; curl -s $VOICE_GATEWAY/v1/models | head -c 200'
+   sprite exec -s shadowman -- bash -c '. /home/sprite/app/env; curl -s $GAMEMASTER_GATEWAY/v1/models | head -c 200; echo; curl -s $VOICE_GATEWAY/v1/models | head -c 200'
    ```
 
 6. Make the URL public and open it.
 
    ```bash
-   sprite url update -s the-core --auth public
+   sprite url update -s shadowman --auth public
    ```
 
 To update later: run `deploy/build.sh`, push the bundle and run `setup.sh` again. Logs are in
@@ -104,14 +105,14 @@ At roughly 0.2 CPU and 1 GB of memory that is about $0.03 an hour: around 150 ho
 in the Free plan. Model and voice calls are billed by OpenRouter and ElevenLabs, not by Fly; the two caps above
 bound them.
 
+## Verified on a real Sprite (27 Nov 2026)
+
+- The image is Ubuntu 26.04 on x86_64 with `sudo` and `apt`; `setup.sh` installed and started everything in one run.
+- WebSocket upgrades pass through the public `*.sprites.app` URL: `/mqtt` answers `101 Switching Protocols`, and a
+  game started from the browser was run by the engine on the Sprite.
+- From outside, `/rooms`, `/mcp`, `/safety` and unknown `/voice` names answer 404.
+
 ## Not verified yet
 
-These come from the Sprites documentation, not from a run on a real Sprite:
-
-- WebSocket upgrades through the public `*.sprites.app` URL (the docs say "HTTP(S) only"). If `/mqtt` does not
-  connect, the landing page still works (its room runs offline), but `/play/` then runs without Shadowman.
-- `sudo`/`apt` and `systemctl` on the Sprite image, and the CPU architecture (the bundle is built for x86_64).
-- Whether the gateway overrides the placeholder `Authorization` header the Anthropic SDK sends.
-- Whether local connections between the engine and the broker keep the Sprite awake. If they do, the Sprite
-  never pauses and costs about $22 a month; stop the `engine` service between demos in that case.
+- Whether the gateway overrides the placeholder `Authorization` header the Anthropic SDK sends (needs the Connectors).
 - One game runs at a time: two viewers restart each other's game.

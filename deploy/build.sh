@@ -21,5 +21,5 @@ cp "$BRIEF" "$OUT/room/brief.md"
 echo "$ROOM_ID" > "$OUT/room/id"
 python3 deploy/make-acl.py "$ROOM_ID" "$ROOM_JSON" > "$OUT/deploy/browser.acl"
 cp deploy/Caddyfile deploy/mosquitto.conf deploy/setup.sh deploy/run-engine.sh deploy/env.example "$OUT/deploy/"
-tar -C deploy -czf deploy/bundle.tgz bundle
+COPYFILE_DISABLE=1 tar --no-xattrs -C deploy -czf deploy/bundle.tgz bundle
 du -sh deploy/bundle.tgz
